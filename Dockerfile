@@ -8,7 +8,7 @@ COPY ashbal_os_FINAL-1.zip .
 
 RUN unzip ashbal_os_FINAL-1.zip && rm ashbal_os_FINAL-1.zip
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir fastapi uvicorn
 
 EXPOSE 8080
 
