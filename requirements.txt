@@ -31,3 +31,4 @@ prometheus-client>=0.20.0      # /metrics endpoint (Prometheus format)
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=8.0.0
 pytest-mock>=3.12.0
+gunicorn
