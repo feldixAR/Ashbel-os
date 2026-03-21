@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AshbalOS — אשבל אלומיניום</title>
+  <link rel="stylesheet" href="/ui/css/app.css" />
+</head>
+<body>
+
+<!-- ── API Key Modal ─────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="apiModal">
+  <div class="modal">
+    <h2>כניסה למערכת</h2>
+    <p>הכנס את מפתח ה-API כדי להתחבר ל-AshbalOS.<br/>
+       המפתח נשמר לסשן הנוכחי בלבד ונמחק כשסוגרים את הדפדפן.</p>
+    <input class="modal-input" id="apiKeyInput" type="password"
+           placeholder="API key..." autocomplete="off" />
+    <button class="btn btn-primary" id="apiKeySubmit" style="width:100%;">התחבר</button>
+    <div class="modal-note">
+      ⓘ  המפתח מוגדר במשתנה הסביבה <code>API_KEY</code> בשרת.
+         ברירת מחדל לפיתוח: <code>dev-api-key-change-in-production</code>
+    </div>
+  </div>
+</div>
+
+<!-- ── Shell ─────────────────────────────────────────────────────────── -->
+<div class="os-shell">
+
+  <!-- Header -->
+  <header class="header">
+    <a class="logo" href="#">
+      <div class="logo-hex"></div>
+      <span class="logo-name">Ashbal<span>OS</span></span>
+    </a>
+
+    <div class="header-live">
+      <div class="pulse"></div>
+      <span>מערכת פעילה</span>
+    </div>
+
+    <button class="bell-btn" id="bellBtn">
+      <span>⏸</span>
+      <span id="bellTxt">אישורים</span>
+      <span class="bell-badge hidden" id="bellBadge">0</span>
+    </button>
+  </header>
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-section-label">ניווט</div>
+    <div id="sideNav"></div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div id="panel-cmd"       class="panel"></div>
+    <div id="panel-leads"     class="panel"></div>
+    <div id="panel-agents"    class="panel"></div>
+    <div id="panel-approvals" class="panel"></div>
+    <div id="panel-reports"   class="panel"></div>
+  </main>
+
+</div>
+
+<!-- Scripts — order matters -->
+<script src="/ui/js/api.js"></script>
+<script src="/ui/js/components/toast.js"></script>
+<script src="/ui/js/panels/command.js"></script>
+<script src="/ui/js/panels/leads.js"></script>
+<script src="/ui/js/panels/agents.js"></script>
+<script src="/ui/js/panels/approvals.js"></script>
+<script src="/ui/js/panels/reports.js"></script>
+<script src="/ui/js/app.js"></script>
+
+</body>
+</html>

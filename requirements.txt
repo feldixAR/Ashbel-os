@@ -1,2 +1,33 @@
-fastapi
-uvicorn
+# ── Web Framework ─────────────────────────────────────────────────────────────
+flask>=3.0.0
+gunicorn>=21.2.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9        # PostgreSQL driver (production)
+# sqlite3 is part of Python stdlib — no package needed for development
+
+# ── AI Providers ──────────────────────────────────────────────────────────────
+anthropic>=0.25.0
+openai>=1.0.0
+
+# ── Scheduling ────────────────────────────────────────────────────────────────
+apscheduler>=3.10.4
+
+# ── Auth / Security ───────────────────────────────────────────────────────────
+bcrypt>=4.1.2                  # password hashing
+pyjwt>=2.8.0                   # session tokens
+
+# ── Validation ────────────────────────────────────────────────────────────────
+pydantic>=2.6.0                # request/response schema validation
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0           # load .env in development
+pytz>=2024.1                   # timezone handling for scheduler
+
+# ── Observability ─────────────────────────────────────────────────────────────
+prometheus-client>=0.20.0      # /metrics endpoint (Prometheus format)
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-mock>=3.12.0
