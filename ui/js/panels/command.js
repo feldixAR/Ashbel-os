@@ -7,10 +7,13 @@ const CommandPanel = (() => {
   const QUICK = [
     { label: '📊 סטטוס',              cmd: 'סטטוס' },
     { label: '🔥 לידים חמים',          cmd: 'לידים חמים' },
-    { label: '💡 מה יקדם הכנסות',      cmd: 'מה הכי יקדם הכנסות היום' },
+    { label: '💰 הכנסות',              cmd: 'מה הכי יקדם הכנסות היום' },
     { label: '🚧 מה תקוע',             cmd: 'למה לא סוגרים' },
     { label: '📋 הצעד הבא',            cmd: 'מה הצעד הבא' },
-    { label: '📈 דוח יומי',             cmd: 'דוח יומי' },
+    { label: '📈 דוח הכנסות',           cmd: 'דוח הכנסות' },
+    { label: '🤖 הצג סוכנים',           cmd: 'הצג סוכנים' },
+    { label: '➕ סוכן חדש',             cmd: 'צור סוכן follow-up לאדריכלים' },
+    { label: '📅 דוח יומי',             cmd: 'דוח יומי' },
     { label: '❓ עזרה',                cmd: 'עזרה' },
   ];
 
@@ -186,6 +189,25 @@ const CommandPanel = (() => {
         output.textContent = out.report;
         Toast.success('דוח נוצר');
         addToHistory(cmd, 'דוח יומי נוצר', 'success');
+        return;
+      }
+
+      // --- Agent list ---
+      if (out.agents && Array.isArray(out.agents)) {
+        const lines = out.agents.map(a =>
+          `🤖 ${a.name} | ${a.department} | v${a.version || 1}`
+        );
+        output.textContent = d.message + (lines.length ? '\n\n' + lines.join('\n') : '');
+        Toast.success(d.message);
+        addToHistory(cmd, d.message, 'success');
+        return;
+      }
+
+      // --- Revenue report ---
+      if (out.pipeline_value !== undefined && out.report) {
+        output.textContent = out.report;
+        Toast.success('דוח הכנסות');
+        addToHistory(cmd, 'דוח הכנסות נוצר', 'success');
         return;
       }
 
