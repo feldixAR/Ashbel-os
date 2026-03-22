@@ -55,6 +55,10 @@ _INTENT_TASK_MAP = {
     Intent.DEVELOPMENT_BATCH_STATUS: ("development", "batch_status"),
 
     Intent.STATUS: ("crm", "read_data"),
+
+    # 🔥 SALES
+    Intent.CREATE_LEAD: ("sales", "create_lead"),
+    Intent.SALES: ("sales", "handle_sales"),
 }
 
 
