@@ -192,7 +192,7 @@ def _handle_read_data(task: TaskModel) -> ExecutionResult:
 # ── Assistant Handlers (Batch 2 — draft flow) ─────────────────────────────────
 
 def _handle_draft_message(task: TaskModel) -> ExecutionResult:
-    """Prepares a WhatsApp draft for approval before sending."""
+    """Prepares a WhatsApp draft with contact resolution and deep link."""
     started = _now_ms()
     p       = _params(task)
     cmd     = _command(task)
@@ -203,44 +203,75 @@ def _handle_draft_message(task: TaskModel) -> ExecutionResult:
         f"האם נוח לך לדבר?"
     )
 
-    return ExecutionResult(
-        success=True,
-        message=f"טיוטת הודעה מוכנה ל-{contact}",
-        output={
+    # Resolve contact phone from CRM
+    phone    = ""
+    lead_id  = ""
+    try:
+        from services.integrations.contacts import contacts_service
+        resolved = contacts_service.resolve(contact)
+        if resolved:
+            phone   = resolved.phone or ""
+            lead_id = resolved.lead_id or ""
+            contact = resolved.name   # use exact DB name
+    except Exception:
+        pass
+
+    # Build draft with deep link if phone found
+    try:
+        from services.integrations.whatsapp import whatsapp_service
+        draft = whatsapp_service.prepare_draft(contact, phone, text, lead_id)
+    except Exception:
+        draft = {
             "action_type":    "whatsapp_draft",
             "contact_name":   contact,
+            "phone":          phone,
             "draft_message":  text,
             "channel":        "whatsapp",
             "needs_approval": True,
             "next_step":      "approve_or_edit",
-            "command":        cmd,
-        },
+        }
+
+    return ExecutionResult(
+        success=True,
+        message=f"טיוטת הודעה מוכנה ל-{contact}" + (f" ({phone})" if phone else " — לא נמצא טלפון"),
+        output={**draft, "command": cmd},
         duration_ms=_elapsed_ms(started),
     )
 
 
 def _handle_draft_meeting(task: TaskModel) -> ExecutionResult:
-    """Prepares a calendar event draft for approval."""
+    """Prepares a calendar event draft with deep link."""
     started = _now_ms()
     p       = _params(task)
 
     contact = p.get("contact_name") or p.get("name") or "איש קשר"
-    date    = p.get("date") or "לקביעה"
+    date    = p.get("date") or ""
     notes   = p.get("notes") or ""
 
-    return ExecutionResult(
-        success=True,
-        message=f"טיוטת פגישה מוכנה עם {contact}",
-        output={
+    try:
+        from services.integrations.calendar import calendar_service, CalendarEvent
+        event = CalendarEvent(
+            title=f"פגישה עם {contact}",
+            date=date or __import__("datetime").date.today().isoformat(),
+            attendee_name=contact, notes=notes,
+        )
+        draft = calendar_service.prepare_draft(event)
+    except Exception:
+        draft = {
             "action_type":    "calendar_draft",
             "contact_name":   contact,
             "meeting_title":  f"פגישה עם {contact}",
-            "meeting_date":   date,
+            "meeting_date":   date or "לקביעה",
             "notes":          notes,
             "channel":        "calendar",
             "needs_approval": True,
             "next_step":      "approve_or_edit",
-        },
+        }
+
+    return ExecutionResult(
+        success=True,
+        message=f"טיוטת פגישה מוכנה עם {contact}",
+        output=draft,
         duration_ms=_elapsed_ms(started),
     )
 
