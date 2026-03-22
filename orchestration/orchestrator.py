@@ -40,24 +40,15 @@ class OrchestratorResult:
 
 
 _INTENT_TASK_MAP = {
-    Intent.ADD_LEAD: ("crm", "update_crm_status"),
-    Intent.LIST_LEADS: ("crm", "read_data"),
-    Intent.SCORE_LEADS: ("scoring", "score_lead"),
-    Intent.UPDATE_LEAD: ("crm", "update_crm_status"),
-    Intent.GENERATE_MESSAGE: ("sales", "generate_content"),
-    Intent.SEND_FOLLOWUP: ("followup", "generate_content"),
     Intent.CREATE_AGENT: ("agent_build", "create_agent"),
     Intent.BUILD_AGENT_CODE: ("agent_build", "build_agent_code"),
-    Intent.CREATE_DEPARTMENT: ("agent_build", "create_agent"),
-    Intent.LIST_AGENTS: ("crm", "read_data"),
-    Intent.GENERATE_CONTENT: ("content", "generate_content"),
-    Intent.SEO: ("seo", "generate_content"),
-    Intent.MARKET_ANALYSIS: ("analysis", "analyze_market"),
-    Intent.COMPETITOR: ("analysis", "analyze_market"),
-    Intent.BRAINSTORM: ("strategy", "complex_reasoning"),
-    Intent.REPORT: ("summarization", "generate_report"),
+
+    Intent.ASSISTANT_MESSAGE: ("assistant", "draft_message"),
+    Intent.ASSISTANT_MEETING: ("assistant", "draft_meeting"),
+    Intent.ASSISTANT_DASHBOARD: ("assistant", "update_dashboard"),
+    Intent.ASSISTANT_PLAN: ("assistant", "plan_action"),
+
     Intent.STATUS: ("crm", "read_data"),
-    Intent.APPROVE: ("crm", "read_data"),
 }
 
 
@@ -82,7 +73,7 @@ class Orchestrator:
 
         task_type, action = _INTENT_TASK_MAP.get(
             intent_result.intent,
-            ("strategy", "complex_reasoning"),
+            ("assistant", "plan_action"),
         )
 
         task = self._tm.create_task(
@@ -93,7 +84,7 @@ class Orchestrator:
                 "intent": intent_result.intent,
                 "params": intent_result.params,
             },
-            priority=self._priority_for(intent_result.intent),
+            priority=5,
             trace_id=trace_id,
         )
 
@@ -102,7 +93,7 @@ class Orchestrator:
             return OrchestratorResult(
                 success=False,
                 intent=intent_result.intent,
-                message=f"פעולה '{action}' דורשת אישור. בדוק את תור האישורים.",
+                message=f"פעולה '{action}' דורשת אישור.",
                 task_id=task.id,
                 trace_id=trace_id,
                 needs_approval=True,
@@ -154,9 +145,6 @@ class Orchestrator:
         if ir.intent == Intent.STATUS:
             return self._system_status(ir, trace_id)
 
-        if ir.intent == Intent.APPROVE:
-            return self._handle_approve(ir, trace_id)
-
         return None
 
     def _system_status(
@@ -196,85 +184,26 @@ class Orchestrator:
             trace_id=trace_id,
         )
 
-    def _handle_approve(
-        self, ir: IntentResult, trace_id: str
-    ) -> OrchestratorResult:
-        from services.storage.repositories.approval_repo import ApprovalRepository
-
-        repo = ApprovalRepository()
-        approval_id = ir.params.get("approval_id")
-        if not approval_id:
-            pending = repo.get_pending()
-            if not pending:
-                return OrchestratorResult(
-                    success=True,
-                    intent=ir.intent,
-                    message="אין אישורים ממתינים.",
-                    trace_id=trace_id,
-                )
-            approval_id = pending[0].id
-
-        ok = repo.approve(approval_id)
-        if ok:
-            return OrchestratorResult(
-                success=True,
-                intent=ir.intent,
-                message=f"אישור {approval_id} בוצע בהצלחה.",
-                data={"approval_id": approval_id},
-                trace_id=trace_id,
-            )
-
-        return OrchestratorResult(
-            success=False,
-            intent=ir.intent,
-            message=f"לא נמצא אישור {approval_id}.",
-            trace_id=trace_id,
-        )
-
     def _unknown_intent(
         self, command: str, ir: IntentResult, trace_id: str
     ) -> OrchestratorResult:
         return OrchestratorResult(
             success=False,
             intent=Intent.UNKNOWN,
-            message=(
-                "לא הצלחתי להבין את הפקודה. "
-                "נסה לנסח אחרת או כתוב עזרה."
-            ),
+            message="לא הצלחתי להבין את הבקשה.",
             trace_id=trace_id,
             error="intent_not_recognised",
         )
 
-    @staticmethod
-    def _priority_for(intent: str) -> int:
-        high_priority = {
-            Intent.SEND_FOLLOWUP,
-            Intent.GENERATE_MESSAGE,
-            Intent.APPROVE,
-            Intent.BUILD_AGENT_CODE,
-        }
-        low_priority = {
-            Intent.REPORT,
-            Intent.MARKET_ANALYSIS,
-            Intent.BRAINSTORM,
-            Intent.SEO,
-        }
-        if intent in high_priority:
-            return 2
-        if intent in low_priority:
-            return 7
-        return 5
-
 
 _HELP_TEXT = """
 פקודות זמינות:
-- הוסף ליד
-- הצג לידים
-- כתוב הודעה
 - צור סוכן חדש
 - בנה קוד לסוכן חדש
+- תשלחי הודעה לשרי
+- תקבעי פגישה עם יוסי ביום חמישי
+- תוסיפי לידים חמים למסך הבית
 - סטטוס
-- עזרה
 """.strip()
 
 
