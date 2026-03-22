@@ -82,6 +82,14 @@ _INTENT_TASK_MAP = {
 
     # Reports
     Intent.DAILY_REPORT:             ("reporting",    "generate_report"),
+
+    # Agent Factory (Batch 3)
+    Intent.UPDATE_AGENT:             ("agent_build",  "update_agent"),
+    Intent.RETIRE_AGENT:             ("agent_build",  "retire_agent"),
+    Intent.LIST_AGENTS:              ("crm",          "read_data"),
+
+    # Revenue (Batch 4)
+    Intent.REVENUE_REPORT:           ("revenue",      "revenue_report"),
 }
 
 
@@ -210,6 +218,10 @@ class Orchestrator:
             return self._bottleneck(ir, trace_id)
         if ir.intent == Intent.NEXT_ACTION:
             return self._next_action(ir, trace_id)
+        if ir.intent == Intent.REVENUE_REPORT:
+            return self._full_revenue_report(ir, trace_id)
+        if ir.intent == Intent.LIST_AGENTS:
+            return self._list_agents(ir, trace_id)
         return None
 
     def _system_status(self, ir: IntentResult, trace_id: str) -> OrchestratorResult:
@@ -344,6 +356,46 @@ class Orchestrator:
             trace_id=trace_id,
         )
 
+    def _full_revenue_report(self, ir: IntentResult, trace_id: str) -> OrchestratorResult:
+        from engines.revenue_engine import revenue_snapshot, build_revenue_report
+        snap   = revenue_snapshot()
+        report = build_revenue_report(snap)
+        return OrchestratorResult(
+            success=True, intent=ir.intent,
+            message="דוח הכנסות נוצר",
+            data={
+                "report":         report,
+                "total_leads":    snap.total_leads,
+                "hot_leads":      snap.hot_leads,
+                "pipeline_value": snap.pipeline_value,
+                "conversion_est": snap.conversion_est,
+                "opportunities":  [{"name": o.lead_name, "action": o.action}
+                                   for o in snap.opportunities[:3]],
+                "bottlenecks":    [{"category": b.category, "suggestion": b.suggestion}
+                                   for b in snap.bottlenecks],
+                "next_actions":   [{"action": a.action, "urgency": a.urgency}
+                                   for a in snap.next_actions[:3]],
+            },
+            trace_id=trace_id,
+        )
+
+    def _list_agents(self, ir: IntentResult, trace_id: str) -> OrchestratorResult:
+        from agents.base.agent_registry import agent_registry
+        agents = agent_registry.list_agents()
+        data = {
+            "agents": [
+                {"name": a.name, "department": a.department,
+                 "agent_id": a.agent_id, "version": getattr(a, "version", 1)}
+                for a in agents
+            ],
+            "count": len(agents),
+        }
+        msg = f"פעילים {len(agents)} סוכנים במערכת."
+        return OrchestratorResult(
+            success=True, intent=ir.intent,
+            message=msg, data=data, trace_id=trace_id,
+        )
+
     def _unknown_intent(self, trace_id: str) -> OrchestratorResult:
         return OrchestratorResult(
             success=False,
@@ -359,25 +411,28 @@ _HELP_TEXT = """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 לידים
   • הוסף ליד יוסי כהן תל אביב 0501234567
-  • הצג לידים
-  • לידים חמים
+  • הצג לידים / לידים חמים
   • עדכן ליד [שם] לסטטוס מתעניין
 
 💬 תקשורת
   • שלחי הודעה לשרי
-  • תשלחי וואטסאפ ליוסי
   • תקבעי פגישה עם דוד ביום חמישי
   • תזכירי לי לחזור ליוסי מחר
 
-📊 תובנות עסקיות
+💰 הכנסות (Batch 4)
   • מה הכי יקדם הכנסות היום
   • למה לא סוגרים
   • מה הצעד הבא
-  • דוח יומי
+  • דוח הכנסות
+
+🤖 סוכנים (Batch 3)
+  • צור סוכן follow-up לאדריכלים
+  • הצג סוכנים
+
+📊 דוחות
+  • דוח יומי / סטטוס
 
 ⚙️ מערכת
-  • סטטוס
-  • צור סוכן חדש
   • עזרה
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """.strip()
