@@ -44,6 +44,8 @@ def create_app() -> Flask:
     from api.routes.system    import bp as system_bp
     from api.routes.goals     import bp as goals_bp        # Batch 6
 
+    app.register_blueprint(whatsapp_bp, url_prefix="/api/whatsapp")  # WhatsApp
+
     for blueprint in [commands_bp, leads_bp, agents_bp, tasks_bp,
                       approvals_bp, reports_bp, system_bp, actions_bp,
                       goals_bp]:                           # Batch 6
