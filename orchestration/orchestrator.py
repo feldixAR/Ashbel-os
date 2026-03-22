@@ -48,6 +48,10 @@ _INTENT_TASK_MAP = {
     Intent.ASSISTANT_DASHBOARD: ("assistant", "update_dashboard"),
     Intent.ASSISTANT_PLAN: ("assistant", "plan_action"),
 
+    Intent.DEVELOPMENT_ROADMAP: ("development", "roadmap"),
+    Intent.DEVELOPMENT_GAP: ("development", "gap_analysis"),
+    Intent.DEVELOPMENT_BATCH_STATUS: ("development", "batch_status"),
+
     Intent.STATUS: ("crm", "read_data"),
 }
 
@@ -59,13 +63,10 @@ class Orchestrator:
 
     def handle_command(self, command: str) -> OrchestratorResult:
         trace_id = str(uuid.uuid4())
-        log.info(f"[Orchestrator] command received trace={trace_id}: {command!r}")
-
         intent_result = intent_parser.parse(command)
-        log.info(f"[Orchestrator] parsed: {intent_result}")
 
         if not intent_result.is_confident(threshold=0.5):
-            return self._unknown_intent(command, intent_result, trace_id)
+            return self._unknown_intent(trace_id)
 
         direct = self._handle_direct(intent_result, trace_id)
         if direct is not None:
@@ -131,9 +132,7 @@ class Orchestrator:
             error=str(error),
         )
 
-    def _handle_direct(
-        self, ir: IntentResult, trace_id: str
-    ) -> Optional[OrchestratorResult]:
+    def _handle_direct(self, ir: IntentResult, trace_id: str) -> Optional[OrchestratorResult]:
         if ir.intent == Intent.HELP:
             return OrchestratorResult(
                 success=True,
@@ -147,9 +146,7 @@ class Orchestrator:
 
         return None
 
-    def _system_status(
-        self, ir: IntentResult, trace_id: str
-    ) -> OrchestratorResult:
+    def _system_status(self, ir: IntentResult, trace_id: str) -> OrchestratorResult:
         from agents.base.agent_registry import agent_registry
         from services.storage.repositories.lead_repo import LeadRepository
         from services.storage.repositories.approval_repo import ApprovalRepository
@@ -158,35 +155,21 @@ class Orchestrator:
         leads = LeadRepository().list_all()
         pending = ApprovalRepository().get_pending()
 
-        by_dept = {}
-        for a in agents:
-            dept = getattr(a, "department", "unknown")
-            name = getattr(a, "name", a.__class__.__name__)
-            by_dept.setdefault(dept, []).append(name)
-
         data = {
             "agents": len(agents),
             "leads": len(leads),
             "pending_approvals": len(pending),
-            "departments": by_dept,
         }
-        msg = (
-            f"מערכת פעילה — "
-            f"{data['agents']} סוכנים, "
-            f"{data['leads']} לידים, "
-            f"{data['pending_approvals']} ממתינים לאישור."
-        )
+
         return OrchestratorResult(
             success=True,
             intent=ir.intent,
-            message=msg,
+            message=f"מערכת פעילה — {data['agents']} סוכנים, {data['leads']} לידים, {data['pending_approvals']} ממתינים לאישור.",
             data=data,
             trace_id=trace_id,
         )
 
-    def _unknown_intent(
-        self, command: str, ir: IntentResult, trace_id: str
-    ) -> OrchestratorResult:
+    def _unknown_intent(self, trace_id: str) -> OrchestratorResult:
         return OrchestratorResult(
             success=False,
             intent=Intent.UNKNOWN,
@@ -203,6 +186,9 @@ _HELP_TEXT = """
 - תשלחי הודעה לשרי
 - תקבעי פגישה עם יוסי ביום חמישי
 - תוסיפי לידים חמים למסך הבית
+- תני לי roadmap
+- מה חסר במערכת
+- מה מצב הפיתוח
 - סטטוס
 """.strip()
 
