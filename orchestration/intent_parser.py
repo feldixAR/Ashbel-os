@@ -62,6 +62,11 @@ class Intent(str, Enum):
     # Revenue (Batch 4)
     REVENUE_REPORT            = "revenue_report"
 
+    # Goal & Growth Engine (Batch 6)
+    SET_GOAL                  = "set_goal"
+    LIST_GOALS                = "list_goals"
+    GROWTH_PLAN               = "growth_plan"
+
 
 @dataclass
 class IntentResult:
@@ -104,6 +109,24 @@ class IntentParser:
         return "command"
 
     def _detect_intent(self, text: str, tl: str):
+        # ── Batch 6 — Goal & Growth (check before generic revenue/sales) ──────
+        if any(w in tl for w in [
+            "הגדל מכירות", "רוצה להגדיל", "יעד עסקי", "הגדר יעד",
+            "תגדיר מטרה", "מטרה עסקית", "set goal", "הגדל הכנסות",
+            "להגדיל מכירות", "להגדיל הכנסות", "תגדיל",
+        ]):
+            return Intent.SET_GOAL, 0.95
+
+        if any(w in tl for w in [
+            "תוכנית צמיחה", "איך לצמוח", "growth plan", "תכנית שיווק",
+        ]):
+            return Intent.GROWTH_PLAN, 0.9
+
+        if any(w in tl for w in [
+            "יעדים", "מה היעדים", "הצג יעדים", "list goals", "יעדים פעילים",
+        ]):
+            return Intent.LIST_GOALS, 0.9
+
         # Revenue intelligence
         if any(w in tl for w in ["מה הכי יקדם", "מה יביא כסף", "revenue", "הכנסות"]):
             return Intent.REVENUE_INSIGHTS, 0.9
