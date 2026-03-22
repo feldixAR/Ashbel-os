@@ -12,6 +12,7 @@ Usage (development):
 import logging
 import os
 from flask import Flask, send_from_directory
+from api.routes.whatsapp import whatsapp_bp
 from flask_cors import CORS
 from config.settings import PORT, DEBUG
 
