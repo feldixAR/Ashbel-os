@@ -1,7 +1,3 @@
-"""
-IntentParser — Hebrew natural language → structured IntentResult.
-"""
-
 import re
 from dataclasses import dataclass, field
 
@@ -9,6 +5,7 @@ from dataclasses import dataclass, field
 class Intent:
     CREATE_AGENT = "create_agent"
     BUILD_AGENT_CODE = "build_agent_code"
+    APPLY_BUILD = "apply_build"
 
     ASSISTANT_MESSAGE = "assistant_message"
     ASSISTANT_MEETING = "assistant_meeting"
@@ -37,6 +34,15 @@ class IntentResult:
 
 
 _KEYWORD_RULES = [
+    (Intent.APPLY_BUILD, 0.95, [
+        r"תיישם",
+        r"תיישמי",
+        r"תכתוב את הקבצים",
+        r"apply build",
+        r"apply files",
+        r"תעלה לגיטהאב",
+        r"עדכן את הריפו",
+    ]),
     (Intent.DEVELOPMENT_ROADMAP, 0.95, [
         r"רודמאפ",
         r"roadmap",
@@ -58,7 +64,6 @@ _KEYWORD_RULES = [
         r"מה מצב הבאצ",
         r"מה מצב הפיתוח",
     ]),
-
     (Intent.ASSISTANT_MESSAGE, 0.95, [
         r"תשלח",
         r"תשלחי",
@@ -88,7 +93,6 @@ _KEYWORD_RULES = [
         r"תכנן",
         r"תכנני",
     ]),
-
     (Intent.BUILD_AGENT_CODE, 0.95, [
         r"בנ[יה]\s+קוד\s+לסוכן",
         r"בנה\s+קוד\s+לסוכן",
@@ -101,7 +105,6 @@ _KEYWORD_RULES = [
         r"create\s+agent",
         r"סוכן\s+חדש",
     ]),
-
     (Intent.STATUS, 0.95, [
         r"סטטוס",
         r"\bstatus\b",
@@ -127,25 +130,20 @@ def _extract_agent_params(cmd: str) -> dict:
 
 def _extract_assistant_params(cmd: str) -> dict:
     params = {}
-
     if "שרי" in cmd:
         params["name"] = "שרי"
     if "יוסי" in cmd:
         params["name"] = "יוסי"
-
     if "למחר" in cmd:
         params["date"] = "מחר"
     if "חמישי" in cmd:
         params["date"] = "יום חמישי"
     if "רביעי" in cmd:
         params["date"] = "יום רביעי"
-
     if "בעשר" in cmd:
         params["time"] = "10:00"
-
     if "לידים חמים" in cmd:
         params["widget"] = "לידים חמים"
-
     return params
 
 
