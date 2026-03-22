@@ -1,17 +1,5 @@
 """
 AgentRegistry — in-memory registry of active agent instances.
-
-Routing:
-    find(task_type, action)
-        → iterates agents in registration order
-        → returns first where can_handle() is True
-        → falls back to _fallback (GenericTaskAgent) if nothing matches
-        → returns None only if fallback is also not set
-
-bootstrap():
-    registers built-in agents in order
-    sets GenericTaskAgent as fallback
-    loads active DB agents (informational at Stage 3)
 """
 
 import logging
@@ -26,8 +14,6 @@ class AgentRegistry:
         self._agents: list = []
         self._fallback = None
         self._lock = threading.Lock()
-
-    # ── Registration ──────────────────────────────────────────────────────────
 
     def register(self, agent) -> None:
         with self._lock:
@@ -44,8 +30,6 @@ class AgentRegistry:
         with self._lock:
             self._agents.clear()
         log.info("[Registry] cleared")
-
-    # ── Routing ───────────────────────────────────────────────────────────────
 
     def find(self, task_type: str, action: str):
         with self._lock:
@@ -66,8 +50,6 @@ class AgentRegistry:
         log.warning(f"[Registry] no agent for ({task_type},{action})")
         return None
 
-    # ── Introspection ─────────────────────────────────────────────────────────
-
     def list_agents(self) -> list:
         with self._lock:
             return list(self._agents)
@@ -76,14 +58,12 @@ class AgentRegistry:
         with self._lock:
             return len(self._agents)
 
-    # ── Bootstrap ─────────────────────────────────────────────────────────────
-
     def bootstrap(self) -> None:
-        """Called once at startup — registers built-in agents."""
         from agents.departments.sales.lead_qualifier import LeadQualifierAgent
         from agents.departments.sales.messaging_agent import MessagingAgent
         from agents.departments.executive.ceo_agent import CEOAgent
         from agents.departments.executive.build_manager_agent import BuildManagerAgent
+        from agents.departments.executive.code_builder_agent import CodeBuilderAgent
         from agents.departments.generic.task_agent import GenericTaskAgent
 
         for agent in [
@@ -91,6 +71,7 @@ class AgentRegistry:
             MessagingAgent(),
             CEOAgent(),
             BuildManagerAgent(),
+            CodeBuilderAgent(),
         ]:
             self.register(agent)
 
@@ -101,7 +82,6 @@ class AgentRegistry:
         log.info(f"[Registry] bootstrap complete — {self.count()} agents")
 
     def _load_from_db(self) -> None:
-        """Load active agents from DB — informational at Stage 3."""
         try:
             from services.storage.repositories.agent_repo import AgentRepository
 
