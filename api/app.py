@@ -41,9 +41,11 @@ def create_app() -> Flask:
     from api.routes.approvals import bp as approvals_bp
     from api.routes.reports   import bp as reports_bp
     from api.routes.system    import bp as system_bp
+    from api.routes.goals     import bp as goals_bp        # Batch 6
 
     for blueprint in [commands_bp, leads_bp, agents_bp, tasks_bp,
-                      approvals_bp, reports_bp, system_bp, actions_bp]:
+                      approvals_bp, reports_bp, system_bp, actions_bp,
+                      goals_bp]:                           # Batch 6
         app.register_blueprint(blueprint, url_prefix="/api")
 
     # ── 4. Serve UI static files ──────────────────────────────────────────────
