@@ -32,6 +32,7 @@ const API = (() => {
 
   return {
     setKey(key) { sessionStorage.setItem('ashbal_api_key', key); },
+    request: request,   // expose for panels
     clearKey()  { sessionStorage.removeItem('ashbal_api_key'); },
     hasKey()    { return !!getKey(); },
 
