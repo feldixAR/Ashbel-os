@@ -63,11 +63,11 @@ ACTION_RISK: dict[str, RiskLevel] = {
     "rollback_agent_version": RiskLevel.HIGH,
     "delete_leads_bulk":      RiskLevel.HIGH,
 
-    # financial / legal — CRITICAL
-    "financial_decision":     RiskLevel.CRITICAL,
-    "contract_action":        RiskLevel.CRITICAL,
-    "pricing_change":         RiskLevel.CRITICAL,
-    "system_config_change":   RiskLevel.CRITICAL,
+    # Batch 6 — Goal & Growth Engine (internal writes = LOW, auto approved)
+    "set_goal":            RiskLevel.LOW,
+    "list_goals":          RiskLevel.TRIVIAL,
+    "growth_plan":         RiskLevel.TRIVIAL,
+    "outreach_plan":       RiskLevel.LOW,
 }
 
 
