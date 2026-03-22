@@ -1,98 +1,171 @@
+"""
+intent_parser.py — Hebrew/English intent detection with entity extraction.
+
+Batch 1: Conversational Interface
+- Free text intent classification (Enum-based)
+- Entity extraction via EntityExtractor
+- Confidence scoring
+- Context detection: command vs question vs update
+- Params populated from entities automatically
+"""
+
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Any
+
+from orchestration.entity_extractor import entity_extractor
 
 
 class Intent(str, Enum):
-    CREATE_AGENT = "create_agent"
-    BUILD_AGENT_CODE = "build_agent_code"
-    APPLY_BUILD = "apply_build"
+    # Agent management
+    CREATE_AGENT              = "create_agent"
+    BUILD_AGENT_CODE          = "build_agent_code"
+    APPLY_BUILD               = "apply_build"
 
-    ASSISTANT_MESSAGE = "assistant_message"
-    ASSISTANT_MEETING = "assistant_meeting"
-    ASSISTANT_DASHBOARD = "assistant_dashboard"
-    ASSISTANT_PLAN = "assistant_plan"
+    # Assistant actions
+    ASSISTANT_MESSAGE         = "assistant_message"
+    ASSISTANT_MEETING         = "assistant_meeting"
+    ASSISTANT_DASHBOARD       = "assistant_dashboard"
+    ASSISTANT_PLAN            = "assistant_plan"
+    ASSISTANT_REMINDER        = "assistant_reminder"
 
-    DEVELOPMENT_ROADMAP = "development_roadmap"
-    DEVELOPMENT_GAP = "development_gap"
-    DEVELOPMENT_BATCH_STATUS = "development_batch_status"
+    # Development
+    DEVELOPMENT_ROADMAP       = "development_roadmap"
+    DEVELOPMENT_GAP           = "development_gap"
+    DEVELOPMENT_BATCH_STATUS  = "development_batch_status"
 
-    STATUS = "status"
+    # CRM / Sales
+    STATUS                    = "status"
+    SALES                     = "sales"
+    CREATE_LEAD               = "create_lead"
+    UPDATE_LEAD               = "update_lead"
+    LIST_LEADS                = "list_leads"
+    HOT_LEADS                 = "hot_leads"
 
-    SALES = "sales"
-    CREATE_LEAD = "create_lead"
+    # Revenue intelligence
+    REVENUE_INSIGHTS          = "revenue_insights"
+    BOTTLENECK                = "bottleneck"
+    NEXT_ACTION               = "next_action"
 
-    HELP = "help"
-    UNKNOWN = "unknown"
+    # Reporting
+    DAILY_REPORT              = "daily_report"
+
+    # Meta
+    HELP                      = "help"
+    UNKNOWN                   = "unknown"
 
 
 @dataclass
 class IntentResult:
-    intent: Intent
+    intent:     Intent
     confidence: float
-    params: Dict[str, Any]
+    params:     Dict[str, Any] = field(default_factory=dict)
+    context:    str            = "command"   # command | question | update
 
     def is_confident(self, threshold: float = 0.5) -> bool:
         return self.confidence >= threshold
 
 
 class IntentParser:
+    """
+    Parses free Hebrew/English text into structured IntentResult.
+    Pipeline: text -> intent detection -> entity extraction -> params merge.
+    """
+
     def parse(self, text: str) -> IntentResult:
-        text_lower = text.lower()
+        t = text.strip()
+        tl = t.lower()
 
-        # SALES / LEADS
-        if any(word in text_lower for word in ["ליד", "lead"]):
-            return IntentResult(
-                intent=Intent.CREATE_LEAD,
-                confidence=0.9,
-                params={}
-            )
+        context = self._detect_context(t)
+        intent, confidence = self._detect_intent(t, tl)
+        entities = entity_extractor.extract(t)
+        params = dict(entities)
 
-        if any(word in text_lower for word in ["לקוח", "מכירה", "sale"]):
-            return IntentResult(
-                intent=Intent.SALES,
-                confidence=0.8,
-                params={}
-            )
-
-        # ASSISTANT MESSAGE
-        if any(word in text_lower for word in ["שלח", "הודעה", "וואטסאפ", "whatsapp"]):
-            return IntentResult(
-                intent=Intent.ASSISTANT_MESSAGE,
-                confidence=0.8,
-                params={}
-            )
-
-        # MEETING
-        if any(word in text_lower for word in ["פגישה", "meeting", "schedule"]):
-            return IntentResult(
-                intent=Intent.ASSISTANT_MEETING,
-                confidence=0.8,
-                params={}
-            )
-
-        # STATUS
-        if "סטטוס" in text_lower or "status" in text_lower:
-            return IntentResult(
-                intent=Intent.STATUS,
-                confidence=0.9,
-                params={}
-            )
-
-        # HELP
-        if "עזרה" in text_lower or "help" in text_lower:
-            return IntentResult(
-                intent=Intent.HELP,
-                confidence=0.9,
-                params={}
-            )
-
-        # DEFAULT
         return IntentResult(
-            intent=Intent.UNKNOWN,
-            confidence=0.0,
-            params={}
+            intent=intent,
+            confidence=confidence,
+            params=params,
+            context=context,
         )
+
+    def _detect_context(self, text: str) -> str:
+        if any(q in text for q in ["?", "מה ", "איך ", "כמה ", "מתי ", "למה ", "האם "]):
+            return "question"
+        if any(u in text for u in ["עדכן", "שנה", "תעדכן", "עדכני", "שנה סטטוס"]):
+            return "update"
+        return "command"
+
+    def _detect_intent(self, text: str, tl: str):
+        # Revenue intelligence
+        if any(w in tl for w in ["מה הכי יקדם", "מה יביא כסף", "revenue", "הכנסות"]):
+            return Intent.REVENUE_INSIGHTS, 0.9
+        if any(w in text for w in ["למה לא סוגרים", "מה תקוע", "bottleneck", "חסם"]):
+            return Intent.BOTTLENECK, 0.9
+        if any(w in text for w in ["מה כדאי לעשות", "next action", "מה לפעול", "מה הצעד הבא"]):
+            return Intent.NEXT_ACTION, 0.9
+
+        # Leads
+        if any(w in tl for w in ["לידים חמים", "hot leads"]):
+            return Intent.HOT_LEADS, 0.95
+        if any(w in tl for w in ["הצג לידים", "רשימת לידים", "list leads", "כל הלידים", "תראה לידים"]):
+            return Intent.LIST_LEADS, 0.9
+        if any(w in text for w in ["עדכן ליד", "עדכני ליד", "שנה סטטוס ליד", "update lead"]):
+            return Intent.UPDATE_LEAD, 0.9
+        if any(w in tl for w in ["ליד", "lead", "לקוח חדש"]):
+            return Intent.CREATE_LEAD, 0.9
+
+        # Assistant: message
+        if any(w in text for w in ["שלח הודעה", "תשלח הודעה", "שלחי הודעה", "תשלחי הודעה",
+                                    "שלח וואטסאפ", "תשלח וואטסאפ", "whatsapp", "וואטסאפ"]):
+            return Intent.ASSISTANT_MESSAGE, 0.9
+
+        # Assistant: reminder
+        if any(w in text for w in ["תזכיר", "תזכירי", "תזכור", "reminder", "תזכורת",
+                                    "לחזור אל", "לחזור ל"]):
+            return Intent.ASSISTANT_REMINDER, 0.9
+
+        # Assistant: meeting
+        if any(w in text for w in ["פגישה", "meeting", "schedule", "קבע פגישה",
+                                    "תקבע", "תקבעי", "יומן", "calendar"]):
+            return Intent.ASSISTANT_MEETING, 0.9
+
+        # Dashboard
+        if any(w in text for w in ["מסך הבית", "dashboard", "עדכן מסך", "הוסף למסך"]):
+            return Intent.ASSISTANT_DASHBOARD, 0.8
+
+        # Daily report
+        if any(w in tl for w in ["דוח יומי", "daily report", "דוח", "סיכום יום"]):
+            return Intent.DAILY_REPORT, 0.9
+
+        # Sales
+        if any(w in tl for w in ["לקוח", "מכירה", "sale", "עסקה"]):
+            return Intent.SALES, 0.8
+
+        # Status
+        if any(w in tl for w in ["סטטוס", "status", "מצב המערכת"]):
+            return Intent.STATUS, 0.9
+
+        # Build system
+        if any(w in tl for w in ["בנה קוד", "build agent", "build_agent"]):
+            return Intent.BUILD_AGENT_CODE, 0.9
+        if any(w in tl for w in ["יישם", "apply", "תיישמי"]):
+            return Intent.APPLY_BUILD, 0.9
+        if any(w in tl for w in ["צור סוכן", "create agent", "סוכן חדש"]):
+            return Intent.CREATE_AGENT, 0.9
+
+        # Development
+        if any(w in tl for w in ["roadmap", "תכנית", "פיתוח"]):
+            return Intent.DEVELOPMENT_ROADMAP, 0.8
+        if any(w in tl for w in ["מה חסר", "gap", "פערים"]):
+            return Intent.DEVELOPMENT_GAP, 0.8
+        if any(w in tl for w in ["batch", "סטטוס פיתוח"]):
+            return Intent.DEVELOPMENT_BATCH_STATUS, 0.8
+
+        # Help
+        if any(w in tl for w in ["עזרה", "help", "פקודות", "מה אתה יכול"]):
+            return Intent.HELP, 0.9
+
+        return Intent.UNKNOWN, 0.0
 
 
 intent_parser = IntentParser()
