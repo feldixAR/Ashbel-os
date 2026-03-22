@@ -388,6 +388,57 @@ def _handle_generate_report(task: TaskModel) -> ExecutionResult:
         )
 
 
+
+# ── Agent Factory Handlers (Batch 3) ─────────────────────────────────────────
+
+def _handle_create_agent(task: TaskModel) -> ExecutionResult:
+    from agents.factory.agent_factory import agent_factory
+    started = _now_ms()
+    params  = _params(task)
+    command = _command(task)
+
+    spec = agent_factory.parse_create_request(command)
+    if not spec:
+        return ExecutionResult(
+            success=False,
+            message="לא הצלחתי להבין את הגדרת הסוכן.",
+            output={"error": "parse_failed", "tip": "נסה: 'צור סוכן follow-up לאדריכלים'"},
+        )
+
+    result = agent_factory.create_agent(spec)
+    if result.get("success"):
+        return ExecutionResult(
+            success=True,
+            message=f"✅ סוכן '{result['name']}' נוצר ונרשם!",
+            output=result,
+            duration_ms=_elapsed_ms(started),
+        )
+    return ExecutionResult(
+        success=False,
+        message=f"שגיאה: {result.get('error')}",
+        output=result,
+    )
+
+
+def _handle_revenue_report(task: TaskModel) -> ExecutionResult:
+    from engines.revenue_engine import revenue_snapshot, build_revenue_report
+    started = _now_ms()
+    snap    = revenue_snapshot()
+    report  = build_revenue_report(snap)
+    return ExecutionResult(
+        success=True,
+        message="דוח הכנסות נוצר",
+        output={
+            "report":         report,
+            "total_leads":    snap.total_leads,
+            "hot_leads":      snap.hot_leads,
+            "pipeline_value": snap.pipeline_value,
+            "conversion_est": snap.conversion_est,
+        },
+        duration_ms=_elapsed_ms(started),
+    )
+
+
 # ── Handler Registry ──────────────────────────────────────────────────────────
 
 _HANDLERS: Dict[str, Callable] = {
@@ -412,6 +463,12 @@ _HANDLERS: Dict[str, Callable] = {
 
     # Reporting
     "generate_report":      _handle_generate_report,
+
+    # Agent Factory (Batch 3)
+    "create_agent":         _handle_create_agent,
+
+    # Revenue (Batch 4)
+    "revenue_report":       _handle_revenue_report,
 }
 
 
