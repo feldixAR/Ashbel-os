@@ -1,16 +1,9 @@
-"""
-Orchestrator — the central command router.
-"""
-
-import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
 from orchestration.intent_parser import IntentResult, Intent, intent_parser
 from orchestration.task_manager import task_manager, TaskManager
-
-log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -42,6 +35,7 @@ class OrchestratorResult:
 _INTENT_TASK_MAP = {
     Intent.CREATE_AGENT: ("agent_build", "create_agent"),
     Intent.BUILD_AGENT_CODE: ("agent_build", "build_agent_code"),
+    Intent.APPLY_BUILD: ("development", "apply_files"),
 
     Intent.ASSISTANT_MESSAGE: ("assistant", "draft_message"),
     Intent.ASSISTANT_MEETING: ("assistant", "draft_meeting"),
@@ -57,7 +51,6 @@ _INTENT_TASK_MAP = {
 
 
 class Orchestrator:
-
     def __init__(self, tm: TaskManager = None):
         self._tm = tm or task_manager
 
@@ -183,6 +176,7 @@ _HELP_TEXT = """
 פקודות זמינות:
 - צור סוכן חדש
 - בנה קוד לסוכן חדש
+- תיישמי את הקבצים
 - תשלחי הודעה לשרי
 - תקבעי פגישה עם יוסי ביום חמישי
 - תוסיפי לידים חמים למסך הבית
