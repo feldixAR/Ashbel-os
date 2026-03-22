@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 class AgentRegistry:
 
     def __init__(self):
-        self._agents: list = []
+        self._agents = []
         self._fallback = None
         self._lock = threading.Lock()
 
@@ -64,6 +64,7 @@ class AgentRegistry:
         from agents.departments.executive.ceo_agent import CEOAgent
         from agents.departments.executive.build_manager_agent import BuildManagerAgent
         from agents.departments.executive.code_builder_agent import CodeBuilderAgent
+        from agents.departments.executive.executive_assistant_agent import ExecutiveAssistantAgent
         from agents.departments.generic.task_agent import GenericTaskAgent
 
         for agent in [
@@ -72,6 +73,7 @@ class AgentRegistry:
             CEOAgent(),
             BuildManagerAgent(),
             CodeBuilderAgent(),
+            ExecutiveAssistantAgent(),
         ]:
             self.register(agent)
 
@@ -84,7 +86,6 @@ class AgentRegistry:
     def _load_from_db(self) -> None:
         try:
             from services.storage.repositories.agent_repo import AgentRepository
-
             db_agents = AgentRepository().get_active()
             log.info(f"[Registry] {len(db_agents)} active agents in DB")
         except Exception as e:
