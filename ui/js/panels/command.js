@@ -273,12 +273,38 @@ const CommandPanel = (() => {
       currentDraft = null;
     }
 
-    function approveDraft() {
+    async function approveDraft() {
       if (!currentDraft) return;
-      const textarea = document.getElementById('draftText');
-      const msg = textarea ? textarea.value : '';
-      Toast.success('הפעולה אושרה — בשלב הבא תישלח בפועל');
-      output.textContent = `✅ אושר!\n\nבשלב הבא (Batch 5 — Integrations), ההודעה תישלח ישירות דרך WhatsApp/Calendar.`;
+      const textarea  = document.getElementById('draftText');
+      const out_draft = currentDraft.out;
+
+      // Update draft message if edited
+      if (textarea) out_draft.draft_message = textarea.value;
+
+      const btn = document.getElementById('draftApprove');
+      btn.disabled    = true;
+      btn.textContent = '⏳ מבצע...';
+
+      const res = await API.request('POST', '/actions/execute', {
+        action_type: out_draft.action_type,
+        payload:     out_draft,
+        lead_id:     out_draft.lead_id || '',
+      });
+
+      btn.disabled    = false;
+      btn.textContent = '✅ אשר ושלח';
+
+      const d = res.data || res;
+
+      // If we got a deep link — open it
+      const link = d.deep_link || (d.result && d.result.deep_link);
+      if (link) {
+        window.open(link, '_blank');
+        output.textContent = `✅ ${d.message || 'בוצע'}\n\n🔗 נפתח חלון חדש`;
+      } else {
+        output.textContent = `✅ ${d.message || 'בוצע'}`;
+      }
+      Toast.success(d.message || 'בוצע בהצלחה');
       hideDraft();
     }
 
