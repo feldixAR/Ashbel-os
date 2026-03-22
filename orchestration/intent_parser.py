@@ -19,7 +19,6 @@ class Intent(str, Enum):
 
     STATUS = "status"
 
-    # 🔥 הוספה חשובה
     SALES = "sales"
     CREATE_LEAD = "create_lead"
 
@@ -41,7 +40,7 @@ class IntentParser:
     def parse(self, text: str) -> IntentResult:
         text_lower = text.lower()
 
-        # 🔥 SALES / LEADS
+        # SALES / LEADS
         if any(word in text_lower for word in ["ליד", "lead"]):
             return IntentResult(
                 intent=Intent.CREATE_LEAD,
