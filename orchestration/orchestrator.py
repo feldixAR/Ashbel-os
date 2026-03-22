@@ -90,6 +90,11 @@ _INTENT_TASK_MAP = {
 
     # Revenue (Batch 4)
     Intent.REVENUE_REPORT:           ("revenue",      "revenue_report"),
+
+    # Goal & Growth Engine (Batch 6)
+    Intent.SET_GOAL:                 ("growth",       "set_goal"),
+    Intent.LIST_GOALS:               ("growth",       "list_goals"),
+    Intent.GROWTH_PLAN:              ("growth",       "growth_plan"),
 }
 
 
@@ -222,6 +227,8 @@ class Orchestrator:
             return self._full_revenue_report(ir, trace_id)
         if ir.intent == Intent.LIST_AGENTS:
             return self._list_agents(ir, trace_id)
+        if ir.intent == Intent.LIST_GOALS:
+            return self._list_goals(ir, trace_id)
         return None
 
     def _system_status(self, ir: IntentResult, trace_id: str) -> OrchestratorResult:
@@ -395,6 +402,23 @@ class Orchestrator:
             success=True, intent=ir.intent,
             message=msg, data=data, trace_id=trace_id,
         )
+
+    def _list_goals(self, ir: IntentResult, trace_id: str) -> OrchestratorResult:
+        try:
+            from services.storage.repositories.goal_repo import GoalRepository
+            goals = GoalRepository().list_active()
+            return OrchestratorResult(
+                success=True, intent=ir.intent,
+                message=f"יש {len(goals)} יעדים פעילים." if goals else "אין יעדים פעילים עדיין.",
+                data={"goals": [g.to_dict() for g in goals], "total": len(goals)},
+                trace_id=trace_id,
+            )
+        except Exception as e:
+            return OrchestratorResult(
+                success=False, intent=ir.intent,
+                message=f"שגיאה בטעינת יעדים: {e}",
+                trace_id=trace_id, error=str(e),
+            )
 
     def _unknown_intent(self, trace_id: str) -> OrchestratorResult:
         return OrchestratorResult(
