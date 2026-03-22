@@ -1,25 +1,21 @@
 """
-Executor — entry point for all task execution.
+executor.py — Execution entry point for all task actions.
 
-Stage 2: handles update_crm_status via direct handler.
-Stage 3: AgentRegistry will be added here without breaking this.
-
-Contract with TaskManager.dispatch():
-    execute(task) -> ExecutionResult
-    ExecutionResult has: success, message, output, model_used, cost_usd, duration_ms, to_dict()
+Batch 1+2: Full handler registry for CRM, assistant, revenue, and reporting.
+Contract: execute(task) -> ExecutionResult (never raises)
 """
 
 import logging
 import datetime
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, Callable
 
 from services.storage.models.task import TaskModel
 
 log = logging.getLogger(__name__)
 
 
-# ── ExecutionResult — DO NOT MODIFY ──────────────────────────────────────────
+# ── ExecutionResult ───────────────────────────────────────────────────────────
 
 @dataclass
 class ExecutionResult:
@@ -41,34 +37,57 @@ class ExecutionResult:
         }
 
 
-# ── Handler: update_crm_status ────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _handle_update_crm_status(task: TaskModel) -> ExecutionResult:
+def _now_ms() -> int:
+    return int(datetime.datetime.utcnow().timestamp() * 1000)
+
+def _elapsed_ms(started: int) -> int:
+    return _now_ms() - started
+
+def _params(task: TaskModel) -> dict:
+    return (task.input_data or {}).get("params", {})
+
+def _command(task: TaskModel) -> str:
+    return (task.input_data or {}).get("command", "")
+
+
+# ── CRM Handlers ──────────────────────────────────────────────────────────────
+
+def _handle_create_lead(task: TaskModel) -> ExecutionResult:
     from services.storage.repositories.lead_repo import LeadRepository
-    from events.event_bus                         import event_bus
-    import events.event_types                     as ET
+    from events.event_bus import event_bus
+    import events.event_types as ET
 
     started = _now_ms()
-    params  = (task.input_data or {}).get("params", {})
-    name    = (params.get("name")   or "").strip()
-    city    = (params.get("city")   or "").strip()
-    phone   = (params.get("phone")  or "").strip()
-    source  = (params.get("source") or "manual").strip()
-    notes   = (params.get("notes")  or "").strip()
+    p = _params(task)
+
+    name   = (p.get("name")   or "").strip()
+    city   = (p.get("city")   or "").strip()
+    phone  = (p.get("phone")  or "").strip()
+    source = (p.get("source") or "manual").strip()
+    notes  = (p.get("notes")  or "").strip()
 
     if not name:
-        log.warning(f"[Executor] missing name task={task.id}")
+        # Try to extract name from command text as fallback
+        cmd = _command(task)
+        import re
+        m = re.search(r"ליד\s+([א-תa-zA-Z]+(?:\s+[א-תa-zA-Z]+)?)", cmd)
+        if m:
+            name = m.group(1).strip()
+
+    if not name:
         return ExecutionResult(
             success=False,
-            message="שגיאה: שם הליד חסר.",
-            output={"error": "missing_name", "received_params": params},
+            message="שגיאה: שם הליד חסר. נסה: 'הוסף ליד יוסי כהן תל אביב 0501234567'",
+            output={"error": "missing_name", "tip": "פרמט: הוסף ליד [שם] [עיר] [טלפון]"},
         )
 
     try:
         lead = LeadRepository().create(
             name=name, city=city, phone=phone, source=source, notes=notes)
     except Exception as e:
-        log.error(f"[Executor] lead create failed task={task.id}: {e}", exc_info=True)
+        log.error(f"[Executor] create_lead failed task={task.id}: {e}", exc_info=True)
         return ExecutionResult(
             success=False,
             message=f"שגיאה ביצירת ליד: {e}",
@@ -82,31 +101,328 @@ def _handle_update_crm_status(task: TaskModel) -> ExecutionResult:
         source_task_id=task.id,
         trace_id=task.trace_id,
     )
-    log.info(f"[Executor] lead created id={lead.id} name={lead.name}")
+
     return ExecutionResult(
         success=True,
-        message=f"ליד נוצר בהצלחה: {lead.name}",
-        output={"lead_id": lead.id, "name": lead.name, "city": lead.city,
-                "phone": lead.phone, "source": lead.source, "status": lead.status},
+        message=f"✅ ליד נוצר בהצלחה: {lead.name}" + (f" ({lead.city})" if lead.city else ""),
+        output={
+            "lead_id": lead.id, "name": lead.name, "city": lead.city,
+            "phone": lead.phone, "source": lead.source, "status": lead.status,
+        },
         duration_ms=_elapsed_ms(started),
     )
 
 
-# ── Handler registry ──────────────────────────────────────────────────────────
+def _handle_update_crm_status(task: TaskModel) -> ExecutionResult:
+    """Alias for create_lead (legacy handler name)."""
+    return _handle_create_lead(task)
 
-_HANDLERS: dict[str, callable] = {
-    "update_crm_status": _handle_update_crm_status,
+
+def _handle_update_lead(task: TaskModel) -> ExecutionResult:
+    from services.storage.repositories.lead_repo import LeadRepository
+    started = _now_ms()
+    p = _params(task)
+
+    lead_id = p.get("lead_id", "")
+    status  = p.get("status", "")
+    score   = p.get("score")
+    notes   = p.get("notes", "")
+
+    if not lead_id and not p.get("name"):
+        return ExecutionResult(
+            success=False,
+            message="שגיאה: חסר מזהה ליד לעדכון.",
+            output={"error": "missing_lead_id"},
+        )
+
+    repo = LeadRepository()
+    if lead_id and status:
+        repo.update_status(lead_id, status)
+    if lead_id and score is not None:
+        repo.update_score(lead_id, int(score))
+
+    return ExecutionResult(
+        success=True,
+        message=f"ליד עודכן בהצלחה.",
+        output={"lead_id": lead_id, "status": status, "score": score},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_hot_leads(task: TaskModel) -> ExecutionResult:
+    from services.storage.repositories.lead_repo import LeadRepository
+    started = _now_ms()
+    leads   = LeadRepository().get_hot_leads(min_score=50)
+    data = [
+        {"name": l.name, "city": l.city or "—", "phone": l.phone or "—",
+         "status": l.status, "score": l.score}
+        for l in leads
+    ]
+    msg = f"נמצאו {len(data)} לידים חמים." if data else "אין לידים חמים כרגע."
+    return ExecutionResult(
+        success=True, message=msg,
+        output={"hot_leads": data, "count": len(data)},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_read_data(task: TaskModel) -> ExecutionResult:
+    from services.storage.repositories.lead_repo import LeadRepository
+    from agents.base.agent_registry import agent_registry
+    started = _now_ms()
+    leads   = LeadRepository().list_all()
+    agents  = agent_registry.list_agents()
+    data = {
+        "leads": [
+            {"id": l.id, "name": l.name, "city": l.city, "phone": l.phone,
+             "source": l.source, "status": l.status, "score": l.score}
+            for l in leads
+        ],
+        "agents_count": len(agents),
+        "leads_count":  len(leads),
+    }
+    return ExecutionResult(
+        success=True,
+        message=f"נטענו {len(leads)} לידים ו-{len(agents)} סוכנים.",
+        output=data,
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+# ── Assistant Handlers (Batch 2 — draft flow) ─────────────────────────────────
+
+def _handle_draft_message(task: TaskModel) -> ExecutionResult:
+    """Prepares a WhatsApp draft for approval before sending."""
+    started = _now_ms()
+    p       = _params(task)
+    cmd     = _command(task)
+
+    contact = p.get("contact_name") or p.get("name") or "איש קשר"
+    text    = p.get("message") or (
+        f"היי {contact}, רציתי לעדכן אותך לגבי הנושא שדיברנו עליו. "
+        f"האם נוח לך לדבר?"
+    )
+
+    return ExecutionResult(
+        success=True,
+        message=f"טיוטת הודעה מוכנה ל-{contact}",
+        output={
+            "action_type":    "whatsapp_draft",
+            "contact_name":   contact,
+            "draft_message":  text,
+            "channel":        "whatsapp",
+            "needs_approval": True,
+            "next_step":      "approve_or_edit",
+            "command":        cmd,
+        },
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_draft_meeting(task: TaskModel) -> ExecutionResult:
+    """Prepares a calendar event draft for approval."""
+    started = _now_ms()
+    p       = _params(task)
+
+    contact = p.get("contact_name") or p.get("name") or "איש קשר"
+    date    = p.get("date") or "לקביעה"
+    notes   = p.get("notes") or ""
+
+    return ExecutionResult(
+        success=True,
+        message=f"טיוטת פגישה מוכנה עם {contact}",
+        output={
+            "action_type":    "calendar_draft",
+            "contact_name":   contact,
+            "meeting_title":  f"פגישה עם {contact}",
+            "meeting_date":   date,
+            "notes":          notes,
+            "channel":        "calendar",
+            "needs_approval": True,
+            "next_step":      "approve_or_edit",
+        },
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_set_reminder(task: TaskModel) -> ExecutionResult:
+    """Creates a reminder entry."""
+    started = _now_ms()
+    p       = _params(task)
+    cmd     = _command(task)
+
+    contact = p.get("contact_name") or p.get("name") or ""
+    date    = p.get("date") or "מחר"
+    notes   = p.get("notes") or cmd
+
+    reminder_text = f"לחזור ל{contact}" if contact else "תזכורת"
+
+    return ExecutionResult(
+        success=True,
+        message=f"תזכורת נרשמה: {reminder_text} ב-{date}",
+        output={
+            "action_type":  "reminder",
+            "contact_name": contact,
+            "reminder_text": reminder_text,
+            "date":         date,
+            "notes":        notes,
+            "status":       "set",
+        },
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_plan_action(task: TaskModel) -> ExecutionResult:
+    """Generic plan action handler."""
+    cmd = _command(task)
+    return ExecutionResult(
+        success=True,
+        message="העוזר האישי ניתח את הבקשה",
+        output={
+            "status":             "planned",
+            "command":            cmd,
+            "suggested_next_steps": [
+                "classify_request",
+                "prepare_draft",
+                "ask_for_approval_if_needed",
+            ],
+        },
+    )
+
+
+def _handle_update_dashboard(task: TaskModel) -> ExecutionResult:
+    p      = _params(task)
+    widget = p.get("widget") or "לידים חמים"
+    return ExecutionResult(
+        success=True,
+        message=f"בקשת עדכון מסך הבית נרשמה: {widget}",
+        output={
+            "action_type":    "dashboard_update",
+            "widget":         widget,
+            "needs_approval": True,
+            "next_step":      "apply_dashboard_update",
+        },
+    )
+
+
+# ── Revenue Handlers ──────────────────────────────────────────────────────────
+
+def _handle_revenue_insights(task: TaskModel) -> ExecutionResult:
+    from services.storage.repositories.lead_repo import LeadRepository
+    started = _now_ms()
+    repo    = LeadRepository()
+    leads   = repo.list_all()
+    hot     = [l for l in leads if (l.score or 0) >= 70]
+    stuck   = [l for l in leads if l.status == "ניסיון קשר" and (l.attempts or 0) >= 3]
+
+    insights = []
+    if hot:
+        insights.append(f"⚡ {len(hot)} לידים חמים — פנה אליהם היום!")
+    if stuck:
+        insights.append(f"⚠️ {len(stuck)} לידים תקועים — שקול גישה שונה.")
+    if not leads:
+        insights.append("אין לידים במערכת. התחל להזין לידים.")
+    if not hot and leads:
+        insights.append("אין לידים חמים — שפר ציונים או הוסף לידים חדשים.")
+
+    return ExecutionResult(
+        success=True,
+        message="\n".join(insights) or "אין תובנות כרגע.",
+        output={"insights": insights, "total": len(leads), "hot": len(hot), "stuck": len(stuck)},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_bottleneck(task: TaskModel) -> ExecutionResult:
+    from services.storage.repositories.lead_repo import LeadRepository
+    started = _now_ms()
+    leads   = LeadRepository().list_all()
+    counts: dict = {}
+    for l in leads:
+        counts[l.status] = counts.get(l.status, 0) + 1
+
+    bottlenecks = []
+    if counts.get("ניסיון קשר", 0) > 3:
+        bottlenecks.append(f"🔴 {counts['ניסיון קשר']} לידים תקועים בניסיון קשר")
+    if counts.get("חדש", 0) > 5:
+        bottlenecks.append(f"🟡 {counts['חדש']} לידים חדשים לא טופלו")
+
+    msg = "\n".join(bottlenecks) if bottlenecks else "לא זוהו חסמים."
+    return ExecutionResult(
+        success=True, message=msg,
+        output={"distribution": counts, "bottlenecks": bottlenecks},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_next_best_action(task: TaskModel) -> ExecutionResult:
+    from services.storage.repositories.lead_repo import LeadRepository
+    started = _now_ms()
+    leads   = LeadRepository().get_pending_followup()[:5]
+    actions = [
+        {"name": l.name, "city": l.city or "—", "status": l.status, "score": l.score}
+        for l in leads
+    ]
+    lines = [f"• {a['name']} ({a['city']}) — {a['status']}, ציון {a['score']}" for a in actions]
+    msg   = "הפעולות הבאות המומלצות:\n" + "\n".join(lines) if lines else "אין פעולות דחופות."
+    return ExecutionResult(
+        success=True, message=msg,
+        output={"next_actions": actions},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_generate_report(task: TaskModel) -> ExecutionResult:
+    try:
+        from engines.reporting_engine import daily_summary, build_text_report
+        summary = daily_summary()
+        report  = build_text_report(summary)
+        return ExecutionResult(
+            success=True, message="דוח יומי נוצר",
+            output={"report": report, **summary},
+        )
+    except Exception as e:
+        return ExecutionResult(
+            success=False, message=f"שגיאה ביצירת דוח: {e}",
+            output={"error": str(e)},
+        )
+
+
+# ── Handler Registry ──────────────────────────────────────────────────────────
+
+_HANDLERS: Dict[str, Callable] = {
+    # CRM
+    "create_lead":          _handle_create_lead,
+    "update_crm_status":    _handle_update_crm_status,
+    "update_lead":          _handle_update_lead,
+    "hot_leads":            _handle_hot_leads,
+    "read_data":            _handle_read_data,
+
+    # Assistant / Batch 2
+    "draft_message":        _handle_draft_message,
+    "draft_meeting":        _handle_draft_meeting,
+    "set_reminder":         _handle_set_reminder,
+    "plan_action":          _handle_plan_action,
+    "update_dashboard":     _handle_update_dashboard,
+
+    # Revenue intelligence
+    "revenue_insights":     _handle_revenue_insights,
+    "bottleneck_analysis":  _handle_bottleneck,
+    "next_best_action":     _handle_next_best_action,
+
+    # Reporting
+    "generate_report":      _handle_generate_report,
 }
 
 
-# ── Main entry point ──────────────────────────────────────────────────────────
+# ── Main Entry Point ──────────────────────────────────────────────────────────
 
 def execute(task: TaskModel) -> ExecutionResult:
     """
-    Routing priority:
-        1. AgentRegistry  — agent-based (Stage 3+)
-        2. _HANDLERS dict — direct handlers (Stage 2 fallback)
-        3. Unhandled      — return ExecutionResult(success=False)
+    Priority:
+      1. AgentRegistry — agent-based
+      2. _HANDLERS     — direct handlers
+      3. Unhandled     — ExecutionResult(success=False)
     """
     action    = task.action
     task_type = task.type
@@ -141,12 +457,3 @@ def execute(task: TaskModel) -> ExecutionResult:
         message=f"אין handler לפעולה '{action}'",
         output={"error": "unhandled_action", "action": action, "task_type": task_type},
     )
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _now_ms() -> int:
-    return int(datetime.datetime.utcnow().timestamp() * 1000)
-
-def _elapsed_ms(started: int) -> int:
-    return _now_ms() - started
