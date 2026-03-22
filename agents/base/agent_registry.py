@@ -1,5 +1,6 @@
 """
 AgentRegistry — in-memory registry of active agent instances.
+Batch 3: loads dynamic agents from DB on bootstrap.
 """
 
 import logging
@@ -11,9 +12,9 @@ log = logging.getLogger(__name__)
 class AgentRegistry:
 
     def __init__(self):
-        self._agents = []
+        self._agents   = []
         self._fallback = None
-        self._lock = threading.Lock()
+        self._lock     = threading.Lock()
 
     def register(self, agent) -> None:
         with self._lock:
@@ -34,17 +35,14 @@ class AgentRegistry:
     def find(self, task_type: str, action: str):
         with self._lock:
             snapshot = list(self._agents)
-
         for agent in snapshot:
             try:
                 if agent.can_handle(task_type, action):
                     return agent
             except Exception as e:
                 log.error(f"[Registry] can_handle raised on {agent!r}: {e}")
-
         if self._fallback is not None:
             return self._fallback
-
         return None
 
     def list_agents(self) -> list:
@@ -77,14 +75,18 @@ class AgentRegistry:
             self.register(agent)
 
         self._fallback = GenericTaskAgent()
-        self._load_from_db()
 
-    def _load_from_db(self) -> None:
+        # Batch 3: load dynamic agents from DB
+        self._load_dynamic_agents()
+
+    def _load_dynamic_agents(self) -> None:
+        """Load all active DB-persisted dynamic agents into memory."""
         try:
-            from services.storage.repositories.agent_repo import AgentRepository
-            AgentRepository().get_active()
+            from agents.factory.agent_factory import agent_factory
+            count = agent_factory.load_agents_from_db()
+            log.info(f"[Registry] loaded {count} dynamic agents from DB")
         except Exception as e:
-            log.error(f"[Registry] _load_from_db failed: {e}", exc_info=True)
+            log.error(f"[Registry] _load_dynamic_agents failed: {e}", exc_info=True)
 
 
 agent_registry = AgentRegistry()
