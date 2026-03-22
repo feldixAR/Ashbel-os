@@ -80,6 +80,19 @@ def get_session() -> Generator[Session, None, None]:
 def create_all_tables() -> None:
     """Create all tables that don't yet exist. Safe to call on startup."""
     log.info("Creating database tables (if not exist)...")
+    # Import all models so SQLAlchemy registers them before create_all
+    import services.storage.models.lead        # noqa
+    import services.storage.models.task        # noqa
+    import services.storage.models.approval    # noqa
+    import services.storage.models.agent       # noqa
+    import services.storage.models.event       # noqa
+    import services.storage.models.trace       # noqa
+    import services.storage.models.memory      # noqa
+    import services.storage.models.dlq         # noqa
+    # Batch 6
+    import services.storage.models.goal        # noqa
+    import services.storage.models.opportunity # noqa
+    import services.storage.models.outreach    # noqa
     Base.metadata.create_all(bind=engine)
     log.info("Database tables ready.")
 
