@@ -38,16 +38,13 @@ class AgentRegistry:
         for agent in snapshot:
             try:
                 if agent.can_handle(task_type, action):
-                    log.debug(f"[Registry] ({task_type},{action}) → {agent.name!r}")
                     return agent
             except Exception as e:
                 log.error(f"[Registry] can_handle raised on {agent!r}: {e}")
 
         if self._fallback is not None:
-            log.debug(f"[Registry] fallback for ({task_type},{action})")
             return self._fallback
 
-        log.warning(f"[Registry] no agent for ({task_type},{action})")
         return None
 
     def list_agents(self) -> list:
@@ -65,6 +62,7 @@ class AgentRegistry:
         from agents.departments.executive.build_manager_agent import BuildManagerAgent
         from agents.departments.executive.code_builder_agent import CodeBuilderAgent
         from agents.departments.executive.executive_assistant_agent import ExecutiveAssistantAgent
+        from agents.departments.executive.github_writer_agent import GitHubWriterAgent
         from agents.departments.generic.task_agent import GenericTaskAgent
 
         for agent in [
@@ -74,20 +72,17 @@ class AgentRegistry:
             BuildManagerAgent(),
             CodeBuilderAgent(),
             ExecutiveAssistantAgent(),
+            GitHubWriterAgent(),
         ]:
             self.register(agent)
 
         self._fallback = GenericTaskAgent()
-        log.info("[Registry] fallback = GenericTaskAgent")
-
         self._load_from_db()
-        log.info(f"[Registry] bootstrap complete — {self.count()} agents")
 
     def _load_from_db(self) -> None:
         try:
             from services.storage.repositories.agent_repo import AgentRepository
-            db_agents = AgentRepository().get_active()
-            log.info(f"[Registry] {len(db_agents)} active agents in DB")
+            AgentRepository().get_active()
         except Exception as e:
             log.error(f"[Registry] _load_from_db failed: {e}", exc_info=True)
 
