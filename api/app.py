@@ -1,31 +1,28 @@
 """
 app.py — Flask application factory.
-
 Creates and configures the Flask app:
     1. Initialises DB (create_all_tables)
     2. Bootstraps event dispatcher + AgentRegistry
     3. Registers all route blueprints under /api
-
 Usage (production):
     gunicorn "api.app:create_app()"
-
 Usage (development):
     python api/app.py
 """
-
 import logging
 import os
 from flask import Flask, send_from_directory
-
+from flask_cors import CORS
 from config.settings import PORT, DEBUG
 
 log = logging.getLogger(__name__)
 
-
 def create_app() -> Flask:
     app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-    app.config["JSON_AS_ASCII"] = False   # allow Hebrew in JSON responses
+    app.config["JSON_AS_ASCII"] = False
+
+    CORS(app)
 
     # ── 1. Database ───────────────────────────────────────────────────────────
     from services.storage.db import create_all_tables
@@ -63,8 +60,14 @@ def create_app() -> Flask:
     log.info("[App] AshbalOS API ready")
     return app
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = create_app()
     app.run(host="0.0.0.0", port=PORT, debug=DEBUG)
+```
+
+---
+
+אחרי שהעתקת ושמרת — פתח `requirements.txt` ובדוק אם יש `flask-cors`. אם לא — הוסף שם:
+```
+flask-cors
