@@ -1,18 +1,5 @@
 """
 Orchestrator — the central command router.
-
-Receives a parsed IntentResult, decides what to do with it,
-creates a Task via TaskManager, and returns a structured OrchestratorResult.
-
-In this initial version (Batch 1):
-  - All task types are recognised and routed
-  - dispatch() is called on TaskManager but returns a stub result
-    until Batch 2 wires real agents
-  - Approval gate is checked before dispatch
-  - Events are emitted at every step
-
-The orchestrator never calls agents directly.
-It only speaks to TaskManager and EventBus.
 """
 
 import logging
@@ -22,13 +9,9 @@ from typing import Optional
 
 from orchestration.intent_parser import IntentResult, Intent, intent_parser
 from orchestration.task_manager import task_manager, TaskManager
-from events.event_bus import event_bus
-import events.event_types as ET
 
 log = logging.getLogger(__name__)
 
-
-# ── Result dataclass ──────────────────────────────────────────────────────────
 
 @dataclass
 class OrchestratorResult:
@@ -56,8 +39,6 @@ class OrchestratorResult:
         }
 
 
-# ── Intent → Task type + action mapping ──────────────────────────────────────
-
 _INTENT_TASK_MAP = {
     Intent.ADD_LEAD: ("crm", "update_crm_status"),
     Intent.LIST_LEADS: ("crm", "read_data"),
@@ -79,8 +60,6 @@ _INTENT_TASK_MAP = {
     Intent.APPROVE: ("crm", "read_data"),
 }
 
-
-# ── Orchestrator ──────────────────────────────────────────────────────────────
 
 class Orchestrator:
 
@@ -183,17 +162,19 @@ class Orchestrator:
     def _system_status(
         self, ir: IntentResult, trace_id: str
     ) -> OrchestratorResult:
-        from services.storage.repositories.agent_repo import AgentRepository
+        from agents.base.agent_registry import agent_registry
         from services.storage.repositories.lead_repo import LeadRepository
         from services.storage.repositories.approval_repo import ApprovalRepository
 
-        agents = AgentRepository().get_active()
+        agents = agent_registry.list_agents()
         leads = LeadRepository().list_all()
         pending = ApprovalRepository().get_pending()
 
         by_dept = {}
         for a in agents:
-            by_dept.setdefault(a.department, []).append(a.name)
+            dept = getattr(a, "department", "unknown")
+            name = getattr(a, "name", a.__class__.__name__)
+            by_dept.setdefault(dept, []).append(name)
 
         data = {
             "agents": len(agents),
@@ -219,8 +200,8 @@ class Orchestrator:
         self, ir: IntentResult, trace_id: str
     ) -> OrchestratorResult:
         from services.storage.repositories.approval_repo import ApprovalRepository
-        repo = ApprovalRepository()
 
+        repo = ApprovalRepository()
         approval_id = ir.params.get("approval_id")
         if not approval_id:
             pending = repo.get_pending()
@@ -233,45 +214,32 @@ class Orchestrator:
                 )
             approval_id = pending[0].id
 
-        result = repo.resolve(approval_id, status="approved", resolved_by="owner")
-        if not result:
+        ok = repo.approve(approval_id)
+        if ok:
             return OrchestratorResult(
-                success=False,
+                success=True,
                 intent=ir.intent,
-                message=f"לא נמצא אישור עם מזהה {approval_id}.",
+                message=f"אישור {approval_id} בוצע בהצלחה.",
+                data={"approval_id": approval_id},
                 trace_id=trace_id,
-                error="approval_not_found",
             )
 
-        event_bus.publish(
-            ET.APPROVAL_GRANTED,
-            payload={
-                "approval_id": approval_id,
-                "action": result.action,
-                "resolved_by": "owner",
-                "task_id": result.task_id,
-            },
-            trace_id=trace_id,
-        )
-
         return OrchestratorResult(
-            success=True,
+            success=False,
             intent=ir.intent,
-            message=f"פעולה '{result.action}' אושרה.",
-            data={"approval_id": approval_id, "action": result.action},
+            message=f"לא נמצא אישור {approval_id}.",
             trace_id=trace_id,
         )
 
     def _unknown_intent(
         self, command: str, ir: IntentResult, trace_id: str
     ) -> OrchestratorResult:
-        log.warning(f"[Orchestrator] unknown intent for: {command!r}")
         return OrchestratorResult(
             success=False,
             intent=Intent.UNKNOWN,
             message=(
                 "לא הצלחתי להבין את הפקודה. "
-                "נסה להיות יותר ספציפי, או כתוב 'עזרה' לרשימת פקודות."
+                "נסה לנסח אחרת או כתוב עזרה."
             ),
             trace_id=trace_id,
             error="intent_not_recognised",
@@ -300,37 +268,13 @@ class Orchestrator:
 
 _HELP_TEXT = """
 פקודות זמינות:
-─────────────────────────────────────────
-לידים:
-  הוסף ליד: שם=X עיר=Y טלפון=Z
-  הצג לידים
-  דרג לידים
-
-הודעות:
-  כתוב הודעה ל...
-  פולואפ ל...
-
-סוכנים:
-  צור סוכן [שם/תפקיד]
-  בנה קוד לסוכן [שם/תפקיד]
-  צור מחלקת [שם]
-  הצג סוכנים
-
-תוכן:
-  כתוב פוסט על...
-  SEO לנושא...
-
-אנליזה:
-  ניתוח שוק [נושא]
-  מתחרה [שם]
-  סיעור מוחות: [נושא]
-
-מערכת:
-  סטטוס
-  דוח יומי
-  אשר [id]
-  עזרה
-─────────────────────────────────────────
+- הוסף ליד
+- הצג לידים
+- כתוב הודעה
+- צור סוכן חדש
+- בנה קוד לסוכן חדש
+- סטטוס
+- עזרה
 """.strip()
 
 
