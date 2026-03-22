@@ -18,13 +18,12 @@ It only speaks to TaskManager and EventBus.
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 from orchestration.intent_parser import IntentResult, Intent, intent_parser
-from orchestration.task_manager  import task_manager, TaskManager
-from events.event_bus             import event_bus
-import events.event_types          as ET
-from config.risk_policy           import get_risk
+from orchestration.task_manager import task_manager, TaskManager
+from events.event_bus import event_bus
+import events.event_types as ET
 
 log = logging.getLogger(__name__)
 
@@ -33,52 +32,51 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class OrchestratorResult:
-    success:          bool
-    intent:           str
-    message:          str
-    data:             dict         = field(default_factory=dict)
-    task_id:          Optional[str] = None
-    trace_id:         Optional[str] = None
-    needs_approval:   bool          = False
-    approval_id:      Optional[str] = None
-    error:            Optional[str] = None
+    success: bool
+    intent: str
+    message: str
+    data: dict = field(default_factory=dict)
+    task_id: Optional[str] = None
+    trace_id: Optional[str] = None
+    needs_approval: bool = False
+    approval_id: Optional[str] = None
+    error: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
-            "success":        self.success,
-            "intent":         self.intent,
-            "message":        self.message,
-            "data":           self.data,
-            "task_id":        self.task_id,
-            "trace_id":       self.trace_id,
+            "success": self.success,
+            "intent": self.intent,
+            "message": self.message,
+            "data": self.data,
+            "task_id": self.task_id,
+            "trace_id": self.trace_id,
             "needs_approval": self.needs_approval,
-            "approval_id":    self.approval_id,
-            "error":          self.error,
+            "approval_id": self.approval_id,
+            "error": self.error,
         }
 
 
 # ── Intent → Task type + action mapping ──────────────────────────────────────
-# Maps Intent constant → (task_type, action)
-# task_type drives model routing; action drives risk policy.
 
-_INTENT_TASK_MAP: dict[str, tuple[str, str]] = {
-    Intent.ADD_LEAD:          ("crm",        "update_crm_status"),
-    Intent.LIST_LEADS:        ("crm",        "read_data"),
-    Intent.SCORE_LEADS:       ("scoring",    "score_lead"),
-    Intent.UPDATE_LEAD:       ("crm",        "update_crm_status"),
-    Intent.GENERATE_MESSAGE:  ("sales",      "generate_content"),
-    Intent.SEND_FOLLOWUP:     ("followup",   "generate_content"),
-    Intent.CREATE_AGENT:      ("agent_build","create_agent"),
-    Intent.CREATE_DEPARTMENT: ("agent_build","create_agent"),
-    Intent.LIST_AGENTS:       ("crm",        "read_data"),
-    Intent.GENERATE_CONTENT:  ("content",    "generate_content"),
-    Intent.SEO:               ("seo",        "generate_content"),
-    Intent.MARKET_ANALYSIS:   ("analysis",   "analyze_market"),
-    Intent.COMPETITOR:        ("analysis",   "analyze_market"),
-    Intent.BRAINSTORM:        ("strategy",   "complex_reasoning"),
-    Intent.REPORT:            ("summarization", "generate_report"),
-    Intent.STATUS:            ("crm",           "read_data"),
-    Intent.APPROVE:           ("crm",           "read_data"),
+_INTENT_TASK_MAP = {
+    Intent.ADD_LEAD: ("crm", "update_crm_status"),
+    Intent.LIST_LEADS: ("crm", "read_data"),
+    Intent.SCORE_LEADS: ("scoring", "score_lead"),
+    Intent.UPDATE_LEAD: ("crm", "update_crm_status"),
+    Intent.GENERATE_MESSAGE: ("sales", "generate_content"),
+    Intent.SEND_FOLLOWUP: ("followup", "generate_content"),
+    Intent.CREATE_AGENT: ("agent_build", "create_agent"),
+    Intent.BUILD_AGENT_CODE: ("agent_build", "build_agent_code"),
+    Intent.CREATE_DEPARTMENT: ("agent_build", "create_agent"),
+    Intent.LIST_AGENTS: ("crm", "read_data"),
+    Intent.GENERATE_CONTENT: ("content", "generate_content"),
+    Intent.SEO: ("seo", "generate_content"),
+    Intent.MARKET_ANALYSIS: ("analysis", "analyze_market"),
+    Intent.COMPETITOR: ("analysis", "analyze_market"),
+    Intent.BRAINSTORM: ("strategy", "complex_reasoning"),
+    Intent.REPORT: ("summarization", "generate_report"),
+    Intent.STATUS: ("crm", "read_data"),
+    Intent.APPROVE: ("crm", "read_data"),
 }
 
 
@@ -89,52 +87,37 @@ class Orchestrator:
     def __init__(self, tm: TaskManager = None):
         self._tm = tm or task_manager
 
-    # ── Public entry point ────────────────────────────────────────────────────
-
     def handle_command(self, command: str) -> OrchestratorResult:
-        """
-        Full pipeline:
-          1. Parse intent
-          2. Validate
-          3. Create task
-          4. Check approval gate
-          5. Dispatch (stub until Batch 2)
-          6. Return result
-        """
         trace_id = str(uuid.uuid4())
         log.info(f"[Orchestrator] command received trace={trace_id}: {command!r}")
 
-        # 1. Parse
         intent_result = intent_parser.parse(command)
         log.info(f"[Orchestrator] parsed: {intent_result}")
 
-        # 2. Validate confidence
         if not intent_result.is_confident(threshold=0.5):
             return self._unknown_intent(command, intent_result, trace_id)
 
-        # 3. Handle system intents that don't need a task
         direct = self._handle_direct(intent_result, trace_id)
         if direct is not None:
             return direct
 
-        # 4. Create task
         task_type, action = _INTENT_TASK_MAP.get(
             intent_result.intent,
-            ("strategy", "complex_reasoning")
+            ("strategy", "complex_reasoning"),
         )
+
         task = self._tm.create_task(
             type=task_type,
             action=action,
             input_data={
                 "command": command,
-                "intent":  intent_result.intent,
-                "params":  intent_result.params,
+                "intent": intent_result.intent,
+                "params": intent_result.params,
             },
             priority=self._priority_for(intent_result.intent),
             trace_id=trace_id,
         )
 
-        # 5. Approval gate
         approved = self._tm.check_approval(task)
         if not approved:
             return OrchestratorResult(
@@ -146,7 +129,6 @@ class Orchestrator:
                 needs_approval=True,
             )
 
-        # 6. Dispatch
         self._tm.transition(task.id, "queued")
         dispatch_result = self._tm.dispatch(task)
 
@@ -167,27 +149,21 @@ class Orchestrator:
                 task_id=task.id,
                 trace_id=trace_id,
             )
-        else:
-            error = dispatch_result.get("output", "שגיאה לא ידועה")
-            self._tm.mark_failed(task.id, str(error), trace_id=trace_id)
-            return OrchestratorResult(
-                success=False,
-                intent=intent_result.intent,
-                message=f"הפעולה נכשלה: {error}",
-                task_id=task.id,
-                trace_id=trace_id,
-                error=str(error),
-            )
 
-    # ── Direct handlers (no task needed) ─────────────────────────────────────
+        error = dispatch_result.get("output", "שגיאה לא ידועה")
+        self._tm.mark_failed(task.id, str(error), trace_id=trace_id)
+        return OrchestratorResult(
+            success=False,
+            intent=intent_result.intent,
+            message=f"הפעולה נכשלה: {error}",
+            task_id=task.id,
+            trace_id=trace_id,
+            error=str(error),
+        )
 
     def _handle_direct(
         self, ir: IntentResult, trace_id: str
     ) -> Optional[OrchestratorResult]:
-        """
-        Handle intents that are answered directly without creating a task.
-        Returns None if the intent should go through the normal task flow.
-        """
         if ir.intent == Intent.HELP:
             return OrchestratorResult(
                 success=True,
@@ -207,23 +183,23 @@ class Orchestrator:
     def _system_status(
         self, ir: IntentResult, trace_id: str
     ) -> OrchestratorResult:
-        from services.storage.repositories.agent_repo  import AgentRepository
-        from services.storage.repositories.lead_repo   import LeadRepository
+        from services.storage.repositories.agent_repo import AgentRepository
+        from services.storage.repositories.lead_repo import LeadRepository
         from services.storage.repositories.approval_repo import ApprovalRepository
 
-        agents    = AgentRepository().get_active()
-        leads     = LeadRepository().list_all()
-        pending   = ApprovalRepository().get_pending()
+        agents = AgentRepository().get_active()
+        leads = LeadRepository().list_all()
+        pending = ApprovalRepository().get_pending()
 
-        by_dept: dict[str, list[str]] = {}
+        by_dept = {}
         for a in agents:
             by_dept.setdefault(a.department, []).append(a.name)
 
         data = {
-            "agents":            len(agents),
-            "leads":             len(leads),
+            "agents": len(agents),
+            "leads": len(leads),
             "pending_approvals": len(pending),
-            "departments":       by_dept,
+            "departments": by_dept,
         }
         msg = (
             f"מערכת פעילה — "
@@ -247,7 +223,6 @@ class Orchestrator:
 
         approval_id = ir.params.get("approval_id")
         if not approval_id:
-            # Approve first pending
             pending = repo.get_pending()
             if not pending:
                 return OrchestratorResult(
@@ -272,12 +247,13 @@ class Orchestrator:
             ET.APPROVAL_GRANTED,
             payload={
                 "approval_id": approval_id,
-                "action":      result.action,
+                "action": result.action,
                 "resolved_by": "owner",
-                "task_id":     result.task_id,
+                "task_id": result.task_id,
             },
             trace_id=trace_id,
         )
+
         return OrchestratorResult(
             success=True,
             intent=ir.intent,
@@ -285,8 +261,6 @@ class Orchestrator:
             data={"approval_id": approval_id, "action": result.action},
             trace_id=trace_id,
         )
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _unknown_intent(
         self, command: str, ir: IntentResult, trace_id: str
@@ -305,11 +279,11 @@ class Orchestrator:
 
     @staticmethod
     def _priority_for(intent: str) -> int:
-        """Lower number = higher priority (1 = urgent)."""
         high_priority = {
             Intent.SEND_FOLLOWUP,
             Intent.GENERATE_MESSAGE,
             Intent.APPROVE,
+            Intent.BUILD_AGENT_CODE,
         }
         low_priority = {
             Intent.REPORT,
@@ -323,8 +297,6 @@ class Orchestrator:
             return 7
         return 5
 
-
-# ── Help text ─────────────────────────────────────────────────────────────────
 
 _HELP_TEXT = """
 פקודות זמינות:
@@ -340,6 +312,7 @@ _HELP_TEXT = """
 
 סוכנים:
   צור סוכן [שם/תפקיד]
+  בנה קוד לסוכן [שם/תפקיד]
   צור מחלקת [שם]
   הצג סוכנים
 
@@ -361,5 +334,4 @@ _HELP_TEXT = """
 """.strip()
 
 
-# ── Singleton ─────────────────────────────────────────────────────────────────
 orchestrator = Orchestrator()
