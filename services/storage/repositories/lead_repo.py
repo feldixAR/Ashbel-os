@@ -79,3 +79,11 @@ class LeadRepository(BaseRepository[LeadModel]):
                             LeadModel.status.in_(["ניסיון קשר", "חדש", "מתעניין"]))
                     .order_by(LeadModel.score.desc())
                     .all())
+
+    def list_all(self, limit: int = 200) -> list:
+        """Return all leads ordered by score desc."""
+        with get_session() as s:
+            return (s.query(LeadModel)
+                    .order_by(LeadModel.score.desc())
+                    .limit(limit)
+                    .all())
