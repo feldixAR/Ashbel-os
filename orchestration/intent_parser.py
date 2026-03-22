@@ -54,6 +54,14 @@ class Intent(str, Enum):
     HELP                      = "help"
     UNKNOWN                   = "unknown"
 
+    # Agent Factory (Batch 3)
+    UPDATE_AGENT              = "update_agent"
+    RETIRE_AGENT              = "retire_agent"
+    LIST_AGENTS               = "list_agents"
+
+    # Revenue (Batch 4)
+    REVENUE_REPORT            = "revenue_report"
+
 
 @dataclass
 class IntentResult:
@@ -160,6 +168,18 @@ class IntentParser:
             return Intent.DEVELOPMENT_GAP, 0.8
         if any(w in tl for w in ["batch", "סטטוס פיתוח"]):
             return Intent.DEVELOPMENT_BATCH_STATUS, 0.8
+
+        # Agent management (Batch 3)
+        if any(w in text for w in ["עדכן סוכן", "שנה סוכן", "update agent"]):
+            return Intent.UPDATE_AGENT, 0.9
+        if any(w in text for w in ["פרוש סוכן", "הסר סוכן", "retire agent"]):
+            return Intent.RETIRE_AGENT, 0.9
+        if any(w in tl for w in ["הצג סוכנים", "רשימת סוכנים", "list agents", "כל הסוכנים"]):
+            return Intent.LIST_AGENTS, 0.9
+
+        # Revenue report (Batch 4)
+        if any(w in tl for w in ["דוח הכנסות", "revenue report", "דוח מכירות"]):
+            return Intent.REVENUE_REPORT, 0.9
 
         # Help
         if any(w in tl for w in ["עזרה", "help", "פקודות", "מה אתה יכול"]):
