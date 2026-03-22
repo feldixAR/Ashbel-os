@@ -6,6 +6,14 @@ from orchestration.intent_parser import IntentResult, Intent, intent_parser
 from orchestration.task_manager import task_manager, TaskManager
 
 
+LAST_BUILD_ARTIFACT = {
+    "files": [],
+    "commit_message": "",
+    "requested_agent": "",
+    "status": "",
+}
+
+
 @dataclass
 class OrchestratorResult:
     success: bool
@@ -55,6 +63,8 @@ class Orchestrator:
         self._tm = tm or task_manager
 
     def handle_command(self, command: str) -> OrchestratorResult:
+        global LAST_BUILD_ARTIFACT
+
         trace_id = str(uuid.uuid4())
         intent_result = intent_parser.parse(command)
 
@@ -70,13 +80,29 @@ class Orchestrator:
             ("assistant", "plan_action"),
         )
 
+        params = dict(intent_result.params or {})
+
+        if intent_result.intent == Intent.APPLY_BUILD:
+            if not LAST_BUILD_ARTIFACT.get("files"):
+                return OrchestratorResult(
+                    success=False,
+                    intent=intent_result.intent,
+                    message="אין כרגע build מוכן ליישום. קודם תבנה קוד לסוכן או לפיצ'ר.",
+                    trace_id=trace_id,
+                    error="missing_build_artifact",
+                )
+
+            params["files"] = LAST_BUILD_ARTIFACT.get("files", [])
+            params["commit_message"] = LAST_BUILD_ARTIFACT.get("commit_message", "Apply generated files via AshbalOS")
+            params["requested_agent"] = LAST_BUILD_ARTIFACT.get("requested_agent", "")
+
         task = self._tm.create_task(
             type=task_type,
             action=action,
             input_data={
                 "command": command,
                 "intent": intent_result.intent,
-                "params": intent_result.params,
+                "params": params,
             },
             priority=5,
             trace_id=trace_id,
@@ -97,6 +123,16 @@ class Orchestrator:
         dispatch_result = self._tm.dispatch(task)
 
         if dispatch_result.get("success"):
+            output = dispatch_result.get("output", {}) or {}
+
+            if intent_result.intent == Intent.BUILD_AGENT_CODE and output.get("files"):
+                LAST_BUILD_ARTIFACT = {
+                    "files": output.get("files", []),
+                    "commit_message": output.get("commit_message", "Apply generated files via AshbalOS"),
+                    "requested_agent": output.get("requested_agent", ""),
+                    "status": output.get("status", ""),
+                }
+
             self._tm.mark_completed(
                 task_id=task.id,
                 output_data=dispatch_result,
@@ -109,7 +145,7 @@ class Orchestrator:
                 success=True,
                 intent=intent_result.intent,
                 message=dispatch_result.get("message", "בוצע בהצלחה"),
-                data=dispatch_result.get("output", {}),
+                data=output,
                 task_id=task.id,
                 trace_id=trace_id,
             )
@@ -152,6 +188,8 @@ class Orchestrator:
             "agents": len(agents),
             "leads": len(leads),
             "pending_approvals": len(pending),
+            "last_build_ready": bool(LAST_BUILD_ARTIFACT.get("files")),
+            "last_build_agent": LAST_BUILD_ARTIFACT.get("requested_agent", ""),
         }
 
         return OrchestratorResult(
