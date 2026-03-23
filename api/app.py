@@ -29,7 +29,6 @@ def create_app() -> Flask:
     from api.routes.learning import bp as learning_bp
     from api.routes.outreach import bp as outreach_bp
     from api.routes.research import bp as research_bp
-    from config.business_registry import dashboard_bp as biz_dashboard_bp
 
     app.register_blueprint(whatsapp_bp, url_prefix="/api/whatsapp")
     for blueprint in [commands_bp, leads_bp, agents_bp, tasks_bp,
@@ -41,10 +40,6 @@ def create_app() -> Flask:
     app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
     app.register_blueprint(learning_bp, url_prefix='/api/learning')
     app.register_blueprint(dashboard_bp, url_prefix='/api')
-    try:
-        app.register_blueprint(biz_dashboard_bp, url_prefix='/api')
-    except Exception:
-        pass
 
     ui_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
 
