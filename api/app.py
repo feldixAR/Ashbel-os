@@ -25,10 +25,11 @@ def create_app() -> Flask:
     from api.routes.reports import bp as reports_bp
     from api.routes.system import bp as system_bp
     from api.routes.goals import bp as goals_bp
+    from api.routes.research import bp as research_bp
     app.register_blueprint(whatsapp_bp, url_prefix="/api/whatsapp")
     for blueprint in [commands_bp, leads_bp, agents_bp, tasks_bp,
                       approvals_bp, reports_bp, system_bp, actions_bp,
-                      goals_bp]:
+                      goals_bp, research_bp]:
         app.register_blueprint(blueprint, url_prefix="/api")
     ui_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
     @app.route("/")
