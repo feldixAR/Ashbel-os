@@ -1,5 +1,5 @@
 """
-app.py — Flask application factory.
+app.py -- Flask application factory.
 Creates and configures the Flask app:
     1. Initialises DB (create_all_tables)
     2. Bootstraps event dispatcher + AgentRegistry
@@ -73,6 +73,6 @@ if __name__ == "__main__":
 
 ---
 
-אחרי שהעתקת ושמרת — פתח `requirements.txt` ובדוק אם יש `flask-cors`. אם לא — הוסף שם:
+אחרי שהעתקת ושמרת -- פתח `requirements.txt` ובדוק אם יש `flask-cors`. אם לא -- הוסף שם:
 ```
 flask-cors
