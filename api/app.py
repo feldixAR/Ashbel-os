@@ -25,6 +25,7 @@ def create_app() -> Flask:
     from api.routes.reports import bp as reports_bp
     from api.routes.system import bp as system_bp
     from api.routes.goals import bp as goals_bp
+    from api.routes.dashboard import bp as dashboard_bp
     from api.routes.learning import bp as learning_bp
     from api.routes.outreach import bp as outreach_bp
     from api.routes.research import bp as research_bp
