@@ -34,6 +34,10 @@ def create_app() -> Flask:
                       approvals_bp, reports_bp, system_bp, actions_bp,
                       goals_bp, research_bp]:
         app.register_blueprint(blueprint, url_prefix="/api")
+app.register_blueprint(research_bp, url_prefix='/api/research')
+app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
+app.register_blueprint(learning_bp, url_prefix='/api/learning')
+app.register_blueprint(dashboard_bp, url_prefix='/api')
     ui_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
     @app.route("/")
     def serve_index():
