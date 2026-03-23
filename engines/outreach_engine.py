@@ -1,0 +1,169 @@
+"""
+outreach_engine.py — Outreach & Execution Engine (Batch 8)
+Real-world execution: send, follow-up, pipeline management, daily prioritization.
+"""
+import datetime, logging, re, urllib.parse, uuid as _uuid
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional
+
+log = logging.getLogger(__name__)
+
+@dataclass
+class OutreachTask:
+    task_id: str; lead_id: str; lead_name: str; phone: str
+    channel: str; message: str; audience: str; priority: int
+    urgency: str; reason: str; goal_id: str = ""; opp_id: str = ""
+    attempt: int = 1; deep_link: str = ""
+
+@dataclass
+class OutreachResult:
+    success: bool; task_id: str; lead_name: str; channel: str; mode: str
+    message_id: str = ""; deep_link: str = ""; error: str = ""; sent_at: str = ""
+
+@dataclass
+class PipelineEntry:
+    outreach_id: str; lead_name: str; phone: str; channel: str
+    status: str; attempt: int; sent_at: str; next_followup: str; message_body: str
+
+@dataclass
+class DailySummary:
+    date: str; total_due: int; sent_today: int; replied_today: int
+    pending: int; overdue: int; top_priorities: List[OutreachTask]; pipeline: List[PipelineEntry]
+
+FOLLOWUP_TEMPLATES = {
+    "architects": {
+        1: "שלום {name},\n\nשלחתי לך הצעה לפני מספר ימים — רציתי לוודא שהגיעה.\nיש לי תיק עבודות שעשוי לעניין אותך.\nמתי נוח לשיחה קצרה?\n\nבברכה",
+        2: "שלום {name},\n\nרק רציתי לשאול אם יש פרויקט שאנחנו יכולים לעזור בו.\nזמינים גם לכמויות קטנות.\n\nבברכה",
+        3: "שלום {name},\n\nפנייה אחרונה ממני. אם תצטרך בעתיד ספק אמין — נשמח.\n\nבברכה",
+    },
+    "contractors": {
+        1: "שלום {name},\n\nשלחתי הצעת מחיר לפני מספר ימים — קיבלת?\nנשמח לענות על שאלות.\n\nבברכה",
+        2: "שלום {name},\n\nיש לנו מבצע השבוע לקבלנים — הנחה על הזמנות מעל ₪20,000.\nמעניין?\n\nבברכה",
+        3: "שלום {name},\n\nנסיון קשר אחרון. כשיהיה פרויקט מתאים — נשמח.\n\nבברכה",
+    },
+    "private": {
+        1: "שלום {name},\n\nרציתי לעקוב — האם עדיין מתכנן שיפוץ?\nנשמח לבוא לסקר ללא התחייבות.\n\nבברכה",
+        2: "שלום {name},\n\nיש לנו מקום פנוי בלוח הזמנים — מעוניין להתחיל לתכנן?\n\nבברכה",
+        3: "שלום {name},\n\nאם תרצה בעתיד — אנחנו כאן.\nבברכה",
+    },
+    "general": {
+        1: "שלום {name},\n\nרציתי לעקוב אחרי הפנייה שלי — האם יש עניין?\n\nבברכה",
+        2: "שלום {name},\n\nעוקב שוב — נשמח לשמוע אם יש שאלות.\n\nבברכה",
+        3: "שלום {name},\n\nנסיון אחרון מצידנו. כשתהיה מוכן — אנחנו כאן.\n\nבברכה",
+    },
+}
+
+INITIAL_MESSAGES = {
+    "architects": "שלום {name},\n\nאני מאשבל אלומיניום — מתמחים בפתרונות אלומיניום איכותיים לאדריכלים.\nאשמח לשלוח תיק עבודות רלוונטי.\nהאם מתאים?\n\nבברכה",
+    "contractors": "שלום {name},\n\nאני מאשבל אלומיניום — ספק עם ניסיון רב בעבודה עם קבלנים.\nמחירים תחרותיים, אספקה בזמן, תנאי אשראי גמישים.\nהאם תרצה הצעת מחיר?\n\nבברכה",
+    "private": "שלום {name},\n\nאני מאשבל אלומיניום — מתמחים בחלונות, דלתות ופרגולות לבית.\nנשמח לבוא לסקר ולתת הצעת מחיר ללא התחייבות.\n\nבברכה",
+    "general": "שלום {name},\n\nאני מאשבל אלומיניום — נשמח להכיר ולדון בשיתוף פעולה.\n\nבברכה",
+}
+
+def build_initial_message(audience: str, name: str) -> str:
+    return INITIAL_MESSAGES.get(audience, INITIAL_MESSAGES["general"]).replace("{name}", name)
+
+def build_followup_message(audience: str, name: str, attempt: int) -> str:
+    templates = FOLLOWUP_TEMPLATES.get(audience, FOLLOWUP_TEMPLATES["general"])
+    key = min(attempt, max(templates.keys()))
+    return templates[key].replace("{name}", name)
+
+def _detect_audience(lead) -> str:
+    combined = ((lead.notes or "") + (lead.source or "") + (lead.name or "")).lower()
+    if any(w in combined for w in ["אדריכל","מעצב","architect","designer"]): return "architects"
+    if any(w in combined for w in ["קבלן","יזם","contractor","developer"]): return "contractors"
+    return "private"
+
+def _build_whatsapp_link(phone: str, message: str) -> str:
+    digits = re.sub(r"\D", "", phone or "")
+    if digits.startswith("0"): digits = "972" + digits[1:]
+    if not digits: return ""
+    return f"https://wa.me/{digits}?text={urllib.parse.quote(message)}"
+
+def _get_lead_score(leads: list, lead_id: str) -> int:
+    for l in leads:
+        if l.id == lead_id: return l.score or 0
+    return 0
+
+def build_outreach_queue(leads: list, goals: list = None) -> List[OutreachTask]:
+    tasks = []
+    closed = {"סגור_זכה","סגור_הפסיד"}
+    for lead in leads:
+        if (lead.status or "") in closed: continue
+        if not (lead.phone or "").strip(): continue
+        score = lead.score or 0; attempts = lead.attempts or 0; status = lead.status or "חדש"
+        audience = _detect_audience(lead)
+        if attempts >= 5: continue
+        if attempts == 0:
+            message = build_initial_message(audience, lead.name)
+            urgency = "today" if score >= 60 else "this_week"
+            reason = f"פנייה ראשונה — ציון {score}"; priority = 1 if score >= 70 else 2
+        else:
+            message = build_followup_message(audience, lead.name, attempts)
+            urgency = "today" if score >= 50 else "this_week"
+            reason = f"follow-up #{attempts + 1} — {status}"; priority = 2 if score >= 50 else 3
+        deep_link = _build_whatsapp_link(lead.phone, message)
+        tasks.append(OutreachTask(task_id=str(_uuid.uuid4()), lead_id=lead.id, lead_name=lead.name, phone=lead.phone, channel="whatsapp", message=message, audience=audience, priority=priority, urgency=urgency, reason=reason, attempt=attempts + 1, deep_link=deep_link))
+    return sorted(tasks, key=lambda t: (t.priority, -_get_lead_score(leads, t.lead_id)))
+
+def prioritize_daily(queue: List[OutreachTask], max_tasks: int = 10) -> List[OutreachTask]:
+    today = [t for t in queue if t.urgency == "today"]
+    week  = [t for t in queue if t.urgency == "this_week"]
+    return (today + week)[:max_tasks]
+
+def execute_outreach(task: OutreachTask) -> OutreachResult:
+    import os
+    now = datetime.datetime.utcnow().isoformat()
+    try:
+        from services.integrations.whatsapp_client import WhatsAppClient
+        token = os.environ.get("WHATSAPP_ACCESS_TOKEN",""); phone_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID","")
+        if token and phone_id:
+            result = WhatsAppClient(phone_id, token).send_text(task.phone, task.message)
+            if result.get("success"):
+                return OutreachResult(success=True, task_id=task.task_id, lead_name=task.lead_name, channel=task.channel, mode="api", message_id=result.get("message_id",""), sent_at=now)
+    except Exception as e:
+        log.warning(f"[Outreach] API failed: {e}")
+    return OutreachResult(success=True, task_id=task.task_id, lead_name=task.lead_name, channel=task.channel, mode="deeplink", deep_link=task.deep_link, sent_at=now)
+
+def record_outreach_sent(task: OutreachTask) -> bool:
+    try:
+        from services.storage.repositories.outreach_repo import OutreachRepository
+        from services.storage.repositories.lead_repo import LeadRepository
+        OutreachRepository().create(goal_id=task.goal_id or "", opp_id=task.opp_id or "", contact_name=task.lead_name, contact_phone=task.phone, channel=task.channel, message_body=task.message)
+        LeadRepository().increment_attempts(task.lead_id)
+        if task.attempt == 1: LeadRepository().update_status(task.lead_id, "ניסיון קשר")
+        return True
+    except Exception as e:
+        log.error(f"[Outreach] record failed: {e}"); return False
+
+def update_pipeline_status(outreach_id: str, status: str, notes: str = "") -> bool:
+    try:
+        from services.storage.db import get_session
+        from services.storage.models.outreach import OutreachModel
+        import datetime as dt
+        with get_session() as s:
+            r = s.get(OutreachModel, outreach_id)
+            if not r: return False
+            r.status = status
+            if status == "sent": r.sent_at = dt.datetime.utcnow().isoformat()
+            if status == "replied": r.replied_at = dt.datetime.utcnow().isoformat()
+            if notes: r.notes = notes
+            if status == "sent":
+                days = 3 if r.attempt == 1 else 5
+                r.next_followup = (dt.datetime.utcnow() + dt.timedelta(days=days)).isoformat()
+        return True
+    except Exception as e:
+        log.error(f"[Outreach] update failed: {e}"); return False
+
+def daily_outreach_summary() -> DailySummary:
+    today = datetime.date.today().isoformat(); now = datetime.datetime.utcnow().isoformat()
+    try:
+        from services.storage.repositories.outreach_repo import OutreachRepository
+        from services.storage.repositories.lead_repo import LeadRepository
+        repo = OutreachRepository(); due = repo.list_due_followup()
+        leads = LeadRepository().list_all(); queue = build_outreach_queue(leads); top5 = prioritize_daily(queue, 5)
+        pipeline = [PipelineEntry(outreach_id=o.id, lead_name=o.contact_name, phone=o.contact_phone or "", channel=o.channel, status=o.status, attempt=o.attempt, sent_at=o.sent_at or "", next_followup=o.next_followup or "", message_body=(o.message_body or "")[:100]) for o in due]
+        return DailySummary(date=today, total_due=len(due), sent_today=0, replied_today=0, pending=len([o for o in due if o.status=="pending"]), overdue=len([o for o in due if (o.next_followup or "")<now]), top_priorities=top5, pipeline=pipeline)
+    except Exception as e:
+        log.error(f"[Outreach] summary failed: {e}")
+        return DailySummary(date=today, total_due=0, sent_today=0, replied_today=0, pending=0, overdue=0, top_priorities=[], pipeline=[])
