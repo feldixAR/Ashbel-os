@@ -69,10 +69,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = create_app()
     app.run(host="0.0.0.0", port=PORT, debug=DEBUG)
-```
 
 ---
 
 אחרי שהעתקת ושמרת -- פתח `requirements.txt` ובדוק אם יש `flask-cors`. אם לא -- הוסף שם:
-```
 flask-cors
