@@ -37,6 +37,10 @@ def create_app() -> Flask:
     @app.route("/ui/<path:path>")
     def serve_ui(path):
         return send_from_directory(ui_root, path)
+
+    @app.route("/api/health")
+    def health():
+        return {"status": "ok"}, 200
     log.info("[App] AshbalOS API ready")
     return app
 
