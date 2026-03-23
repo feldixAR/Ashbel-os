@@ -29,19 +29,29 @@ def create_app() -> Flask:
     from api.routes.learning import bp as learning_bp
     from api.routes.outreach import bp as outreach_bp
     from api.routes.research import bp as research_bp
+    from config.business_registry import dashboard_bp as biz_dashboard_bp
+
     app.register_blueprint(whatsapp_bp, url_prefix="/api/whatsapp")
     for blueprint in [commands_bp, leads_bp, agents_bp, tasks_bp,
                       approvals_bp, reports_bp, system_bp, actions_bp,
-                      goals_bp, research_bp]:
+                      goals_bp]:
         app.register_blueprint(blueprint, url_prefix="/api")
-app.register_blueprint(research_bp, url_prefix='/api/research')
-app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
-app.register_blueprint(learning_bp, url_prefix='/api/learning')
-app.register_blueprint(dashboard_bp, url_prefix='/api')
+
+    app.register_blueprint(research_bp, url_prefix='/api/research')
+    app.register_blueprint(outreach_bp, url_prefix='/api/outreach')
+    app.register_blueprint(learning_bp, url_prefix='/api/learning')
+    app.register_blueprint(dashboard_bp, url_prefix='/api')
+    try:
+        app.register_blueprint(biz_dashboard_bp, url_prefix='/api')
+    except Exception:
+        pass
+
     ui_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
+
     @app.route("/")
     def serve_index():
         return send_from_directory(ui_root, "index.html")
+
     @app.route("/ui/<path:path>")
     def serve_ui(path):
         return send_from_directory(ui_root, path)
@@ -49,6 +59,7 @@ app.register_blueprint(dashboard_bp, url_prefix='/api')
     @app.route("/api/health")
     def health():
         return {"status": "ok"}, 200
+
     log.info("[App] AshbalOS API ready")
     return app
 
