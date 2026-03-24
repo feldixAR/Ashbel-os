@@ -13,7 +13,7 @@ import urllib.request
 import urllib.error
 
 from services.storage.models.task import TaskModel
-from services.execution.executor import ExecutionResult
+from services.execution.result  import ExecutionResult
 from agents.base.base_agent import BaseAgent
 
 log = logging.getLogger(__name__)

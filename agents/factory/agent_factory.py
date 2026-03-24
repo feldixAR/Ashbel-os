@@ -86,7 +86,7 @@ class DynamicAgent:
         return key in self._task_types
 
     def execute(self, task) -> "ExecutionResult":
-        from services.execution.executor import ExecutionResult
+        from services.execution.result  import ExecutionResult
         try:
             return self._run(task)
         except Exception as e:
@@ -94,7 +94,7 @@ class DynamicAgent:
             return ExecutionResult(success=False, message=str(e), output={"error": str(e)})
 
     def _run(self, task) -> "ExecutionResult":
-        from services.execution.executor import ExecutionResult
+        from services.execution.result  import ExecutionResult
         from services.storage.repositories.agent_repo import AgentRepository
 
         params  = (task.input_data or {}).get("params", {})

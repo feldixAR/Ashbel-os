@@ -6,7 +6,7 @@ Handles: task_type="scoring", action="score_lead"
 
 import logging
 from services.storage.models.task            import TaskModel
-from services.execution.executor             import ExecutionResult
+from services.execution.result  import ExecutionResult
 from agents.base.base_agent                  import BaseAgent
 from services.storage.repositories.lead_repo import LeadRepository
 from events.event_bus                        import event_bus
