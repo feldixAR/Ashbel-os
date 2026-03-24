@@ -1,5 +1,5 @@
 """
-research_engine.py — Research & Asset Engine
+research_engine.py - Research & Asset Engine
 Pure functions, no DB, no external deps.
 """
 import datetime, logging
@@ -97,31 +97,79 @@ class ResearchPackage:
 
 PROFILES = {
     "default": {
-        "title": "לקוח כללי",
-        "description": "לקוח פוטנציאלי בתחום הבנייה והשיפוצים",
-        "pain_points": ["עלויות גבוהות", "קבלנים לא אמינים", "עיכובים בלו"ז"],
-        "motivations": ["בית חלומות", "ערך נדל"ן", "איכות חיים"],
-        "objections": ["יקר מדי", "לא מכיר את החברה", "כבר יש לי קבלן"],
-        "best_channels": ["WhatsApp", "מייל", "המלצות"],
-        "best_times": ["בוקר 9-11", "ערב 19-21"],
-        "message_tone": "מקצועי וחם",
-        "decision_maker": "בעל הבית",
-        "avg_deal_size": "15,000-80,000 ש"ח",
-        "buying_cycle": "2-8 שבועות"
+        "title": "General Client",
+        "description": "Potential client in construction and renovation",
+        "pain_points": ["High costs", "Unreliable contractors", "Schedule delays"],
+        "motivations": ["Dream home", "Property value", "Quality of life"],
+        "objections": ["Too expensive", "Don't know the company", "Already have a contractor"],
+        "best_channels": ["WhatsApp", "Email", "Referrals"],
+        "best_times": ["Morning 9-11", "Evening 19-21"],
+        "message_tone": "Professional and warm",
+        "decision_maker": "Homeowner",
+        "avg_deal_size": "15,000-80,000 NIS",
+        "buying_cycle": "2-8 weeks"
+    },
+    "small_business": {
+        "title": "Small Business Owner",
+        "description": "Small business owner needing aluminum solutions",
+        "pain_points": ["Budget constraints", "Fast delivery needed", "Reliability"],
+        "motivations": ["Professional image", "Durability", "Cost efficiency"],
+        "objections": ["Price too high", "Timeline too long", "Unsure of quality"],
+        "best_channels": ["WhatsApp", "Phone", "Email"],
+        "best_times": ["Morning 8-10", "Afternoon 14-16"],
+        "message_tone": "Direct and professional",
+        "decision_maker": "Business owner",
+        "avg_deal_size": "10,000-50,000 NIS",
+        "buying_cycle": "1-4 weeks"
+    },
+    "contractor": {
+        "title": "Contractor",
+        "description": "Building contractor looking for aluminum supplier",
+        "pain_points": ["Supplier reliability", "On-time delivery", "Consistent quality"],
+        "motivations": ["Project completion", "Client satisfaction", "Profit margin"],
+        "objections": ["Already have supplier", "Price", "Minimum order"],
+        "best_channels": ["Phone", "WhatsApp", "In-person"],
+        "best_times": ["Early morning 7-9", "Lunch 12-13"],
+        "message_tone": "Practical and direct",
+        "decision_maker": "Project manager or owner",
+        "avg_deal_size": "30,000-200,000 NIS",
+        "buying_cycle": "1-2 weeks"
     }
 }
 
 MARKETS = {
     "default": {
-        "market_size": "שוק גדול",
-        "growth_trend": "צמיחה יציבה",
+        "market_size": "Large market",
+        "growth_trend": "Stable growth",
         "players": [
-            {"name": "מתחרה א", "strength": "מחיר", "weakness": "שירות", "our_edge": "איכות ומהירות"},
-            {"name": "מתחרה ב", "strength": "מוניטין", "weakness": "זמינות", "our_edge": "שירות אישי"}
+            {"name": "Competitor A", "strength": "Price", "weakness": "Service", "our_edge": "Quality and speed"},
+            {"name": "Competitor B", "strength": "Reputation", "weakness": "Availability", "our_edge": "Personal service"}
         ],
-        "opportunities": ["שוק גדל", "ביקוש גבוה", "מעט מתחרים איכותיים"],
-        "threats": ["עלות חומרים", "כוח אדם מיומן"],
-        "our_position": "ספק איכות עם שירות אישי"
+        "opportunities": ["Growing market", "High demand", "Few quality competitors"],
+        "threats": ["Material costs", "Skilled labor shortage"],
+        "our_position": "Quality provider with personal service"
+    },
+    "photography": {
+        "market_size": "Medium market",
+        "growth_trend": "Growing steadily",
+        "players": [
+            {"name": "Large studios", "strength": "Brand", "weakness": "Price", "our_edge": "Flexibility"},
+            {"name": "Freelancers", "strength": "Price", "weakness": "Reliability", "our_edge": "Professional setup"}
+        ],
+        "opportunities": ["Events market", "Corporate demand", "Social media content"],
+        "threats": ["Smartphone cameras", "AI image generation"],
+        "our_position": "Professional with competitive pricing"
+    },
+    "aluminum": {
+        "market_size": "Large construction market",
+        "growth_trend": "Strong growth with construction boom",
+        "players": [
+            {"name": "Large manufacturers", "strength": "Scale", "weakness": "Custom work", "our_edge": "Custom solutions"},
+            {"name": "Local shops", "strength": "Price", "weakness": "Quality", "our_edge": "Quality + reliability"}
+        ],
+        "opportunities": ["New construction projects", "Renovation wave", "Green building"],
+        "threats": ["Raw material prices", "Import competition"],
+        "our_position": "Custom aluminum specialist"
     }
 }
 
@@ -169,13 +217,13 @@ def build_market_map(domain: str) -> MarketMap:
 def build_collaboration_proposal(audience: str, contact_name: str = "") -> CollaborationProposal:
     try:
         name = contact_name or audience
-        full = f"שלום {name},\n\nאנו מציעים שיתוף פעולה בתחום האלומיניום.\n\nנשמח לשוחח."
+        full = f"Hello {name},\n\nWe offer collaboration in aluminum solutions.\n\nLooking forward to speaking."
         return CollaborationProposal(
             audience=audience,
-            subject=f"הצעת שיתוף פעולה — {audience}",
-            opening=f"שלום {name}",
-            value_prop="פתרונות אלומיניום מקצועיים במחיר תחרותי",
-            call_to_action="נשמח לקבוע שיחה קצרה",
+            subject=f"Collaboration Proposal - {audience}",
+            opening=f"Hello {name}",
+            value_prop="Professional aluminum solutions at competitive prices",
+            call_to_action="Schedule a quick call",
             full_text=full
         )
     except Exception as e:
@@ -188,11 +236,11 @@ def build_sales_script(audience: str, stage: str = "first_contact") -> SalesScri
         return SalesScript(
             audience=audience,
             stage=stage,
-            opener=f"שלום, אני פונה בנוגע לפרויקט האלומיניום שלכם",
-            questions=["מה השלב הנוכחי בבנייה?", "אילו עבודות אתם מתכננים?", "מה התקציב המשוער?"],
-            objections={"יקר": "המחיר כולל אחריות ושירות מלא", "לא מכיר": "יש לנו עשרות פרויקטים באזורכם"},
-            closer="אוכל לשלוח הצעת מחיר תוך 24 שעות",
-            full_script="תסריט מכירה מלא לשלב " + stage
+            opener=f"Hello, I am reaching out about your aluminum project",
+            questions=["What stage is your construction at?", "What work are you planning?", "What is your approximate budget?"],
+            objections={"expensive": "Price includes full warranty and service", "unknown": "We have dozens of projects in your area"},
+            closer="I can send a quote within 24 hours",
+            full_script="Full sales script for stage " + stage
         )
     except Exception as e:
         log.error(f"build_sales_script error: {e}")
@@ -203,12 +251,12 @@ def build_landing_page_copy(audience: str) -> LandingPageCopy:
     try:
         return LandingPageCopy(
             audience=audience,
-            headline="פתרונות אלומיניום מקצועיים לבית שלך",
-            subheadline="חלונות, דלתות, פרגולות ומעקות — הכל במקום אחד",
-            benefits=["ייצור מותאם אישית", "התקנה מקצועית", "אחריות מלאה", "מחיר הוגן"],
-            social_proof="מעל 500 פרויקטים מוצלחים",
-            cta="קבל הצעת מחיר חינם",
-            full_copy="עמוד נחיתה מלא לקהל " + audience
+            headline="Professional Aluminum Solutions for Your Home",
+            subheadline="Windows, doors, pergolas and railings - all in one place",
+            benefits=["Custom manufacturing", "Professional installation", "Full warranty", "Fair pricing"],
+            social_proof="Over 500 successful projects",
+            cta="Get a free quote",
+            full_copy="Full landing page for audience " + audience
         )
     except Exception as e:
         log.error(f"build_landing_page_copy error: {e}")
@@ -219,11 +267,11 @@ def build_niche_portfolio(audience: str) -> NichePortfolio:
     try:
         return NichePortfolio(
             audience=audience,
-            title=f"תיק עבודות — {audience}",
-            description="פרויקטים נבחרים בתחום האלומיניום",
-            highlights=["עבודה מדויקת", "חומרים איכותיים", "לוחות זמנים מדויקים"],
-            projects=[{"name": "פרויקט לדוגמה", "location": "מרכז", "scope": "פרגולה + מעקות"}],
-            cta="צור קשר לפרויקט שלך"
+            title=f"Portfolio - {audience}",
+            description="Selected projects in aluminum",
+            highlights=["Precise work", "Quality materials", "On-time delivery"],
+            projects=[{"name": "Sample project", "location": "Center", "scope": "Pergola + railings"}],
+            cta="Contact us for your project"
         )
     except Exception as e:
         log.error(f"build_niche_portfolio error: {e}")
