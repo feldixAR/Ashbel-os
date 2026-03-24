@@ -39,4 +39,13 @@ def status():
         "pending_approvals": len(pending),
         "departments":       by_dept,
         "registry_count":    agent_registry.count(),
+        "scheduler":         _scheduler_status(),
     })
+
+
+def _scheduler_status() -> dict:
+    try:
+        from scheduler.revenue_scheduler import status
+        return status()
+    except Exception:
+        return {"running": False, "jobs": []}

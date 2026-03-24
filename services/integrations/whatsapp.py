@@ -14,8 +14,8 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-WHATSAPP_TOKEN    = os.getenv("WHATSAPP_TOKEN", "CngKNAj/p4aZvMyzAxIGZW50OndhIhvXkNep15HXnCDXkNec15XXnteZ16DXmdeV151QloqAzgYaQN9yRQRFSxn5Db6n4ojT0namouZO22dVl8gWBjU7IfW/LvC7fQRCY1k6C804H4nAdtOO6qGP8h78KFMzE8BDtQASL20tNbGQk8DJ8Fqyu5+uaCycXOTiXMbzBdBGAYaLHPyWW4mhvhRwla1ujvr3CnEi")
-WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "9729607033")
+WHATSAPP_TOKEN    = os.getenv("WHATSAPP_TOKEN", "")
+WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 WA_API_VERSION    = "v19.0"
 
 

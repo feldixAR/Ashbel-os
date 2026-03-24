@@ -67,6 +67,20 @@ class Intent(str, Enum):
     LIST_GOALS                = "list_goals"
     GROWTH_PLAN               = "growth_plan"
 
+    # Research & Asset Engine (Batch 7)
+    RESEARCH_AUDIENCE         = "research_audience"
+    BUILD_PORTFOLIO           = "build_portfolio"
+    BUILD_OUTREACH_COPY       = "build_outreach_copy"
+
+    # Outreach & Execution Engine (Batch 8)
+    SEND_OUTREACH             = "send_outreach"
+    DAILY_PLAN                = "daily_plan"
+    FOLLOWUP_QUEUE            = "followup_queue"
+
+    # Revenue Learning (Batch 9)
+    LEARNING_CYCLE            = "learning_cycle"
+    PERFORMANCE_REPORT        = "performance_report"
+
 
 @dataclass
 class IntentResult:
@@ -167,6 +181,35 @@ class IntentParser:
         # Daily report
         if any(w in tl for w in ["דוח יומי", "daily report", "דוח", "סיכום יום"]):
             return Intent.DAILY_REPORT, 0.9
+
+        # Research & Asset Engine (Batch 7) — before SALES to avoid "לקוח" collision
+        if any(w in tl for w in ["מחקר קהל", "פרופיל לקוח", "מי הלקוחות", "research audience",
+                                   "ניתוח קהל", "תאר לי את הלקוח"]):
+            return Intent.RESEARCH_AUDIENCE, 0.9
+        if any(w in tl for w in ["תיק עבודות", "portfolio", "דוגמאות עבודה", "בנה תיק"]):
+            return Intent.BUILD_PORTFOLIO, 0.9
+        if any(w in tl for w in ["כתוב פנייה", "נוסח פנייה", "הכן הודעה שיווקית",
+                                   "outreach copy", "מסר שיווקי", "בנה פנייה"]):
+            return Intent.BUILD_OUTREACH_COPY, 0.9
+
+        # Outreach & Execution Engine (Batch 8) — before SALES
+        if any(w in tl for w in ["שלח פניות", "התחל outreach", "פתח קמפיין",
+                                   "send outreach", "שלח לכולם"]):
+            return Intent.SEND_OUTREACH, 0.9
+        if any(w in tl for w in ["תוכנית יומית", "daily plan", "מה לעשות היום",
+                                   "סדר יום", "תכנן לי את היום"]):
+            return Intent.DAILY_PLAN, 0.9
+        if any(w in tl for w in ["תור follow-up", "מי לא ענה", "followup queue",
+                                   "מעקב פתוח", "מי מחכה לתגובה"]):
+            return Intent.FOLLOWUP_QUEUE, 0.9
+
+        # Revenue Learning (Batch 9) — before SALES
+        if any(w in tl for w in ["מחזור למידה", "learning cycle", "שפר את עצמך",
+                                   "נתח תוצאות", "מה עבד"]):
+            return Intent.LEARNING_CYCLE, 0.9
+        if any(w in tl for w in ["דוח ביצועים", "performance report", "שיעור מענה",
+                                   "מה היה הכי טוב", "ניתוח קמפיין"]):
+            return Intent.PERFORMANCE_REPORT, 0.9
 
         # Sales
         if any(w in tl for w in ["לקוח", "מכירה", "sale", "עסקה"]):

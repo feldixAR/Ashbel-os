@@ -167,3 +167,103 @@ def daily_outreach_summary() -> DailySummary:
     except Exception as e:
         log.error(f"[Outreach] summary failed: {e}")
         return DailySummary(date=today, total_due=0, sent_today=0, replied_today=0, pending=0, overdue=0, top_priorities=[], pipeline=[])
+
+
+# ── OutreachEngineService — unified API for executor + scheduler ──────────────
+
+class OutreachEngineService:
+    """
+    Thin service wrapper that exposes a stable method API over the module-level
+    functions above. Used by executor handlers and the revenue scheduler.
+    """
+
+    def run_outreach_batch(self, goal_id: str) -> List[OutreachResult]:
+        """Send initial outreach for all pending leads under a goal."""
+        try:
+            from services.storage.repositories.lead_repo import LeadRepository
+            from services.storage.repositories.goal_repo import GoalRepository
+            leads = LeadRepository().list_all()
+            goals = GoalRepository().list_active()
+            queue = build_outreach_queue(leads, goals)
+            # Filter to first-contact tasks only
+            first_contact = [t for t in queue if t.attempt == 1]
+            daily = prioritize_daily(first_contact, max_tasks=20)
+            results = []
+            for task in daily:
+                task.goal_id = goal_id
+                result = execute_outreach(task)
+                if result.success:
+                    record_outreach_sent(task)
+                    update_pipeline_status(task.task_id, "sent")
+                results.append(result)
+            return results
+        except Exception as e:
+            log.error(f"[OutreachEngine] run_outreach_batch failed: {e}", exc_info=True)
+            return []
+
+    def run_followup_batch(self, goal_id: str) -> List[OutreachResult]:
+        """Send due follow-ups for a given goal."""
+        try:
+            from services.storage.repositories.lead_repo import LeadRepository
+            from services.storage.repositories.outreach_repo import OutreachRepository
+            import datetime as dt
+
+            now   = dt.datetime.utcnow().isoformat()
+            due   = OutreachRepository().list_due_followup()
+            leads = LeadRepository().list_all()
+            lead_map = {l.id: l for l in leads}
+
+            results = []
+            for record in due:
+                lead = next((l for l in leads if l.name == record.contact_name), None)
+                if not lead:
+                    continue
+                audience = _detect_audience(lead)
+                attempt  = (record.attempt or 1) + 1
+                if attempt > 3:
+                    continue
+                message   = build_followup_message(audience, lead.name, attempt)
+                deep_link = _build_whatsapp_link(record.contact_phone or "", message)
+                task = OutreachTask(
+                    task_id=str(_uuid.uuid4()), lead_id=lead.id,
+                    lead_name=lead.name, phone=record.contact_phone or "",
+                    channel="whatsapp", message=message, audience=audience,
+                    priority=2, urgency="today",
+                    reason=f"follow-up #{attempt}", goal_id=goal_id,
+                    attempt=attempt, deep_link=deep_link,
+                )
+                result = execute_outreach(task)
+                if result.success:
+                    record_outreach_sent(task)
+                    update_pipeline_status(record.id, "sent")
+                results.append(result)
+            return results
+        except Exception as e:
+            log.error(f"[OutreachEngine] run_followup_batch failed: {e}", exc_info=True)
+            return []
+
+    def build_daily_summary(self) -> DailySummary:
+        """Alias for module-level daily_outreach_summary."""
+        return daily_outreach_summary()
+
+    def get_followup_queue(self) -> List[PipelineEntry]:
+        """Return all outreach records that are due for follow-up."""
+        try:
+            from services.storage.repositories.outreach_repo import OutreachRepository
+            due = OutreachRepository().list_due_followup()
+            return [
+                PipelineEntry(
+                    outreach_id=o.id, lead_name=o.contact_name,
+                    phone=o.contact_phone or "", channel=o.channel,
+                    status=o.status, attempt=o.attempt,
+                    sent_at=o.sent_at or "", next_followup=o.next_followup or "",
+                    message_body=(o.message_body or "")[:100],
+                )
+                for o in due
+            ]
+        except Exception as e:
+            log.error(f"[OutreachEngine] get_followup_queue failed: {e}", exc_info=True)
+            return []
+
+
+outreach_engine = OutreachEngineService()

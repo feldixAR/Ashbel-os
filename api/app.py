@@ -61,6 +61,14 @@ def create_app() -> Flask:
         return {"status": "ok"}, 200
 
     log.info("[App] AshbalOS API ready")
+
+    # Start autonomous revenue scheduler
+    try:
+        from scheduler.revenue_scheduler import start as start_scheduler
+        start_scheduler()
+    except Exception as e:
+        log.warning(f"[App] scheduler failed to start: {e}")
+
     return app
 
 if __name__ == "__main__":

@@ -69,3 +69,10 @@ class TaskRepository(BaseRepository[TaskModel]):
                     .filter_by(trace_id=trace_id)
                     .order_by(TaskModel.created_at)
                     .all())
+
+    def get_recent(self, limit: int = 50) -> List[TaskModel]:
+        with get_session() as s:
+            return (s.query(TaskModel)
+                    .order_by(TaskModel.created_at.desc())
+                    .limit(limit)
+                    .all())

@@ -4,11 +4,17 @@
 const App = (() => {
 
   const PANELS = [
-    { id: 'cmd',       label: 'פקודות',   icon: '⌨',  panel: () => CommandPanel  },
-    { id: 'leads',     label: 'לידים',    icon: '👥',  panel: () => LeadsPanel    },
-    { id: 'agents',    label: 'סוכנים',   icon: '🤖',  panel: () => AgentsPanel   },
-    { id: 'approvals', label: 'אישורים',  icon: '⏸',  panel: () => ApprovalsPanel},
-    { id: 'reports',   label: 'דוחות',    icon: '📊',  panel: () => ReportsPanel  },
+    { id: 'cmd',       label: 'פקודות',       icon: '⌨',  panel: () => CommandPanel   },
+    { id: 'dashboard', label: 'בית',          icon: '🏠',  panel: () => DashboardPanel },
+    { id: 'leads',     label: 'לידים',        icon: '👥',  panel: () => LeadsPanel     },
+    { id: 'pipeline',  label: 'צנרת',         icon: '📤',  panel: () => PipelinePanel  },
+    { id: 'goals',     label: 'יעדים',        icon: '🎯',  panel: () => GoalsPanel     },
+    { id: 'tasks',     label: 'משימות',       icon: '📋',  panel: () => TasksPanel     },
+    { id: 'revenue',   label: 'הכנסות',       icon: '💰',  panel: () => RevenuePanel   },
+    { id: 'calendar',  label: 'יומן',         icon: '📅',  panel: () => CalendarPanel  },
+    { id: 'agents',    label: 'סוכנים',       icon: '🤖',  panel: () => AgentsPanel    },
+    { id: 'approvals', label: 'אישורים',      icon: '⏸',  panel: () => ApprovalsPanel },
+    { id: 'reports',   label: 'דוחות',        icon: '📊',  panel: () => ReportsPanel   },
   ];
 
   let currentPanel = 'cmd';

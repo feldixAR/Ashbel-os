@@ -207,6 +207,62 @@ CREATE TABLE IF NOT EXISTS traces (
 CREATE INDEX IF NOT EXISTS idx_traces_trace_id ON traces(trace_id);
 CREATE INDEX IF NOT EXISTS idx_traces_task_id  ON traces(task_id);
 
+-- ── goals (Batch 6) ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS goals (
+    id             VARCHAR(36)  PRIMARY KEY,
+    raw_goal       TEXT         NOT NULL,
+    domain         VARCHAR(60)  NOT NULL DEFAULT 'default',
+    primary_metric VARCHAR(60)  NOT NULL DEFAULT 'revenue',
+    status         VARCHAR(30)  NOT NULL DEFAULT 'active',
+    tracks         TEXT,                           -- JSON
+    created_at     VARCHAR(40)  NOT NULL,
+    updated_at     VARCHAR(40)
+);
+
+CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
+CREATE INDEX IF NOT EXISTS idx_goals_domain ON goals(domain);
+
+-- ── opportunities (Batch 6) ───────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS opportunities (
+    id          VARCHAR(36)  PRIMARY KEY,
+    goal_id     VARCHAR(36)  NOT NULL,
+    track_id    VARCHAR(36),
+    title       TEXT         NOT NULL,
+    audience    VARCHAR(60)  NOT NULL DEFAULT 'general',
+    channel     VARCHAR(40)  NOT NULL DEFAULT 'whatsapp',
+    potential   VARCHAR(20)  NOT NULL DEFAULT 'medium',
+    effort      VARCHAR(20)  NOT NULL DEFAULT 'medium',
+    next_action TEXT,
+    status      VARCHAR(20)  NOT NULL DEFAULT 'open',
+    created_at  VARCHAR(40)  NOT NULL,
+    updated_at  VARCHAR(40)
+);
+
+CREATE INDEX IF NOT EXISTS idx_opportunities_goal_id ON opportunities(goal_id);
+CREATE INDEX IF NOT EXISTS idx_opportunities_status  ON opportunities(status);
+
+-- ── outreach_records (Batch 6/8) ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS outreach_records (
+    id             VARCHAR(36)  PRIMARY KEY,
+    goal_id        VARCHAR(36)  NOT NULL,
+    opp_id         VARCHAR(36),
+    contact_name   VARCHAR(120) NOT NULL,
+    contact_phone  VARCHAR(40),
+    channel        VARCHAR(40)  NOT NULL DEFAULT 'whatsapp',
+    message_body   TEXT,
+    status         VARCHAR(30)  NOT NULL DEFAULT 'pending',
+    attempt        INTEGER      NOT NULL DEFAULT 1,
+    sent_at        VARCHAR(40),
+    replied_at     VARCHAR(40),
+    next_followup  VARCHAR(40),
+    notes          TEXT,
+    created_at     VARCHAR(40)  NOT NULL,
+    updated_at     VARCHAR(40)
+);
+
+CREATE INDEX IF NOT EXISTS idx_outreach_goal_id ON outreach_records(goal_id);
+CREATE INDEX IF NOT EXISTS idx_outreach_status  ON outreach_records(status);
+
 -- =============================================================================
 -- End of migration 001_initial
 -- =============================================================================

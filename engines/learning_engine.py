@@ -271,3 +271,24 @@ def build_roi_report() -> str:
             lines.append(f"  {icon} {b['category']}: {b.get('description','')}")
             lines.append(f"     → {b['suggestion']}")
     return "\n".join(lines)
+
+
+# ── LearningEngineService — unified API for executor + scheduler ──────────────
+
+class LearningEngineService:
+    """Stable method wrapper over module-level learning functions."""
+
+    def run_learning_cycle(self) -> LearningCycleResult:
+        return full_learning_cycle()
+
+    def build_performance_report(self, period_days: int = 30) -> PerformanceReport:
+        return measure_outreach_performance(period_days)
+
+    def get_ab_reports(self) -> List[ABReport]:
+        return run_ab_analysis()
+
+    def get_resource_allocation(self) -> List[ResourceAllocation]:
+        return allocate_resources()
+
+
+learning_engine = LearningEngineService()

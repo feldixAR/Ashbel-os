@@ -95,6 +95,20 @@ _INTENT_TASK_MAP = {
     Intent.SET_GOAL:                 ("growth",       "set_goal"),
     Intent.LIST_GOALS:               ("growth",       "list_goals"),
     Intent.GROWTH_PLAN:              ("growth",       "growth_plan"),
+
+    # Research & Asset Engine (Batch 7)
+    Intent.RESEARCH_AUDIENCE:        ("research",     "research_audience"),
+    Intent.BUILD_PORTFOLIO:          ("research",     "build_portfolio"),
+    Intent.BUILD_OUTREACH_COPY:      ("research",     "build_outreach_copy"),
+
+    # Outreach & Execution Engine (Batch 8)
+    Intent.SEND_OUTREACH:            ("outreach",     "send_outreach"),
+    Intent.DAILY_PLAN:               ("outreach",     "daily_plan"),
+    Intent.FOLLOWUP_QUEUE:           ("outreach",     "followup_queue"),
+
+    # Revenue Learning (Batch 9)
+    Intent.LEARNING_CYCLE:           ("learning",     "learning_cycle"),
+    Intent.PERFORMANCE_REPORT:       ("learning",     "performance_report"),
 }
 
 

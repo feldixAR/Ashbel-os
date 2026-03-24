@@ -476,10 +476,11 @@ tr:hover td { background: rgba(255,255,255,.02); }
   border-radius: var(--radius);
   padding: 11px 14px;
   color: var(--text);
-  font-family: var(--mono);
-  font-size: 12px;
+  font-family: var(--font);
+  font-size: 13px;
   outline: none;
-  direction: ltr;
+  direction: rtl;
+  text-align: right;
   margin-bottom: 12px;
   transition: .15s;
 }
@@ -661,4 +662,47 @@ tr:hover td { background: rgba(255,255,255,.02); }
   background: var(--surface);
   border-color: var(--accent, #6366f1);
   color: var(--accent, #6366f1);
+}
+
+/* ── Data Tables (panels: pipeline, tasks) ──────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  direction: rtl;
+}
+.data-table th {
+  text-align: right;
+  padding: 8px 12px;
+  color: var(--text-muted, #888);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.data-table tbody tr:hover { background: var(--surface2, rgba(255,255,255,.03)); }
+
+/* ── Small button ────────────────────────────────────────────────────────── */
+.btn-xs {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: .15s;
+}
+.btn-xs:hover { background: var(--surface2); }
+
+/* ── KPI skeleton animation ──────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .4; }
 }

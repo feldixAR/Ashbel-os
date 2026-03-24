@@ -32,15 +32,18 @@ const API = (() => {
 
   return {
     setKey(key) { sessionStorage.setItem('ashbal_api_key', key); },
-    request: request,   // expose for panels
     clearKey()  { sessionStorage.removeItem('ashbal_api_key'); },
     hasKey()    { return !!getKey(); },
+
+    // Generic helpers used by panels
+    get:  (path)        => request('GET',  path),
+    post: (path, body)  => request('POST', path, body),
 
     // System
     health:  ()     => request('GET', '/health'),
     status:  ()     => request('GET', '/status'),
 
-    // Command
+    // Command — two endpoints (legacy + new)
     command: (cmd)  => request('POST', '/command', { command: cmd }),
 
     // Leads
@@ -58,8 +61,11 @@ const API = (() => {
     },
 
     // Tasks
-    tasks:   (status = 'done') => request('GET', `/tasks?status=${status}`),
-    task:    (id)              => request('GET', `/tasks/${id}`),
+    tasks:   (status) => {
+      const qs = status ? `?status=${status}` : '';
+      return request('GET', `/tasks${qs}`);
+    },
+    task:    (id) => request('GET', `/tasks/${id}`),
 
     // Approvals
     approvals: ()           => request('GET', '/approvals'),

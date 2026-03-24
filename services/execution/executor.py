@@ -388,17 +388,21 @@ def _handle_bottleneck(task: TaskModel) -> ExecutionResult:
 
 def _handle_next_best_action(task: TaskModel) -> ExecutionResult:
     from services.storage.repositories.lead_repo import LeadRepository
+    from engines.revenue_engine import next_best_actions
     started = _now_ms()
-    leads   = LeadRepository().get_pending_followup()[:5]
-    actions = [
-        {"name": l.name, "city": l.city or "—", "status": l.status, "score": l.score}
-        for l in leads
-    ]
-    lines = [f"• {a['name']} ({a['city']}) — {a['status']}, ציון {a['score']}" for a in actions]
-    msg   = "הפעולות הבאות המומלצות:\n" + "\n".join(lines) if lines else "אין פעולות דחופות."
+    leads   = LeadRepository().list_all()
+    actions = next_best_actions(leads, n=5)
+    if actions:
+        lines = [f"• {a.lead_name} — {a.action} ({a.urgency})" for a in actions]
+        msg   = "הפעולות הבאות המומלצות:\n" + "\n".join(lines)
+        out   = {"next_actions": [{"lead_name": a.lead_name, "action": a.action,
+                                   "channel": a.channel, "urgency": a.urgency,
+                                   "reason": a.reason} for a in actions]}
+    else:
+        msg = "אין פעולות דחופות כרגע."
+        out = {"next_actions": []}
     return ExecutionResult(
-        success=True, message=msg,
-        output={"next_actions": actions},
+        success=True, message=msg, output=out,
         duration_ms=_elapsed_ms(started),
     )
 
@@ -468,6 +472,67 @@ def _handle_revenue_report(task: TaskModel) -> ExecutionResult:
         },
         duration_ms=_elapsed_ms(started),
     )
+
+
+# ── Sales handler (C3 fix) ───────────────────────────────────────────────────
+
+def _handle_sales(task: TaskModel) -> ExecutionResult:
+    """Generic sales intent — routes to create_lead or hot_leads based on params."""
+    p = _params(task)
+    if p.get("name"):
+        return _handle_create_lead(task)
+    return _handle_hot_leads(task)
+
+
+# ── Agent Factory handlers (H1 fix) ──────────────────────────────────────────
+
+def _handle_update_agent(task: TaskModel) -> ExecutionResult:
+    from agents.factory.agent_factory import agent_factory
+    started  = _now_ms()
+    p        = _params(task)
+    agent_id = p.get("agent_id") or p.get("id") or ""
+    spec_updates = {k: v for k, v in p.items() if k not in ("agent_id", "id")}
+    if not agent_id:
+        return ExecutionResult(
+            success=False,
+            message="חסר מזהה סוכן לעדכון. נסה: 'עדכן סוכן [id]'",
+            output={"error": "missing_agent_id"},
+        )
+    try:
+        agent_factory.update_agent(agent_id, spec_updates)
+        return ExecutionResult(
+            success=True,
+            message=f"סוכן {agent_id} עודכן בהצלחה.",
+            output={"agent_id": agent_id},
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:
+        log.error(f"[Executor] update_agent failed: {e}", exc_info=True)
+        return ExecutionResult(success=False, message=f"שגיאה בעדכון סוכן: {e}", output={"error": str(e)})
+
+
+def _handle_retire_agent(task: TaskModel) -> ExecutionResult:
+    from agents.factory.agent_factory import agent_factory
+    started  = _now_ms()
+    p        = _params(task)
+    agent_id = p.get("agent_id") or p.get("id") or ""
+    if not agent_id:
+        return ExecutionResult(
+            success=False,
+            message="חסר מזהה סוכן לפרישה. נסה: 'פרוש סוכן [id]'",
+            output={"error": "missing_agent_id"},
+        )
+    try:
+        agent_factory.retire_agent(agent_id)
+        return ExecutionResult(
+            success=True,
+            message=f"סוכן {agent_id} הוצא משירות.",
+            output={"agent_id": agent_id},
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:
+        log.error(f"[Executor] retire_agent failed: {e}", exc_info=True)
+        return ExecutionResult(success=False, message=f"שגיאה בפרישת סוכן: {e}", output={"error": str(e)})
 
 
 # ── Batch 6 — Goal & Growth Engine ───────────────────────────────────────────
@@ -622,6 +687,148 @@ def _handle_growth_plan(task: TaskModel) -> ExecutionResult:
         duration_ms=_elapsed_ms(started),
     )
 
+
+# ── Batch 7 — Research & Asset Engine ────────────────────────────────────────
+
+def _handle_research_audience(task: TaskModel) -> ExecutionResult:
+    from engines.research_engine import build_client_profile, build_market_map
+    started  = _now_ms()
+    p        = _params(task)
+    audience = p.get("audience") or "architects"
+    domain   = p.get("domain")   or "aluminum"
+    profile  = build_client_profile(audience, domain)
+    market   = build_market_map(domain)
+    return ExecutionResult(
+        success=True,
+        message=f"פרופיל קהל '{audience}' נוצר.",
+        output={"profile": profile.__dict__ if hasattr(profile, "__dict__") else str(profile),
+                "market":  market.__dict__  if hasattr(market,  "__dict__") else str(market)},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_build_portfolio(task: TaskModel) -> ExecutionResult:
+    from engines.research_engine import build_niche_portfolio
+    started  = _now_ms()
+    p        = _params(task)
+    audience = p.get("audience") or "architects"
+    portfolio = build_niche_portfolio(audience)
+    return ExecutionResult(
+        success=True,
+        message=f"תיק עבודות לקהל '{audience}' נוצר.",
+        output={"portfolio": portfolio.__dict__ if hasattr(portfolio, "__dict__") else str(portfolio)},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_build_outreach_copy(task: TaskModel) -> ExecutionResult:
+    from engines.research_engine import build_collaboration_proposal
+    started  = _now_ms()
+    p        = _params(task)
+    audience = p.get("audience") or "architects"
+    proposal = build_collaboration_proposal(audience)
+    return ExecutionResult(
+        success=True,
+        message=f"נוסח פנייה לקהל '{audience}' נוצר.",
+        output={"copy": proposal.__dict__ if hasattr(proposal, "__dict__") else str(proposal)},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+# ── Batch 8 — Outreach & Execution Engine ────────────────────────────────────
+
+def _handle_send_outreach(task: TaskModel) -> ExecutionResult:
+    from engines.outreach_engine import outreach_engine
+    from services.storage.repositories.goal_repo import GoalRepository
+    started = _now_ms()
+    p       = _params(task)
+    goal_id = p.get("goal_id") or ""
+    # Use most recent active goal if not specified
+    if not goal_id:
+        goals = GoalRepository().list_active()
+        if goals:
+            goal_id = goals[0].id
+    if not goal_id:
+        return ExecutionResult(
+            success=False,
+            message="לא נמצא יעד פעיל. הגדר יעד קודם עם 'הגדל מכירות ב...'",
+            output={"error": "no_active_goal"},
+        )
+    result = outreach_engine.run_outreach_batch(goal_id)
+    sent   = len(result) if result else 0
+    return ExecutionResult(
+        success=True,
+        message=f"נשלחו {sent} פניות.",
+        output={"sent": sent, "tasks": [t.__dict__ if hasattr(t, "__dict__") else t for t in (result or [])]},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_daily_plan(task: TaskModel) -> ExecutionResult:
+    from engines.outreach_engine import outreach_engine
+    started = _now_ms()
+    summary = outreach_engine.build_daily_summary()
+    lines   = []
+    if hasattr(summary, "top_priorities") and summary.top_priorities:
+        for ot in summary.top_priorities[:5]:
+            lines.append(f"• {ot.lead_name} — {ot.message[:60]}...")
+    msg = "תוכנית יומית:\n" + "\n".join(lines) if lines else "אין פניות דחופות להיום."
+    return ExecutionResult(
+        success=True,
+        message=msg,
+        output={"summary": summary.__dict__ if hasattr(summary, "__dict__") else {}},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _handle_followup_queue(task: TaskModel) -> ExecutionResult:
+    from engines.outreach_engine import outreach_engine
+    started = _now_ms()
+    queue   = outreach_engine.get_followup_queue()
+    lines   = [f"• {item.lead_name} ({item.channel}) — ניסיון #{item.attempt}"
+               for item in (queue or [])[:10]]
+    msg = f"תור follow-up — {len(queue or [])} פניות:\n" + "\n".join(lines) if lines else "תור follow-up ריק."
+    return ExecutionResult(
+        success=True,
+        message=msg,
+        output={"queue": [q.__dict__ if hasattr(q, "__dict__") else q for q in (queue or [])]},
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+# ── Batch 9 — Revenue Learning ────────────────────────────────────────────────
+
+def _handle_learning_cycle(task: TaskModel) -> ExecutionResult:
+    from engines.learning_engine import learning_engine
+    started = _now_ms()
+    try:
+        result = learning_engine.run_learning_cycle()
+        return ExecutionResult(
+            success=True,
+            message=result.cycle_summary if hasattr(result, "cycle_summary") else "מחזור למידה הושלם.",
+            output={"cycle": result.__dict__ if hasattr(result, "__dict__") else {}},
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:
+        log.error(f"[Executor] learning_cycle failed: {e}", exc_info=True)
+        return ExecutionResult(success=False, message=f"שגיאה במחזור למידה: {e}", output={"error": str(e)})
+
+
+def _handle_performance_report(task: TaskModel) -> ExecutionResult:
+    from engines.learning_engine import learning_engine
+    started = _now_ms()
+    try:
+        report = learning_engine.build_performance_report()
+        return ExecutionResult(
+            success=True,
+            message=f"דוח ביצועים — שיעור מענה: {getattr(report, 'overall_reply_rate', 0):.1f}%",
+            output={"report": report.__dict__ if hasattr(report, "__dict__") else {}},
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:
+        return ExecutionResult(success=False, message=f"שגיאה בדוח ביצועים: {e}", output={"error": str(e)})
+
+
 # ── Handler Registry ──────────────────────────────────────────────────────────
 
 _HANDLERS: Dict[str, Callable] = {
@@ -649,6 +856,11 @@ _HANDLERS: Dict[str, Callable] = {
 
     # Agent Factory (Batch 3)
     "create_agent":         _handle_create_agent,
+    "update_agent":         _handle_update_agent,
+    "retire_agent":         _handle_retire_agent,
+
+    # Sales (C3 fix)
+    "handle_sales":         _handle_sales,
 
     # Revenue (Batch 4)
     "revenue_report":       _handle_revenue_report,
@@ -657,6 +869,20 @@ _HANDLERS: Dict[str, Callable] = {
     "set_goal":             _handle_set_goal,
     "list_goals":           _handle_list_goals,
     "growth_plan":          _handle_growth_plan,
+
+    # Research & Asset Engine (Batch 7)
+    "research_audience":    _handle_research_audience,
+    "build_portfolio":      _handle_build_portfolio,
+    "build_outreach_copy":  _handle_build_outreach_copy,
+
+    # Outreach & Execution Engine (Batch 8)
+    "send_outreach":        _handle_send_outreach,
+    "daily_plan":           _handle_daily_plan,
+    "followup_queue":       _handle_followup_queue,
+
+    # Revenue Learning (Batch 9)
+    "learning_cycle":       _handle_learning_cycle,
+    "performance_report":   _handle_performance_report,
 }
 
 
