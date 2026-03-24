@@ -1,5 +1,10 @@
+"""
+result.py — ExecutionResult dataclass.
+Separated from executor.py to avoid circular import issues at module load time.
+"""
 from dataclasses import dataclass, field
 from typing import Optional
+
 
 @dataclass
 class ExecutionResult:
@@ -11,6 +16,11 @@ class ExecutionResult:
     duration_ms: int           = 0
 
     def to_dict(self) -> dict:
-        return {"success": self.success, "message": self.message,
-                "output": self.output, "model_used": self.model_used,
-                "cost_usd": self.cost_usd, "duration_ms": self.duration_ms}
+        return {
+            "success":     self.success,
+            "message":     self.message,
+            "output":      self.output,
+            "model_used":  self.model_used,
+            "cost_usd":    self.cost_usd,
+            "duration_ms": self.duration_ms,
+        }
