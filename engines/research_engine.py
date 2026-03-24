@@ -1,12 +1,14 @@
 """
-research_engine.py - Research & Asset Engine
+research_engine.py - Research and Asset Engine
 Pure functions, no DB, no external deps.
 """
-import datetime, logging
-from dataclasses import dataclass, field
+import datetime
+import logging
+from dataclasses import dataclass
 from typing import List, Dict, Optional
 
 log = logging.getLogger(__name__)
+
 
 @dataclass
 class ClientProfile:
@@ -23,12 +25,14 @@ class ClientProfile:
     avg_deal_size: str
     buying_cycle: str
 
+
 @dataclass
 class MarketPlayer:
     name: str
     strength: str
     weakness: str
     our_edge: str
+
 
 @dataclass
 class MarketMap:
@@ -40,6 +44,7 @@ class MarketMap:
     threats: List[str]
     our_position: str
 
+
 @dataclass
 class CollaborationProposal:
     audience: str
@@ -48,6 +53,7 @@ class CollaborationProposal:
     value_prop: str
     call_to_action: str
     full_text: str
+
 
 @dataclass
 class SalesScript:
@@ -59,6 +65,7 @@ class SalesScript:
     closer: str
     full_script: str
 
+
 @dataclass
 class LandingPageCopy:
     audience: str
@@ -69,6 +76,7 @@ class LandingPageCopy:
     cta: str
     full_copy: str
 
+
 @dataclass
 class NichePortfolio:
     audience: str
@@ -77,6 +85,7 @@ class NichePortfolio:
     highlights: List[str]
     projects: List[Dict]
     cta: str
+
 
 @dataclass
 class ResearchPackage:
@@ -101,17 +110,17 @@ PROFILES = {
         "description": "Potential client in construction and renovation",
         "pain_points": ["High costs", "Unreliable contractors", "Schedule delays"],
         "motivations": ["Dream home", "Property value", "Quality of life"],
-        "objections": ["Too expensive", "Don't know the company", "Already have a contractor"],
+        "objections": ["Too expensive", "Do not know the company", "Already have a contractor"],
         "best_channels": ["WhatsApp", "Email", "Referrals"],
         "best_times": ["Morning 9-11", "Evening 19-21"],
         "message_tone": "Professional and warm",
         "decision_maker": "Homeowner",
-        "avg_deal_size": "15,000-80,000 NIS",
+        "avg_deal_size": "15000-80000 NIS",
         "buying_cycle": "2-8 weeks"
     },
     "small_business": {
         "title": "Small Business Owner",
-        "description": "Small business owner needing aluminum solutions",
+        "description": "Small business needing aluminum solutions for premises",
         "pain_points": ["Budget constraints", "Fast delivery needed", "Reliability"],
         "motivations": ["Professional image", "Durability", "Cost efficiency"],
         "objections": ["Price too high", "Timeline too long", "Unsure of quality"],
@@ -119,12 +128,12 @@ PROFILES = {
         "best_times": ["Morning 8-10", "Afternoon 14-16"],
         "message_tone": "Direct and professional",
         "decision_maker": "Business owner",
-        "avg_deal_size": "10,000-50,000 NIS",
+        "avg_deal_size": "10000-50000 NIS",
         "buying_cycle": "1-4 weeks"
     },
     "contractor": {
-        "title": "Contractor",
-        "description": "Building contractor looking for aluminum supplier",
+        "title": "Building Contractor",
+        "description": "Contractor looking for reliable aluminum supplier",
         "pain_points": ["Supplier reliability", "On-time delivery", "Consistent quality"],
         "motivations": ["Project completion", "Client satisfaction", "Profit margin"],
         "objections": ["Already have supplier", "Price", "Minimum order"],
@@ -132,8 +141,34 @@ PROFILES = {
         "best_times": ["Early morning 7-9", "Lunch 12-13"],
         "message_tone": "Practical and direct",
         "decision_maker": "Project manager or owner",
-        "avg_deal_size": "30,000-200,000 NIS",
+        "avg_deal_size": "30000-200000 NIS",
         "buying_cycle": "1-2 weeks"
+    },
+    "architect": {
+        "title": "Architect",
+        "description": "Architect specifying aluminum products for projects",
+        "pain_points": ["Product specs accuracy", "Lead times", "Custom solutions"],
+        "motivations": ["Design integrity", "Client satisfaction", "Project success"],
+        "objections": ["Not familiar with brand", "Samples needed", "Certification"],
+        "best_channels": ["Email", "In-person meeting", "LinkedIn"],
+        "best_times": ["Weekday mornings", "After lunch 13-15"],
+        "message_tone": "Technical and precise",
+        "decision_maker": "Principal architect",
+        "avg_deal_size": "50000-500000 NIS",
+        "buying_cycle": "4-12 weeks"
+    },
+    "photography": {
+        "title": "Photography Studio",
+        "description": "Photography business needing aluminum frames and structures",
+        "pain_points": ["Custom sizing", "Aesthetic finish", "Budget"],
+        "motivations": ["Studio aesthetics", "Durability", "Professional look"],
+        "objections": ["Price", "Lead time", "Not standard size"],
+        "best_channels": ["Instagram", "WhatsApp", "Email"],
+        "best_times": ["Afternoon 14-18", "Weekends"],
+        "message_tone": "Creative and visual",
+        "decision_maker": "Studio owner",
+        "avg_deal_size": "5000-30000 NIS",
+        "buying_cycle": "2-6 weeks"
     }
 }
 
@@ -150,26 +185,37 @@ MARKETS = {
         "our_position": "Quality provider with personal service"
     },
     "photography": {
-        "market_size": "Medium market",
-        "growth_trend": "Growing steadily",
+        "market_size": "Medium niche market",
+        "growth_trend": "Growing with content creation boom",
         "players": [
-            {"name": "Large studios", "strength": "Brand", "weakness": "Price", "our_edge": "Flexibility"},
-            {"name": "Freelancers", "strength": "Price", "weakness": "Reliability", "our_edge": "Professional setup"}
+            {"name": "Large studios", "strength": "Brand", "weakness": "Price", "our_edge": "Flexibility and custom work"},
+            {"name": "Freelancers", "strength": "Price", "weakness": "Reliability", "our_edge": "Professional setup and warranty"}
         ],
-        "opportunities": ["Events market", "Corporate demand", "Social media content"],
+        "opportunities": ["Events market", "Corporate demand", "Social media content creation"],
         "threats": ["Smartphone cameras", "AI image generation"],
-        "our_position": "Professional with competitive pricing"
+        "our_position": "Professional aluminum structures for studios"
     },
     "aluminum": {
         "market_size": "Large construction market",
         "growth_trend": "Strong growth with construction boom",
         "players": [
-            {"name": "Large manufacturers", "strength": "Scale", "weakness": "Custom work", "our_edge": "Custom solutions"},
-            {"name": "Local shops", "strength": "Price", "weakness": "Quality", "our_edge": "Quality + reliability"}
+            {"name": "Large manufacturers", "strength": "Scale", "weakness": "Custom work", "our_edge": "Custom solutions fast"},
+            {"name": "Local shops", "strength": "Price", "weakness": "Quality", "our_edge": "Quality plus reliability"}
         ],
-        "opportunities": ["New construction projects", "Renovation wave", "Green building"],
+        "opportunities": ["New construction projects", "Renovation wave", "Green building trend"],
         "threats": ["Raw material prices", "Import competition"],
         "our_position": "Custom aluminum specialist"
+    },
+    "construction": {
+        "market_size": "Very large market",
+        "growth_trend": "Strong consistent growth",
+        "players": [
+            {"name": "National chains", "strength": "Brand and scale", "weakness": "Personal service", "our_edge": "Local expertise"},
+            {"name": "Small local shops", "strength": "Relationships", "weakness": "Capacity", "our_edge": "Quality and capacity"}
+        ],
+        "opportunities": ["Infrastructure projects", "Private construction boom", "Commercial renovation"],
+        "threats": ["Economic slowdown", "Material price volatility"],
+        "our_position": "Reliable regional aluminum partner"
     }
 }
 
@@ -192,7 +238,7 @@ def build_client_profile(audience: str, domain: str = "aluminum") -> ClientProfi
             buying_cycle=data["buying_cycle"]
         )
     except Exception as e:
-        log.error(f"build_client_profile error: {e}")
+        log.error("build_client_profile error: %s", e)
         raise
 
 
@@ -210,24 +256,24 @@ def build_market_map(domain: str) -> MarketMap:
             our_position=data["our_position"]
         )
     except Exception as e:
-        log.error(f"build_market_map error: {e}")
+        log.error("build_market_map error: %s", e)
         raise
 
 
 def build_collaboration_proposal(audience: str, contact_name: str = "") -> CollaborationProposal:
     try:
         name = contact_name or audience
-        full = f"Hello {name},\n\nWe offer collaboration in aluminum solutions.\n\nLooking forward to speaking."
+        full = "Hello " + name + ",\n\nWe offer professional aluminum solutions.\n\nLooking forward to speaking with you."
         return CollaborationProposal(
             audience=audience,
-            subject=f"Collaboration Proposal - {audience}",
-            opening=f"Hello {name}",
+            subject="Collaboration Proposal - " + audience,
+            opening="Hello " + name,
             value_prop="Professional aluminum solutions at competitive prices",
             call_to_action="Schedule a quick call",
             full_text=full
         )
     except Exception as e:
-        log.error(f"build_collaboration_proposal error: {e}")
+        log.error("build_collaboration_proposal error: %s", e)
         raise
 
 
@@ -236,14 +282,21 @@ def build_sales_script(audience: str, stage: str = "first_contact") -> SalesScri
         return SalesScript(
             audience=audience,
             stage=stage,
-            opener=f"Hello, I am reaching out about your aluminum project",
-            questions=["What stage is your construction at?", "What work are you planning?", "What is your approximate budget?"],
-            objections={"expensive": "Price includes full warranty and service", "unknown": "We have dozens of projects in your area"},
+            opener="Hello, I am reaching out about your aluminum project",
+            questions=[
+                "What stage is your construction at?",
+                "What work are you planning?",
+                "What is your approximate budget?"
+            ],
+            objections={
+                "expensive": "Price includes full warranty and service",
+                "unknown": "We have dozens of projects in your area"
+            },
             closer="I can send a quote within 24 hours",
             full_script="Full sales script for stage " + stage
         )
     except Exception as e:
-        log.error(f"build_sales_script error: {e}")
+        log.error("build_sales_script error: %s", e)
         raise
 
 
@@ -253,13 +306,18 @@ def build_landing_page_copy(audience: str) -> LandingPageCopy:
             audience=audience,
             headline="Professional Aluminum Solutions for Your Home",
             subheadline="Windows, doors, pergolas and railings - all in one place",
-            benefits=["Custom manufacturing", "Professional installation", "Full warranty", "Fair pricing"],
+            benefits=[
+                "Custom manufacturing",
+                "Professional installation",
+                "Full warranty",
+                "Fair pricing"
+            ],
             social_proof="Over 500 successful projects",
             cta="Get a free quote",
             full_copy="Full landing page for audience " + audience
         )
     except Exception as e:
-        log.error(f"build_landing_page_copy error: {e}")
+        log.error("build_landing_page_copy error: %s", e)
         raise
 
 
@@ -267,14 +325,16 @@ def build_niche_portfolio(audience: str) -> NichePortfolio:
     try:
         return NichePortfolio(
             audience=audience,
-            title=f"Portfolio - {audience}",
-            description="Selected projects in aluminum",
+            title="Portfolio - " + audience,
+            description="Selected aluminum projects",
             highlights=["Precise work", "Quality materials", "On-time delivery"],
-            projects=[{"name": "Sample project", "location": "Center", "scope": "Pergola + railings"}],
+            projects=[
+                {"name": "Sample project", "location": "Center", "scope": "Pergola and railings"}
+            ],
             cta="Contact us for your project"
         )
     except Exception as e:
-        log.error(f"build_niche_portfolio error: {e}")
+        log.error("build_niche_portfolio error: %s", e)
         raise
 
 
@@ -296,5 +356,5 @@ def full_research_package(goal_id: str, domain: str, audience: str, channel: str
             generated_at=datetime.datetime.utcnow().isoformat()
         )
     except Exception as e:
-        log.error(f"full_research_package error: {e}")
+        log.error("full_research_package error: %s", e)
         raise
