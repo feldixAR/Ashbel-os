@@ -79,3 +79,4 @@ def _scheduler_status() -> dict:
         return status()
     except Exception:
         return {"running": False, "jobs": []}
+
