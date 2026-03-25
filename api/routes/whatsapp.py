@@ -1,57 +1,84 @@
+"""
+api/routes/whatsapp.py
+
+FIX (Axis 1):
+  BUG-2: orch.handle(text) → orchestrator.handle_command(text)
+          Orchestrator has no .handle() method. AttributeError was swallowed
+          by except, meaning every inbound WhatsApp message was silently dropped.
+  BUG-2: result.get("response") → result.message
+          handle_command() returns OrchestratorResult (dataclass), not dict.
+  BUG-3: Orchestrator() per-request → import singleton `orchestrator`
+          commands.py already uses the singleton correctly; webhook now matches.
+"""
+
 from flask import Blueprint, request, jsonify
-import logging, os
+import logging
+import os
+
 from services.integrations.whatsapp_client import WhatsAppClient
-from orchestration.orchestrator import Orchestrator
+from orchestration.orchestrator import orchestrator          # BUG-3 FIX: singleton
 
 logger = logging.getLogger(__name__)
 whatsapp_bp = Blueprint("whatsapp", __name__)
 
-PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "1656261985567539")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+PHONE_NUMBER_ID      = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "1656261985567539")
+WHATSAPP_TOKEN       = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
 WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "ashbelos_webhook_2026")
 
-def get_client():
+
+def get_client() -> WhatsAppClient:
     return WhatsAppClient(PHONE_NUMBER_ID, WHATSAPP_TOKEN)
+
 
 @whatsapp_bp.route("/webhook", methods=["GET"])
 def verify_webhook():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
+    mode      = request.args.get("hub.mode")
+    token     = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
     if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
         logger.info("WhatsApp webhook verified")
         return challenge, 200
     return "Forbidden", 403
 
+
 @whatsapp_bp.route("/webhook", methods=["POST"])
 def receive_webhook():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     try:
-        entry = data.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
+        entry    = data.get("entry",   [{}])[0]
+        changes  = entry.get("changes", [{}])[0]
+        value    = changes.get("value", {})
         messages = value.get("messages", [])
+
         for msg in messages:
             from_number = msg.get("from")
-            msg_id = msg.get("id")
-            msg_type = msg.get("type")
+            msg_id      = msg.get("id")
+            msg_type    = msg.get("type")
+
             client = get_client()
             client.mark_as_read(msg_id)
+
             if msg_type == "text":
                 text = msg.get("text", {}).get("body", "")
                 logger.info(f"Incoming WhatsApp from {from_number}: {text}")
-                orch = Orchestrator()
-                result = orch.handle(text)
-                reply = result.get("response") or result.get("message") or "✅ התקבל"
+
+                # BUG-2 FIX: use handle_command() (not handle()), read .message
+                # BUG-3 FIX: use module-level singleton, not per-request Orchestrator()
+                result = orchestrator.handle_command(text)
+                reply  = result.message or "✅ התקבל"
+
                 client.send_text(from_number, reply)
+
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
+        logger.error(f"Webhook error: {e}", exc_info=True)
+
     return jsonify({"status": "ok"}), 200
+
 
 @whatsapp_bp.route("/send", methods=["POST"])
 def send_message():
-    data = request.get_json()
-    to = data.get("to")
+    data    = request.get_json(silent=True) or {}
+    to      = data.get("to")
     message = data.get("message")
     if not to or not message:
         return jsonify({"error": "to and message required"}), 400
@@ -59,11 +86,12 @@ def send_message():
     result = client.send_text(to, message)
     return jsonify(result)
 
+
 @whatsapp_bp.route("/status", methods=["GET"])
 def whatsapp_status():
     return jsonify({
-        "phone_number_id": PHONE_NUMBER_ID,
-        "token_configured": bool(WHATSAPP_TOKEN),
+        "phone_number_id":      PHONE_NUMBER_ID,
+        "token_configured":     bool(WHATSAPP_TOKEN),
         "webhook_verify_token": WEBHOOK_VERIFY_TOKEN,
-        "status": "active" if WHATSAPP_TOKEN else "missing_token"
+        "status":               "active" if WHATSAPP_TOKEN else "missing_token",
     })
