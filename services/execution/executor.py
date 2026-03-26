@@ -516,108 +516,48 @@ def _handle_retire_agent(task: TaskModel) -> ExecutionResult:
 # ── Batch 6 — Goal & Growth Engine ───────────────────────────────────────────
 
 def _handle_set_goal(task: TaskModel) -> ExecutionResult:
-    from engines.goal_engine import (
-        decompose_goal, identify_opportunities,
-        build_research_summary, build_asset_draft, build_outreach_plan,
-    )
-    from services.storage.repositories.goal_repo import GoalRepository
-    from services.storage.repositories.opportunity_repo import OpportunityRepository
-    from services.storage.repositories.outreach_repo import OutreachRepository
-
+    """
+    Full pipeline: Objective → Decompose → Score → Growth Committee → DB persist.
+    Delegates to services/growth/growth_pipeline.py.
+    """
     started  = _now_ms()
     p        = _params(task)
     raw_goal = p.get("goal") or p.get("raw_goal") or _command(task)
 
-    # 1. Decompose goal into tracks
-    decomp  = decompose_goal(raw_goal)
-    goal_id = decomp["goal_id"]
+    from services.growth.growth_pipeline import run_pipeline
+    result = run_pipeline(raw_goal)
 
-    # 2. Save goal to DB
-    try:
-        goal_db = GoalRepository().create(
-            raw_goal=raw_goal,
-            domain=decomp["domain"],
-            primary_metric=decomp["primary_metric"],
-            tracks=decomp["tracks"],
+    if not result.success:
+        return ExecutionResult(
+            success=False,
+            message=f"שגיאה בהגדרת יעד: {result.error}",
+            output={"error": result.error},
+            duration_ms=_elapsed_ms(started),
         )
-        goal_id = goal_db.id
-    except Exception as e:
-        log.warning(f"[Executor] goal DB save failed: {e}")
 
-    # 3. Identify opportunities
-    opportunities = identify_opportunities(goal_id, decomp["tracks"])
-
-    # 4. Save opportunities to DB
-    saved_opps = []
-    try:
-        opp_repo = OpportunityRepository()
-        for opp in opportunities[:6]:
-            opp_db = opp_repo.create(
-                goal_id=goal_id,
-                track_id=opp["track_id"],
-                title=opp["title"],
-                audience=opp["audience"],
-                channel=opp["channel"],
-                potential=opp["potential"],
-                effort=opp["effort"],
-                next_action=opp["next_action"],
-            )
-            saved_opps.append(opp_db.to_dict())
-    except Exception as e:
-        log.warning(f"[Executor] opp DB save failed: {e}")
-        saved_opps = opportunities[:6]
-
-    # 5. Research summary
-    top_audience = decomp["tracks"][0]["audience"] if decomp["tracks"] else "general"
-    top_channel  = decomp["tracks"][0]["channel"]  if decomp["tracks"] else "whatsapp"
-    research     = build_research_summary(goal_id, decomp["domain"], top_audience)
-
-    # 6. Asset draft
-    asset = build_asset_draft(goal_id, top_audience, top_channel)
-
-    # 7. Outreach plan (based on top opportunity)
-    top_opp      = opportunities[0] if opportunities else {"opp_id": "", "audience": top_audience, "channel": top_channel, "title": "", "next_action": ""}
-    outreach_plan = build_outreach_plan(goal_id, top_opp)
-
-    # 8. Save outreach record to DB
-    try:
-        OutreachRepository().create(
-            goal_id=goal_id,
-            opp_id=top_opp.get("opp_id", ""),
-            contact_name="[ממתין לפרטי קשר]",
-            contact_phone="",
-            channel=top_channel,
-            message_body=asset["message"]["body"],
-        )
-    except Exception as e:
-        log.warning(f"[Executor] outreach DB save failed: {e}")
-
+    winner = result.committee.get("winner", {})
     return ExecutionResult(
         success=True,
         message=(
             f"✅ יעד עסקי הוגדר: {raw_goal}\n"
-            f"תחום: {decomp['domain']} | "
-            f"{len(decomp['tracks'])} מסלולי צמיחה | "
-            f"{len(opportunities)} הזדמנויות"
+            f"תחום: {result.domain} | "
+            f"{len(result.tracks)} מסלולי צמיחה | "
+            f"{len(result.top_opportunities)} הזדמנויות מדורגות\n"
+            f"ועדת צמיחה: {winner.get('top_path', '')}"
         ),
         output={
             "goal": {
-                "id":             goal_id,
-                "raw_goal":       raw_goal,
-                "domain":         decomp["domain"],
-                "primary_metric": decomp["primary_metric"],
-                "tracks":         decomp["tracks"],
+                "id":      result.goal_id,
+                "raw_goal": result.raw_goal,
+                "domain":   result.domain,
+                "metric":   result.metric,
+                "tracks":   result.tracks,
             },
-            "opportunities":  saved_opps,
-            "research":       research,
-            "asset_draft":    asset,
-            "outreach_plan":  outreach_plan,
-            "next_steps": [
-                f"פנייה ראשונה ל-{top_audience}",
-                "בניית רשימת קשרים",
-                "שליחת תיק עבודות",
-                "מעקב follow-up אחרי 3 ימים",
-            ],
+            "top_opportunities": result.top_opportunities,
+            "committee":         result.committee,
+            "research":          result.research,
+            "asset_draft":       result.asset_draft,
+            "outreach_plan":     result.outreach_plan,
         },
         duration_ms=_elapsed_ms(started),
     )
@@ -636,31 +576,39 @@ def _handle_list_goals(task: TaskModel) -> ExecutionResult:
 
 
 def _handle_growth_plan(task: TaskModel) -> ExecutionResult:
-    from engines.goal_engine import decompose_goal, build_research_summary, build_asset_draft
+    """
+    Growth plan: runs full pipeline (with committee) and returns ranked actions.
+    """
     started  = _now_ms()
     raw_goal = _params(task).get("goal") or _command(task)
-    decomp   = decompose_goal(raw_goal)
-    goal_id  = decomp["goal_id"]
-    top_audience = decomp["tracks"][0]["audience"] if decomp["tracks"] else "general"
-    top_channel  = decomp["tracks"][0]["channel"]  if decomp["tracks"] else "whatsapp"
-    research = build_research_summary(goal_id, decomp["domain"], top_audience)
-    asset    = build_asset_draft(goal_id, top_audience, top_channel)
-    plan     = []
-    for track in decomp["tracks"]:
-        plan.append({
-            "track":   track["name"],
-            "channel": track["channel"],
-            "actions": track["actions"],
-        })
+
+    from services.growth.growth_pipeline import run_pipeline
+    result = run_pipeline(raw_goal)
+
+    if not result.success:
+        return ExecutionResult(
+            success=False,
+            message=f"שגיאה בתוכנית צמיחה: {result.error}",
+            output={"error": result.error},
+            duration_ms=_elapsed_ms(started),
+        )
+
+    winner = result.committee.get("winner", {})
+    track_summary = [
+        {"track": t.get("name"), "channel": t.get("channel"), "actions": t.get("actions", [])}
+        for t in result.tracks
+    ]
     return ExecutionResult(
         success=True,
-        message=f"תוכנית צמיחה נבנתה עבור: {raw_goal}",
+        message=f"תוכנית צמיחה: {raw_goal}\nמסלול מנצח: {winner.get('top_path', '')}",
         output={
-            "goal":     raw_goal,
-            "domain":   decomp["domain"],
-            "tracks":   plan,
-            "research": research,
-            "asset":    asset,
+            "goal":              raw_goal,
+            "domain":            result.domain,
+            "tracks":            track_summary,
+            "top_opportunities": result.top_opportunities,
+            "committee":         result.committee,
+            "research":          result.research,
+            "asset":             result.asset_draft,
         },
         duration_ms=_elapsed_ms(started),
     )
