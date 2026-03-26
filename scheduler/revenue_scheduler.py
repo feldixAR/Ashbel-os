@@ -198,6 +198,42 @@ def _job_telegram_delivery(force: bool = False) -> dict:
         return {"status": "error", "error": str(e)}
 
 
+def _job_startup_verification():
+    """
+    Axis 6 — one-shot verification job.
+    Fires automatically 2 minutes after app startup.
+    Proves APScheduler clock is ticking without any manual CURL.
+    Calls the proven delivery flow with force=True (bypasses date idempotency).
+    """
+    log.info("[Scheduler] AUTOMATIC trigger: startup_verification_job starting...")
+    result = _job_telegram_delivery(force=True)
+    if result.get("status") == "success":
+        log.info(
+            f"[Scheduler] AUTOMATIC trigger: startup_verification_job SUCCESS — "
+            f"message_id={result.get('message_id')} lead={result.get('lead_name')}"
+        )
+    elif result.get("status") == "skipped":
+        log.info(
+            f"[Scheduler] AUTOMATIC trigger: startup_verification_job SKIPPED — "
+            f"reason={result.get('reason')}"
+        )
+    else:
+        log.error(
+            f"[Scheduler] AUTOMATIC trigger: startup_verification_job FAILED — "
+            f"error={result.get('error')}"
+        )
+
+
+def _log_registered_jobs(sched) -> None:
+    """Log all registered jobs and their next_run_time after scheduler starts."""
+    jobs = sched.get_jobs()
+    lines = []
+    for job in jobs:
+        nrt = job.next_run_time.strftime("%H:%M %Z") if job.next_run_time else "one-shot"
+        lines.append(f"{job.id} @ {nrt}")
+    log.info(f"[Scheduler] Registered Jobs: [{', '.join(lines)}]")
+
+
 # ── Scheduler lifecycle ───────────────────────────────────────────────────────
 
 def start():
@@ -255,13 +291,24 @@ def start():
                 misfire_grace_time=1800,
             )
 
+            # ── Axis 6 verification: one-shot job 2 min after startup ──────────
+            # Fires once automatically to prove the scheduler clock is ticking.
+            # Self-removes after execution (max_instances=1, no repeat trigger).
+            _verify_at = datetime.datetime.now(il_tz) + datetime.timedelta(minutes=2)
+            sched.add_job(
+                _job_startup_verification,
+                trigger="date",
+                run_date=_verify_at,
+                id="startup_verification",
+                replace_existing=True,
+            )
+
             sched.start()
             _scheduler = sched
             _started   = True
-            log.info(
-                "[Scheduler] started — "
-                "followup/4h, daily_plan/07:30, telegram_delivery/08:00, learning/23:00"
-            )
+
+            # ── Registry log: all jobs + next_run_time ─────────────────────────
+            _log_registered_jobs(sched)
 
         except ImportError:
             log.warning("[Scheduler] apscheduler not installed — autonomous jobs disabled")
