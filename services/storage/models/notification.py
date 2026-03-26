@@ -13,7 +13,7 @@ UNIQUE constraint on (lead_id, delivery_date):
     The loser receives IntegrityError and skips the delivery.
 """
 
-from sqlalchemy import Column, String, UniqueConstraint
+from sqlalchemy import Column, Date, String, UniqueConstraint
 from .base import Base, TimestampMixin, new_uuid
 
 
@@ -22,11 +22,11 @@ class SentNotificationModel(Base, TimestampMixin):
 
     id            = Column(String(36), primary_key=True, default=new_uuid)
     lead_id       = Column(String(36), nullable=False, index=True)
-    delivery_date = Column(String(10), nullable=False)   # "YYYY-MM-DD" Israel TZ
+    delivery_date = Column(Date,       nullable=False)   # Israel TZ date (datetime.date)
     status        = Column(String(20), nullable=False, default="sent")
 
     __table_args__ = (
-        UniqueConstraint("lead_id", "delivery_date", name="_lead_daily_delivery_uc"),
+        UniqueConstraint("lead_id", "delivery_date", name="idx_lead_delivery_date_unique"),
     )
 
     def __repr__(self) -> str:

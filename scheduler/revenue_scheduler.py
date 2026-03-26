@@ -143,27 +143,33 @@ def _job_telegram_delivery(force: bool = False) -> dict:
 
         # ── 2. Race INSERT — only the winning worker proceeds ─────────────────
         if not force:
-            from services.storage.db import get_session
+            from services.storage.db import SessionLocal
             from services.storage.models.notification import SentNotificationModel
+            import datetime as _dt
+
+            today_date = datetime.datetime.now(il_tz).date()   # datetime.date object
+            db = SessionLocal()
             try:
-                with get_session() as session:
-                    session.add(SentNotificationModel(
-                        lead_id=lead.lead_id,
-                        delivery_date=today,
-                        status="sent",
-                    ))
-                # commit happened inside the context manager — this worker won
+                db.add(SentNotificationModel(
+                    lead_id=lead.lead_id,
+                    delivery_date=today_date,
+                    status="sent",
+                ))
+                db.commit()
                 log.info(
-                    f"[Scheduler] Worker {pid} WINNER: "
-                    f"Sending Telegram delivery for Lead {lead.lead_id}"
+                    f"[Scheduler] Worker {pid} - Lock acquired. "
+                    f"Sending Telegram delivery..."
                 )
             except IntegrityError:
+                db.rollback()
                 log.info(
-                    f"[Scheduler] Worker {pid} skipped: "
-                    f"Lead {lead.lead_id} already notified today ({today})"
+                    f"[Scheduler] Worker {pid} - Duplicate detected. "
+                    f"Skipping delivery for Lead {lead.lead_id}."
                 )
                 return {"status": "skipped", "reason": "already_sent_today",
                         "lead_id": lead.lead_id, "date": today}
+            finally:
+                db.close()
 
         # ── 3. Format message (exact Axis 5 format — unchanged) ───────────────
         message = (
