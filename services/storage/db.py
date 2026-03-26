@@ -94,7 +94,26 @@ def create_all_tables() -> None:
     import services.storage.models.opportunity # noqa
     import services.storage.models.outreach    # noqa
     Base.metadata.create_all(bind=engine)
+    _run_column_migrations()
     log.info("Database tables ready.")
+
+
+def _run_column_migrations() -> None:
+    """
+    Idempotent column migrations for tables that already exist.
+    ADD COLUMN IF NOT EXISTS is safe to run on every startup.
+    """
+    migrations = [
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS email  VARCHAR(200)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS sector VARCHAR(80)",
+    ]
+    try:
+        with engine.begin() as conn:
+            for stmt in migrations:
+                conn.execute(text(stmt))
+        log.info("[DB] Column migrations applied.")
+    except Exception as e:
+        log.warning(f"[DB] Column migration skipped (likely SQLite): {e}")
 
 
 def drop_all_tables() -> None:
