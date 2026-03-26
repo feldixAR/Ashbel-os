@@ -24,10 +24,9 @@ from flask import request, jsonify, g
 
 log = logging.getLogger(__name__)
 
-# Loaded strictly from environment — never hardcoded.
-# Set OS_API_KEY in Railway. Falls back to API_KEY only for existing deploys.
-# Both must be set via environment variables; no default string is accepted.
-_API_KEY = os.getenv("OS_API_KEY") or os.getenv("API_KEY") or ""
+# Loaded strictly from OS_API_KEY environment variable.
+# Set OS_API_KEY in Railway. No fallback — empty key always rejects.
+_API_KEY = os.getenv("OS_API_KEY") or ""
 
 
 def require_auth(fn):

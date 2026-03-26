@@ -95,6 +95,8 @@ def create_all_tables() -> None:
     import services.storage.models.outreach     # noqa
     # Axis 6 — distributed idempotency
     import services.storage.models.notification # noqa
+    # Batch 10 — learning analytics
+    import services.storage.models.analytics    # noqa
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")

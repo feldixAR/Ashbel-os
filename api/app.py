@@ -30,6 +30,7 @@ def create_app() -> Flask:
     from api.routes.outreach import bp as outreach_bp
     from api.routes.research  import bp as research_bp
     from api.routes.delivery  import bp as delivery_bp
+    from api.routes.analytics import bp as analytics_bp
 
     app.register_blueprint(whatsapp_bp, url_prefix="/api/whatsapp")
     for blueprint in [commands_bp, leads_bp, agents_bp, tasks_bp,
@@ -42,6 +43,7 @@ def create_app() -> Flask:
     app.register_blueprint(learning_bp,  url_prefix='/api/learning')
     app.register_blueprint(dashboard_bp, url_prefix='/api')
     app.register_blueprint(delivery_bp,  url_prefix='/api')
+    app.register_blueprint(analytics_bp, url_prefix='/api')
 
     ui_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
 
