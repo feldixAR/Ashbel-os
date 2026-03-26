@@ -25,11 +25,16 @@ import os
 
 import httpx
 import pytz
+from sqlalchemy.exc import IntegrityError
 
 log = logging.getLogger(__name__)
 _IL_TZ       = pytz.timezone("Asia/Jerusalem")
 _TG_API      = "https://api.telegram.org/bot{token}/sendMessage"
 _AVG_DEAL    = 15_000   # ILS — Ashbal Aluminum baseline
+
+# Sentinel key used in sent_notifications to deduplicate the learning report.
+# Must not collide with any real lead_id — prefixed to guarantee uniqueness.
+_DEDUP_KEY   = "__daily_learning_report__"
 
 
 # ── Public entry point ─────────────────────────────────────────────────────────
@@ -38,8 +43,17 @@ def send_daily_learning_report() -> dict:
     """
     Fetch today's learning KPIs, format Hebrew Markdown digest, send via Telegram.
 
+    Cross-process deduplication:
+        Uses the same DB-lock pattern as Axis 6 (telegram_delivery).
+        All Gunicorn workers race to INSERT SentNotificationModel(
+            lead_id='__daily_learning_report__', delivery_date=<today_IL>
+        ).
+        UNIQUE(lead_id, delivery_date) ensures exactly one INSERT wins.
+        Losers receive IntegrityError → skipped immediately.
+
     Returns:
-        dict with keys: success (bool), message_id (str), error (str)
+        dict with keys: success (bool), message_id (str), error (str),
+                        skipped (bool, True when dedup lock was held by another worker)
     """
     token   = os.getenv("TELEGRAM_BOT_TOKEN", "")
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -49,16 +63,69 @@ def send_daily_learning_report() -> dict:
             "[DailyLearning] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — "
             "daily learning report skipped"
         )
-        return {"success": False, "message_id": "", "error": "missing_env_vars"}
+        return {"success": False, "skipped": True,
+                "message_id": "", "error": "missing_env_vars"}
 
-    # ── 1. Gather data ────────────────────────────────────────────────────────
+    # ── 1. Acquire cross-process dedup lock ───────────────────────────────────
+    today_il = datetime.datetime.now(_IL_TZ).date()   # datetime.date, Israel TZ
+    lock_acquired = _acquire_dedup_lock(_DEDUP_KEY, today_il)
+
+    if not lock_acquired:
+        log.info(
+            f"[DailyLearning] pid={os.getpid()} — "
+            f"duplicate detected for date={today_il}, skipping"
+        )
+        return {"success": True, "skipped": True,
+                "message_id": "", "error": ""}
+
+    log.info(
+        f"[DailyLearning] pid={os.getpid()} — "
+        f"lock acquired for date={today_il}, sending report"
+    )
+
+    # ── 2. Gather data ────────────────────────────────────────────────────────
     data = _collect_report_data()
 
-    # ── 2. Format Telegram message ────────────────────────────────────────────
+    # ── 3. Format Telegram message ────────────────────────────────────────────
     text = _format_message(data)
 
-    # ── 3. Send ───────────────────────────────────────────────────────────────
-    return _send(token, chat_id, text)
+    # ── 4. Send ───────────────────────────────────────────────────────────────
+    result = _send(token, chat_id, text)
+    result["skipped"] = False
+    return result
+
+
+# ── Dedup lock ─────────────────────────────────────────────────────────────────
+
+def _acquire_dedup_lock(job_key: str, delivery_date) -> bool:
+    """
+    Attempt to INSERT a SentNotificationModel row with the given sentinel key
+    and today's Israel-timezone date.
+
+    Returns True  — this worker won the race; proceed with delivery.
+    Returns False — IntegrityError: another worker already inserted; skip.
+
+    The UNIQUE constraint idx_lead_delivery_date_unique on
+    (lead_id, delivery_date) is the atomic gate. Both SQLite and
+    PostgreSQL enforce this at the storage engine level.
+    """
+    from services.storage.db import SessionLocal
+    from services.storage.models.notification import SentNotificationModel
+
+    db = SessionLocal()
+    try:
+        db.add(SentNotificationModel(
+            lead_id=job_key,
+            delivery_date=delivery_date,
+            status="sent",
+        ))
+        db.commit()
+        return True                  # lock acquired
+    except IntegrityError:
+        db.rollback()
+        return False                 # another worker holds the lock
+    finally:
+        db.close()
 
 
 # ── Data collector ─────────────────────────────────────────────────────────────
