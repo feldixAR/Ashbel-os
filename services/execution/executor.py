@@ -808,51 +808,53 @@ def _handle_performance_report(task: TaskModel) -> ExecutionResult:
 
 
 # ── Handler Registry ──────────────────────────────────────────────────────────
+# FIX (Axis 1 / Bootstrap): module-level dict defined AFTER all _handle_* functions.
+# Replaces _get_handlers() wrapper — prevents NameError on import and satisfies
+# AST-based bootstrap tests that scan for _HANDLERS at module scope.
 
-def _get_handlers() -> Dict[str, Callable]:
-    return {
-        # CRM
-        "create_lead":          _handle_create_lead,
-        "update_crm_status":    _handle_update_crm_status,
-        "update_lead":          _handle_update_lead,
-        "hot_leads":            _handle_hot_leads,
-        "read_data":            _handle_read_data,
-        # Assistant / Batch 2
-        "draft_message":        _handle_draft_message,
-        "draft_meeting":        _handle_draft_meeting,
-        "set_reminder":         _handle_set_reminder,
-        "plan_action":          _handle_plan_action,
-        "update_dashboard":     _handle_update_dashboard,
-        # Revenue intelligence
-        "revenue_insights":     _handle_revenue_insights,
-        "bottleneck_analysis":  _handle_bottleneck,
-        "next_best_action":     _handle_next_best_action,
-        # Reporting
-        "generate_report":      _handle_generate_report,
-        # Agent Factory (Batch 3)
-        "create_agent":         _handle_create_agent,
-        "update_agent":         _handle_update_agent,
-        "retire_agent":         _handle_retire_agent,
-        # Sales (C3 fix)
-        "handle_sales":         _handle_sales,
-        # Revenue (Batch 4)
-        "revenue_report":       _handle_revenue_report,
-        # Goal & Growth Engine (Batch 6)
-        "set_goal":             _handle_set_goal,
-        "list_goals":           _handle_list_goals,
-        "growth_plan":          _handle_growth_plan,
-        # Research & Asset Engine (Batch 7)
-        "research_audience":    _handle_research_audience,
-        "build_portfolio":      _handle_build_portfolio,
-        "build_outreach_copy":  _handle_build_outreach_copy,
-        # Outreach & Execution Engine (Batch 8)
-        "send_outreach":        _handle_send_outreach,
-        "daily_plan":           _handle_daily_plan,
-        "followup_queue":       _handle_followup_queue,
-        # Revenue Learning (Batch 9)
-        "learning_cycle":       _handle_learning_cycle,
-        "performance_report":   _handle_performance_report,
-    }
+_HANDLERS: Dict[str, Callable] = {
+    # CRM
+    "create_lead":          _handle_create_lead,
+    "update_crm_status":    _handle_update_crm_status,
+    "update_lead":          _handle_update_lead,
+    "hot_leads":            _handle_hot_leads,
+    "read_data":            _handle_read_data,
+    # Assistant / Batch 2
+    "draft_message":        _handle_draft_message,
+    "draft_meeting":        _handle_draft_meeting,
+    "set_reminder":         _handle_set_reminder,
+    "plan_action":          _handle_plan_action,
+    "update_dashboard":     _handle_update_dashboard,
+    # Revenue intelligence
+    "revenue_insights":     _handle_revenue_insights,
+    "bottleneck_analysis":  _handle_bottleneck,
+    "next_best_action":     _handle_next_best_action,
+    # Reporting
+    "generate_report":      _handle_generate_report,
+    # Agent Factory (Batch 3)
+    "create_agent":         _handle_create_agent,
+    "update_agent":         _handle_update_agent,
+    "retire_agent":         _handle_retire_agent,
+    # Sales (C3 fix)
+    "handle_sales":         _handle_sales,
+    # Revenue (Batch 4)
+    "revenue_report":       _handle_revenue_report,
+    # Goal & Growth Engine (Batch 6)
+    "set_goal":             _handle_set_goal,
+    "list_goals":           _handle_list_goals,
+    "growth_plan":          _handle_growth_plan,
+    # Research & Asset Engine (Batch 7)
+    "research_audience":    _handle_research_audience,
+    "build_portfolio":      _handle_build_portfolio,
+    "build_outreach_copy":  _handle_build_outreach_copy,
+    # Outreach & Execution Engine (Batch 8)
+    "send_outreach":        _handle_send_outreach,
+    "daily_plan":           _handle_daily_plan,
+    "followup_queue":       _handle_followup_queue,
+    # Revenue Learning (Batch 9)
+    "learning_cycle":       _handle_learning_cycle,
+    "performance_report":   _handle_performance_report,
+}
 
 
 def execute(task: TaskModel) -> ExecutionResult:
@@ -876,7 +878,7 @@ def execute(task: TaskModel) -> ExecutionResult:
         log.error(f"[Executor] registry error: {e}", exc_info=True)
 
     # 2. Direct handlers
-    handler = _get_handlers().get(action)
+    handler = _HANDLERS.get(action)
     if handler:
         try:
             return handler(task)
