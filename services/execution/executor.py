@@ -812,7 +812,7 @@ def _handle_performance_report(task: TaskModel) -> ExecutionResult:
 # Replaces _get_handlers() wrapper — prevents NameError on import and satisfies
 # AST-based bootstrap tests that scan for _HANDLERS at module scope.
 
-_HANDLERS: Dict[str, Callable] = {
+_HANDLERS = {
     # CRM
     "create_lead":          _handle_create_lead,
     "update_crm_status":    _handle_update_crm_status,
