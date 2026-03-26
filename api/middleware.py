@@ -24,7 +24,13 @@ from flask import request, jsonify, g
 
 log = logging.getLogger(__name__)
 
-_API_KEY = os.getenv("API_KEY", "dev-api-key-change-in-production")
+# OS_API_KEY takes precedence; falls back to API_KEY for backward compat.
+# Set OS_API_KEY in Railway environment — never hardcode the value.
+_API_KEY = (
+    os.getenv("OS_API_KEY")
+    or os.getenv("API_KEY")
+    or "dev-api-key-change-in-production"
+)
 
 
 def require_auth(fn):

@@ -102,6 +102,11 @@ def create_goal():
         # Primary generated asset (ready to use)
         "primary_asset":       (result.generated_assets or {}).get("primary_asset"),
         "execution_record_id": result.execution_record_id,
+        # Batch 8 — dispatch outcome
+        "dispatch": {
+            "delivery_status":     result.delivery_status,
+            "provider_message_id": result.provider_message_id,
+        },
         # Full pipeline data
         "pipeline":            result.to_dict(),
     }, status=201)

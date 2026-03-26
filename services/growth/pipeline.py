@@ -64,6 +64,9 @@ class PipelineResult:
     generated_assets:      dict = field(default_factory=dict)  # AssetBundle.to_dict()
     execution_record_id:   str  = ""    # primary OutreachModel.id for the winner's channel
     execution_records:     list = field(default_factory=list)  # all ExecutionRecord.to_dict()
+    # Batch 8 — dispatch result
+    delivery_status:       str  = ""   # delivered | failed | skipped
+    provider_message_id:   str  = ""   # Telegram message_id
     success:    bool = True
     error:      Optional[str] = None
 
@@ -82,6 +85,8 @@ class PipelineResult:
             "generated_assets":      self.generated_assets,
             "execution_record_id":   self.execution_record_id,
             "execution_records":     self.execution_records,
+            "delivery_status":       self.delivery_status,
+            "provider_message_id":   self.provider_message_id,
             "success":               self.success,
             "error":                 self.error,
         }
@@ -178,6 +183,17 @@ def run(raw_goal: str) -> PipelineResult:
         # ── Step 8: Persist goal + opportunities to DB ────────────────────────
         _persist(goal_id, raw_goal, domain, metric, tracks, scored, decision)
 
+        # ── Step 9: Dispatch primary asset via Telegram (Batch 8) ─────────────
+        dispatch_res = None
+        if exec_rec_id:
+            from services.growth.dispatcher import dispatch_record
+            dispatch_res = dispatch_record(exec_rec_id)
+            log.info(
+                f"[Pipeline] dispatch record_id={exec_rec_id} "
+                f"status={dispatch_res.delivery_status} "
+                f"tg_id={dispatch_res.provider_message_id}"
+            )
+
         return PipelineResult(
             goal_id=goal_id,
             raw_goal=raw_goal,
@@ -192,6 +208,8 @@ def run(raw_goal: str) -> PipelineResult:
             generated_assets=asset_bundle.to_dict(),
             execution_record_id=exec_rec_id,
             execution_records=[r.to_dict() for r in exec_records],
+            delivery_status=dispatch_res.delivery_status if dispatch_res else "skipped",
+            provider_message_id=dispatch_res.provider_message_id if dispatch_res else "",
         )
 
     except Exception as e:
@@ -210,6 +228,8 @@ def run(raw_goal: str) -> PipelineResult:
             generated_assets={},
             execution_record_id="",
             execution_records=[],
+            delivery_status="skipped",
+            provider_message_id="",
             success=False,
             error=str(e),
         )

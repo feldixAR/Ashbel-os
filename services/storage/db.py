@@ -123,6 +123,10 @@ def _run_column_migrations() -> None:
         "ALTER TABLE goals ADD COLUMN IF NOT EXISTS committee_reasoning      TEXT",
         "ALTER TABLE goals ADD COLUMN IF NOT EXISTS prioritized_actions_json TEXT",
         "ALTER TABLE goals ADD COLUMN IF NOT EXISTS goal_status              VARCHAR(30) DEFAULT 'analyzed'",
+        # outreach_records — Batch 8 dispatch tracking
+        "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS delivery_status     VARCHAR(40)",
+        "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS failure_reason      TEXT",
+        "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(80)",
     ]
     try:
         with engine.begin() as conn:
