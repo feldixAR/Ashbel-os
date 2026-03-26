@@ -106,8 +106,13 @@ def _run_column_migrations() -> None:
     ADD COLUMN IF NOT EXISTS is safe to run on every startup.
     """
     migrations = [
+        # leads
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS email  VARCHAR(200)",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS sector VARCHAR(80)",
+        # opportunities — Batch 6 hardening
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS normalized_score FLOAT",
+        # goals — Batch 6 hardening
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS committee_decision TEXT",
     ]
     try:
         with engine.begin() as conn:

@@ -61,3 +61,26 @@ def list_outreach(goal_id: str):
     from services.storage.repositories.outreach_repo import OutreachRepository
     records = OutreachRepository().list_by_goal(goal_id)
     return ok({"outreach": [r.to_dict() for r in records], "total": len(records)})
+
+
+@bp.route("/goals", methods=["POST"])
+@require_auth
+@log_request
+def create_goal():
+    """
+    POST /api/goals
+    Body: {"goal": "<raw goal text>"}
+    Runs the full E2E growth pipeline and returns PipelineResult.
+    """
+    body = request.get_json(silent=True) or {}
+    raw_goal = (body.get("goal") or "").strip()
+    if not raw_goal:
+        return _error("'goal' field is required", 400)
+
+    from services.growth.pipeline import run
+    result = run(raw_goal)
+
+    if not result.success:
+        return _error(result.error or "pipeline failed", 500)
+
+    return ok(result.to_dict(), status=201)

@@ -145,7 +145,7 @@ def run(raw_goal: str) -> PipelineResult:
         outreach_plan = build_outreach_plan(goal_id, winner_opp)
 
         # ── Step 7: Persist to DB ─────────────────────────────────────────────
-        _persist(goal_id, raw_goal, domain, metric, tracks, raw_opps)
+        _persist(goal_id, raw_goal, domain, metric, tracks, scored, decision)
 
         return PipelineResult(
             goal_id=goal_id,
@@ -178,6 +178,26 @@ def run(raw_goal: str) -> PipelineResult:
         )
 
 
+# ── Reverse-lookup helpers ─────────────────────────────────────────────────────
+
+def _reverse_potential(revenue_ils: int) -> str:
+    """Map numeric ILS revenue back to high/medium/low category."""
+    if revenue_ils >= 25_000:
+        return "high"
+    if revenue_ils >= 15_000:
+        return "medium"
+    return "low"
+
+
+def _reverse_effort(effort_hours: int) -> str:
+    """Map numeric effort hours back to low/medium/high category."""
+    if effort_hours <= 10:
+        return "low"
+    if effort_hours <= 30:
+        return "medium"
+    return "high"
+
+
 # ── DB persistence ─────────────────────────────────────────────────────────────
 
 def _persist(
@@ -186,13 +206,22 @@ def _persist(
     domain: str,
     metric: str,
     tracks: list,
-    raw_opps: list,
+    scored: list,           # List[ScoredOpportunity]
+    decision: object,       # CommitteeDecision
 ) -> None:
-    """Write GoalModel + OpportunityModels. Errors logged, not raised."""
+    """Write GoalModel + OpportunityModels (with scores + committee). Errors logged, not raised."""
+    import json as _json
+    from services.growth.scoring import ScoredOpportunity
+
+    # Build score lookup: opp_id → normalized_score
+    score_map: dict = {o.opp_id: o.normalized_score for o in scored}
+
     try:
         from services.storage.db import get_session
         from services.storage.models.goal import GoalModel
         from services.storage.models.opportunity import OpportunityModel
+
+        committee_json = _json.dumps(decision.to_dict(), ensure_ascii=False)
 
         with get_session() as session:
             session.add(GoalModel(
@@ -202,20 +231,22 @@ def _persist(
                 primary_metric=metric,
                 status="active",
                 tracks=tracks,
+                committee_decision=committee_json,
             ))
-            for opp in raw_opps:
+            for scored_opp in scored:
                 session.add(OpportunityModel(
-                    id=opp.get("opp_id", str(uuid.uuid4())),
+                    id=scored_opp.opp_id or str(uuid.uuid4()),
                     goal_id=goal_id,
-                    track_id=opp.get("track_id", ""),
-                    title=opp.get("title", ""),
-                    audience=opp.get("audience", ""),
-                    channel=opp.get("channel", "whatsapp"),
-                    potential=opp.get("potential", "medium"),
-                    effort=opp.get("effort", "medium"),
-                    next_action=opp.get("next_action", ""),
+                    track_id="",
+                    title=scored_opp.title,
+                    audience=scored_opp.audience,
+                    channel=scored_opp.channel,
+                    potential=_reverse_potential(scored_opp.revenue_potential),
+                    effort=_reverse_effort(scored_opp.effort),
+                    normalized_score=scored_opp.normalized_score,
+                    next_action="",
                     status="open",
                 ))
-        log.info(f"[Pipeline] persisted goal_id={goal_id} opportunities={len(raw_opps)}")
+        log.info(f"[Pipeline] persisted goal_id={goal_id} opportunities={len(scored)}")
     except Exception as e:
         log.error(f"[Pipeline] DB persist failed goal_id={goal_id}: {e}", exc_info=True)
