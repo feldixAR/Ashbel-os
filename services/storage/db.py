@@ -97,6 +97,12 @@ def create_all_tables() -> None:
     import services.storage.models.notification # noqa
     # Batch 10 — learning analytics
     import services.storage.models.analytics    # noqa
+    # Batch 11 — Revenue CRM
+    import services.storage.models.deal          # noqa
+    import services.storage.models.activity      # noqa
+    import services.storage.models.message       # noqa
+    import services.storage.models.stage_history # noqa
+    import services.storage.models.calendar_event # noqa
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")
@@ -133,6 +139,16 @@ def _run_column_migrations() -> None:
         "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS parent_record_id VARCHAR(36)",
         "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS lifecycle_status  VARCHAR(30) DEFAULT 'sent'",
         "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS next_action_at   VARCHAR(40)",
+        # messages — Batch 11 CRM
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS deal_id            VARCHAR(36)",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS subject            VARCHAR(300)",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at_il    VARCHAR(40)",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at_il         VARCHAR(40)",
+        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS raw_payload        TEXT",
+        # activities — Batch 11 CRM
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS deal_id          VARCHAR(36)",
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS duration_sec     INTEGER",
+        "ALTER TABLE activities ADD COLUMN IF NOT EXISTS performed_at_il  VARCHAR(40)",
     ]
     try:
         with engine.begin() as conn:
