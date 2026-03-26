@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 import logging, uuid as _uuid
+from api.middleware import require_auth, ok, _error
 log = logging.getLogger(__name__)
 bp = Blueprint("outreach", __name__)
 
@@ -70,6 +71,104 @@ def get_pipeline():
         return jsonify({"success": True, "count": len(records), "pipeline": [r.to_dict() for r in records]})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ── Batch 9: Lifecycle endpoints ──────────────────────────────────────────────
+
+@bp.route("/outreach/<record_id>/status", methods=["POST"])
+@require_auth
+def update_lifecycle_status(record_id: str):
+    """
+    POST /api/outreach/<record_id>/status
+    Body: {"lifecycle_status": "closed_won", "notes": "optional"}
+
+    Transition a growth outreach record's lifecycle_status via the FSM.
+    Valid states: sent | awaiting_response | followup_due | followup_sent |
+                  closed_won | closed_lost
+    """
+    body            = request.get_json(silent=True) or {}
+    target_status   = (body.get("lifecycle_status") or "").strip()
+    notes           = (body.get("notes") or "").strip()
+
+    if not target_status:
+        return _error("'lifecycle_status' field is required", 400)
+
+    from services.storage.repositories.outreach_repo import OutreachRepository
+    from services.growth.policy import validate_transition
+
+    repo   = OutreachRepository()
+    record = repo.get_by_id(record_id)
+    if not record:
+        return _error(f"record '{record_id}' not found", 404)
+
+    current = record.lifecycle_status or "sent"
+    ok_flag, err_msg = validate_transition(current, target_status)
+    if not ok_flag:
+        return _error(err_msg, 422)
+
+    success = repo.set_lifecycle_status(record_id, target_status, notes)
+    if not success:
+        return _error("DB update failed", 500)
+
+    log.info(
+        f"[Outreach] lifecycle transition record={record_id} "
+        f"{current} → {target_status}"
+    )
+    return ok({
+        "record_id":        record_id,
+        "previous_status":  current,
+        "lifecycle_status": target_status,
+        "notes":            notes,
+    })
+
+
+@bp.route("/outreach/followups", methods=["GET"])
+@require_auth
+def list_followup_due():
+    """GET /api/outreach/followups — list records where lifecycle_status=followup_due."""
+    from services.storage.repositories.outreach_repo import OutreachRepository
+    records = OutreachRepository().list_lifecycle_due(limit=50)
+    return ok({
+        "count":   len(records),
+        "records": [r.to_dict() for r in records],
+    })
+
+
+@bp.route("/outreach/followups/process", methods=["POST"])
+@require_auth
+def run_followup_engine():
+    """
+    POST /api/outreach/followups/process
+    Trigger the follow-up engine: generate reminder assets for all
+    followup_due records. Records are created with status=ready.
+    Dispatch is human-in-the-loop (not automatic).
+    """
+    from services.growth.followup_engine import process_pending_followups
+    results = process_pending_followups(limit=20)
+    succeeded = [r for r in results if r.success]
+    failed    = [r for r in results if not r.success]
+    return ok({
+        "processed": len(results),
+        "succeeded": len(succeeded),
+        "failed":    len(failed),
+        "results":   [r.to_dict() for r in results],
+    })
+
+
+@bp.route("/outreach/lifecycle/<lifecycle_status>", methods=["GET"])
+@require_auth
+def list_by_lifecycle(lifecycle_status: str):
+    """GET /api/outreach/lifecycle/<status> — list records by lifecycle_status."""
+    from services.storage.repositories.outreach_repo import OutreachRepository
+    from services.growth.policy import ALL_STATES
+    if lifecycle_status not in ALL_STATES:
+        return _error(f"unknown status '{lifecycle_status}'", 400)
+    records = OutreachRepository().list_by_lifecycle(lifecycle_status, limit=50)
+    return ok({
+        "lifecycle_status": lifecycle_status,
+        "count":            len(records),
+        "records":          [r.to_dict() for r in records],
+    })
+
 
 @bp.route("/outreach/daily", methods=["POST"])
 def run_daily_cycle():

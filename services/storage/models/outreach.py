@@ -1,7 +1,8 @@
 """
 OutreachModel — persists outreach records per goal/opportunity.
 Batch 6: Goal & Growth Engine.
-Batch 8: Added dispatch tracking columns.
+Batch 8: Dispatch tracking columns.
+Batch 9: Lifecycle FSM columns + threading (parent_record_id).
 """
 from sqlalchemy import Column, String, Text, Integer
 from .base import Base, TimestampMixin, new_uuid
@@ -17,8 +18,8 @@ class OutreachModel(Base, TimestampMixin):
     contact_phone       = Column(String(40),  nullable=True)
     channel             = Column(String(40),  nullable=False, default="whatsapp")
     message_body        = Column(Text,        nullable=True)
+    # Dispatch status (ready → sent | failed)
     status              = Column(String(30),  nullable=False, default="pending", index=True)
-    # lifecycle:  ready → sent | failed → replied
     attempt             = Column(Integer,     nullable=False, default=1)
     sent_at             = Column(String(40),  nullable=True)   # ISO-8601, Asia/Jerusalem
     replied_at          = Column(String(40),  nullable=True)
@@ -28,6 +29,11 @@ class OutreachModel(Base, TimestampMixin):
     delivery_status     = Column(String(40),  nullable=True)   # delivered | failed | pending_ack
     failure_reason      = Column(Text,        nullable=True)
     provider_message_id = Column(String(80),  nullable=True)   # Telegram message_id
+    # Batch 9 — lifecycle FSM
+    parent_record_id    = Column(String(36),  nullable=True, index=True)
+    # sent | awaiting_response | followup_due | followup_sent | closed_won | closed_lost
+    lifecycle_status    = Column(String(30),  nullable=False, default="sent", index=True)
+    next_action_at      = Column(String(40),  nullable=True)   # ISO-8601, Asia/Jerusalem
 
     def to_dict(self) -> dict:
         return {
@@ -47,5 +53,8 @@ class OutreachModel(Base, TimestampMixin):
             "delivery_status":     self.delivery_status,
             "failure_reason":      self.failure_reason,
             "provider_message_id": self.provider_message_id,
+            "parent_record_id":    self.parent_record_id,
+            "lifecycle_status":    self.lifecycle_status,
+            "next_action_at":      self.next_action_at,
             "created_at":          str(self.created_at) if self.created_at else None,
         }

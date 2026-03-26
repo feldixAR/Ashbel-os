@@ -127,6 +127,10 @@ def _run_column_migrations() -> None:
         "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS delivery_status     VARCHAR(40)",
         "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS failure_reason      TEXT",
         "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(80)",
+        # outreach_records — Batch 9 lifecycle FSM
+        "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS parent_record_id VARCHAR(36)",
+        "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS lifecycle_status  VARCHAR(30) DEFAULT 'sent'",
+        "ALTER TABLE outreach_records ADD COLUMN IF NOT EXISTS next_action_at   VARCHAR(40)",
     ]
     try:
         with engine.begin() as conn:

@@ -102,11 +102,15 @@ def dispatch_record(record_id: str) -> DispatchResult:
 
     # ── 4. Update DB status ───────────────────────────────────────────────────
     if tg_result.success:
+        from services.growth.policy import compute_next_action_at
+        next_action = compute_next_action_at(channel, now_il)
         _update_record(
             record_id=record_id,
             status="sent",
             delivery_status="delivered",
+            lifecycle_status="sent",
             sent_at=now_il,
+            next_action_at=next_action,
             provider_message_id=tg_result.message_id,
             failure_reason=None,
         )
@@ -125,7 +129,9 @@ def dispatch_record(record_id: str) -> DispatchResult:
             record_id=record_id,
             status="failed",
             delivery_status="failed",
+            lifecycle_status="sent",   # still 'sent' lifecycle — dispatch failed
             sent_at=None,
+            next_action_at=None,
             provider_message_id=None,
             failure_reason=tg_result.error,
         )
@@ -172,12 +178,14 @@ def _format_telegram(contact_name: str, channel: str, asset_content: str,
 
 
 def _update_record(
-    record_id: str,
-    status: str,
-    delivery_status: str,
-    sent_at: str | None,
+    record_id:           str,
+    status:              str,
+    delivery_status:     str,
+    lifecycle_status:    str,
+    sent_at:             str | None,
+    next_action_at:      str | None,
     provider_message_id: str | None,
-    failure_reason: str | None,
+    failure_reason:      str | None,
 ) -> None:
     """Idempotent DB update for dispatch outcome."""
     try:
@@ -189,9 +197,12 @@ def _update_record(
             if record:
                 record.status              = status
                 record.delivery_status     = delivery_status
+                record.lifecycle_status    = lifecycle_status
                 record.provider_message_id = provider_message_id or ""
                 record.failure_reason      = failure_reason or ""
                 if sent_at:
                     record.sent_at = sent_at
+                if next_action_at:
+                    record.next_action_at = next_action_at
     except Exception as e:
         log.error(f"[Dispatcher] DB update failed record_id={record_id}: {e}", exc_info=True)

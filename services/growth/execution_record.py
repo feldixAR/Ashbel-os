@@ -77,9 +77,12 @@ def persist(
         from services.storage.db import get_session
         from services.storage.models.outreach import OutreachModel
 
+        from services.growth.policy import compute_next_action_at
+
         with get_session() as session:
             for asset in asset_bundle.assets:
-                record_id = str(uuid.uuid4())
+                record_id     = str(uuid.uuid4())
+                next_action   = compute_next_action_at(asset.channel)
                 session.add(OutreachModel(
                     id=record_id,
                     goal_id=goal_id,
@@ -89,6 +92,8 @@ def persist(
                     channel=asset.channel,
                     message_body=asset.content,
                     status="ready",
+                    lifecycle_status="sent",        # set to 'sent' after dispatch
+                    next_action_at=next_action,
                     notes=asset.subject or "",
                 ))
                 records.append(ExecutionRecord(

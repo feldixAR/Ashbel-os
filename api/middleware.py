@@ -24,13 +24,10 @@ from flask import request, jsonify, g
 
 log = logging.getLogger(__name__)
 
-# OS_API_KEY takes precedence; falls back to API_KEY for backward compat.
-# Set OS_API_KEY in Railway environment — never hardcode the value.
-_API_KEY = (
-    os.getenv("OS_API_KEY")
-    or os.getenv("API_KEY")
-    or "dev-api-key-change-in-production"
-)
+# Loaded strictly from environment — never hardcoded.
+# Set OS_API_KEY in Railway. Falls back to API_KEY only for existing deploys.
+# Both must be set via environment variables; no default string is accepted.
+_API_KEY = os.getenv("OS_API_KEY") or os.getenv("API_KEY") or ""
 
 
 def require_auth(fn):
@@ -38,7 +35,7 @@ def require_auth(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         key = request.headers.get("X-API-Key", "")
-        if not key or key != _API_KEY:
+        if not key or not _API_KEY or key != _API_KEY:
             log.warning(f"[Auth] rejected {request.method} {request.path} "
                         f"from {request.remote_addr}")
             return _error("unauthorized", 401)
