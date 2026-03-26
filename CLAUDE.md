@@ -6,17 +6,37 @@
 
 ---
 
+## Business Context — LOCKED
+
+**This system operates exclusively for Ashbal Aluminum (אשבל אלומיניום).**
+**Sector: Aluminum. No other business profile is active or permitted.**
+
+| Field | Value |
+|-------|-------|
+| **Business** | אשבל אלומיניום — Ashbal Aluminum |
+| **Sector** | Aluminum (`BUSINESS_ID=ashbel`, hardcoded default) |
+| **Active Profile** | `ashbel` (see `config/business_registry.py`) |
+| **Language** | Hebrew (he) |
+| **Currency** | ILS |
+| **Avg Deal Size** | ₪15,000 |
+
+**Operating Rule: Do NOT add, restore, or reference any other business profile.**
+**The `demo_real_estate` profile in `business_registry.py` is a scaffold — do not activate it.**
+
+---
+
 ## Project Identity
 
 | Field | Value |
 |-------|-------|
 | **Product** | AshbelOS — Autonomous Business Operating System |
 | **Domain** | Ashbal Aluminum (אשבל אלומיניום) |
-| **Runtime** | FastAPI/Flask + Gunicorn, PostgreSQL, Railway |
+| **Runtime** | Flask + Gunicorn, PostgreSQL, Railway |
 | **Language** | Python 3.11 |
-| **Repo branch model** | `main` = production-ready; `fix/*` = hotfix branches |
-| **Deploy target** | Railway (auto-deploys from `main` via GitHub push) |
-| **Health endpoint** | `GET /api/health` → `{"status": "ok"}` |
+| **Repo branch model** | `master` = production-ready; `fix/*` = hotfix branches |
+| **Deploy target** | Railway (auto-deploys from `master` via GitHub push) |
+| **Health endpoint** | `GET /api/health` → `{"status": "ok", "db": true}` |
+| **Production URL** | `https://ashbel-os-production.up.railway.app` |
 
 ---
 
@@ -61,44 +81,32 @@ WhatsApp / Dashboard UI
 | 8 | Outreach & Execution Engine | ✅ Implemented |
 | 9 | Revenue Learning Engine | ✅ Implemented |
 
-**Current Priority: Stabilization only. No new batch development until Axis 1 is closed.**
+---
+
+## Axis 1 — CLOSED ✅
+
+**Proof:** `GET /api/health` → HTTP 200 `{"data":{"db":true,"status":"ok"},"success":true}` (verified 2026-03-26)
+**Proof:** `POST /api/command {"command":"create_lead"}` → HTTP 200/201 with lead data (verified 2026-03-26)
+
+### Fixes Applied
+
+| Bug | File | Fix |
+|-----|------|-----|
+| NameError `_handle_set_goal` | `executor.py` | `_HANDLERS` moved to module-level AFTER all `_handle_*` functions (line 815) |
+| BUG-1 lifecycle | `orchestrator.py` | `dispatch()` owns lifecycle — removed duplicate `mark_completed/mark_failed` |
+| BUG-2 method name | `whatsapp.py` | Uses `orchestrator.handle_command()` + reads `result.message` |
+| BUG-3 singleton | `whatsapp.py` | Module-level singleton imported — no per-request instantiation |
+| DB schema drift | `db.py` | `_run_column_migrations()` runs `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on startup |
 
 ---
 
-## Axis 1 Stabilization — Status
+## Axis 2 — CLOSED ✅
 
-### The Bug (Root Cause)
-```
-NameError: name '_handle_set_goal' is not defined
-```
-**Root cause:** In the original codebase, `_HANDLERS` (or the equivalent handler registry) was
-defined as a module-level dict BEFORE the `_handle_set_goal` function was defined, or wrapped
-inside `_get_handlers()` in a way that caused a forward-reference failure on import.
-
-### The Fix Applied
-**File:** `services/execution/executor.py`
-
-- ❌ **Before:** `_get_handlers()` function returned the dict (lazy wrapper, caused test failures)
-- ✅ **After:** `_HANDLERS: Dict[str, Callable] = { ... }` defined at **module level, line 816**,
-  AFTER all `_handle_*` functions (last handler defined at line ~807).
-- `execute()` now uses `_HANDLERS.get(action)` directly.
-
-**Structural proof (grep-validated):**
-```
-518: def _handle_set_goal(...)       ← function defined
-816: _HANDLERS: Dict[str, Callable] = {  ← dict assigned AFTER function
-841:   "set_goal": _handle_set_goal,  ← reference is valid
-882: handler = _HANDLERS.get(action)  ← execute() uses dict directly
-```
-
-### BUG-1 (orchestrator.py) — FIXED
-`handle_command()` no longer calls `mark_completed/mark_failed` — `dispatch()` owns lifecycle.
-
-### BUG-2 (whatsapp.py) — FIXED
-`receive_webhook()` calls `orchestrator.handle_command(text)` and reads `result.message`.
-
-### BUG-3 (whatsapp.py) — FIXED
-Module-level singleton `orchestrator` imported — no per-request instantiation.
+**Business alignment confirmed (2026-03-26):**
+- Active profile: `ashbel` ✅
+- Sector: aluminum ✅
+- `dj` profile: removed ✅ (0 matches across all source files)
+- `leads.sector` column: migration applied via `_run_column_migrations()` ✅
 
 ---
 
@@ -106,73 +114,30 @@ Module-level singleton `orchestrator` imported — no per-request instantiation.
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `tests/test_executor_bootstrap.py` | AST-validates _HANDLERS structure + NameError fix | ✅ Created |
-| `tests/test_runtime_flow_axis1.py` | AST-validates BUG-1, BUG-2, BUG-3 | ✅ Exists |
-| `tests/test_core_flow.py` | Intent parser + orchestrator + engine integration | ✅ Exists |
+| `tests/test_executor_bootstrap.py` | AST-validates _HANDLERS structure + NameError fix | ✅ |
+| `tests/test_runtime_flow_axis1.py` | AST-validates BUG-1, BUG-2, BUG-3 | ✅ |
+| `tests/test_core_flow.py` | Intent parser + orchestrator + engine integration | ✅ |
 
 ---
 
-## GitHub Workflow
-
-**File:** `.github/workflows/fix-bootstrap.yml`
-**Trigger:** `workflow_dispatch` (manual)
-
-**Sequence:**
-1. Checkout `fix/axis1-runtime-flow`
-2. Run `tests/test_executor_bootstrap.py`
-3. Run `tests/test_runtime_flow_axis1.py`
-4. Merge → `main`
-5. Trigger Railway deploy via `secrets.RAILWAY_TOKEN`
-6. Wait 60s
-7. Health check `secrets.RAILWAY_URL/api/health`
-
----
-
-## Git State (as of 2026-03-26)
-
-```
-Branch: fix/axis1-runtime-flow  (= main, fix already committed)
-Commits:
-  98080b1 chore: initial commit — full AshbelOS codebase from zip
-           [includes executor.py fix + test_executor_bootstrap.py]
-```
-
-**Remote:** NOT configured yet — push blocked pending GitHub repo URL.
-
----
-
-## Environment Variables Required
+## Environment Variables
 
 | Variable | Source | Notes |
 |----------|--------|-------|
 | `DATABASE_URL` | Railway PostgreSQL add-on | Auto-injected by Railway |
-| `API_KEY` | Railway secret | Required for all API routes |
+| `API_KEY` | Railway secret | Required for all API routes (`Ashbel2026`) |
 | `SECRET_KEY` | Railway secret | Flask session key |
 | `ANTHROPIC_API_KEY` | Railway secret | For AI-powered engines |
-| `RAILWAY_TOKEN` | GitHub secret | For CI deploy trigger |
-| `RAILWAY_URL` | GitHub secret | `https://ashbel-os-production.up.railway.app` |
-
----
-
-## Current Axis 1 Closure Checklist
-
-- [x] `executor.py` fix applied and validated locally
-- [x] `tests/test_executor_bootstrap.py` created
-- [x] `fix/axis1-runtime-flow` branch exists with fix committed
-- [x] GitHub remote configured and push successful
-- [x] GitHub push → `fix/axis1-runtime-flow`
-- [x] Trigger `fix-bootstrap.yml` workflow manually (Actions tab)
-- [x] Confirm Railway deploy completes (check Railway dashboard)
-- [x] Confirm `GET /api/health` returns HTTP 200 with `{"status": "ok"}` — verified 2026-03-26: `{"data":{"db":true,"status":"ok"},"success":true}`
-- [x] **Axis 1 CLOSED — production proof confirmed**
+| `BUSINESS_ID` | Railway env | Set to `ashbel` (default if unset) |
 
 ---
 
 ## Operating Rules (for All Claude Agents)
 
-1. **Never start a new batch** until Axis 1 checklist above is 100% complete with proof.
+1. **Business context is locked to Ashbal Aluminum.** Do not introduce or activate any other business profile.
 2. **Use this file** for project context — do not re-read the entire codebase.
 3. **Use git diffs** to verify changes, not full file re-reads.
 4. **Bootstrap test must pass** before any Railway deploy is considered valid.
-5. **Health check must return HTTP 200** with real log proof, not assumption.
+5. **Health check must return HTTP 200** with real proof, not assumption.
 6. **Secrets never committed** — use `.env.example` as reference only.
+7. **Axis 1 and Axis 2 are closed.** Do not reopen unless a new regression is proven with HTTP evidence.
