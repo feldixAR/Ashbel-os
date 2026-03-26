@@ -9,8 +9,8 @@ Schema:
     created_at    — UTC timestamp of the insert
 
 UNIQUE constraint on (lead_id, delivery_date):
-    Enforced at DB level. INSERT ... ON CONFLICT DO NOTHING guarantees
-    exactly one delivery per lead per calendar day across all workers.
+    Enforced at DB level. Workers race to INSERT; only one succeeds.
+    The loser receives IntegrityError and skips the delivery.
 """
 
 from sqlalchemy import Column, String, UniqueConstraint
@@ -26,7 +26,7 @@ class SentNotificationModel(Base, TimestampMixin):
     status        = Column(String(20), nullable=False, default="sent")
 
     __table_args__ = (
-        UniqueConstraint("lead_id", "delivery_date", name="uq_notification_lead_date"),
+        UniqueConstraint("lead_id", "delivery_date", name="_lead_daily_delivery_uc"),
     )
 
     def __repr__(self) -> str:

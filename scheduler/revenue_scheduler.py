@@ -106,45 +106,20 @@ def _job_learning_cycle():
         log.error(f"[Scheduler] learning_job crashed: {e}", exc_info=True)
 
 
-def _claim_delivery_slot(lead_id: str, delivery_date: str) -> bool:
-    """
-    Attempt to claim the delivery slot for (lead_id, delivery_date).
-
-    Executes: INSERT INTO sent_notifications (id, lead_id, delivery_date, status)
-              VALUES (...) ON CONFLICT (lead_id, delivery_date) DO NOTHING
-
-    Returns True  if this worker won the race (row inserted).
-    Returns False if another worker already claimed it (conflict → 0 rows inserted).
-    """
-    from services.storage.db import engine
-    from services.storage.models.notification import SentNotificationModel
-    from services.storage.models.base import new_uuid
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-    from sqlalchemy import text
-
-    new_id = new_uuid()
-    stmt = (
-        pg_insert(SentNotificationModel)
-        .values(id=new_id, lead_id=lead_id,
-                delivery_date=delivery_date, status="sent")
-        .on_conflict_do_nothing(
-            constraint="uq_notification_lead_date"
-        )
-    )
-    with engine.begin() as conn:
-        result = conn.execute(stmt)
-        return result.rowcount == 1   # 1 = inserted (winner), 0 = conflict (loser)
-
-
 def _job_telegram_delivery(force: bool = False) -> dict:
     """
     Axis 6 — automated Telegram delivery of top daily lead.
 
-    Idempotency: distributed DB lock via INSERT ON CONFLICT DO NOTHING
-    on sent_notifications(lead_id, delivery_date). Safe across all Gunicorn workers.
+    Idempotency: distributed DB lock via INSERT + IntegrityError.
+    All Gunicorn workers race to INSERT a SentNotification row for
+    (lead_id, delivery_date). The UNIQUE constraint ensures exactly one
+    worker succeeds; the rest receive IntegrityError and skip delivery.
+
     force=True skips the DB lock (used by /api/tasks/run-scheduler-now).
     """
     import pytz
+    from sqlalchemy.exc import IntegrityError
+
     pid   = os.getpid()
     il_tz = pytz.timezone("Asia/Jerusalem")
     today = datetime.datetime.now(il_tz).strftime("%Y-%m-%d")
@@ -166,21 +141,29 @@ def _job_telegram_delivery(force: bool = False) -> dict:
 
         lead = summary.top_priorities[0]
 
-        # ── 2. Atomic DB lock — only one worker proceeds ──────────────────────
+        # ── 2. Race INSERT — only the winning worker proceeds ─────────────────
         if not force:
-            won = _claim_delivery_slot(lead.lead_id, today)
-            if not won:
+            from services.storage.db import get_session
+            from services.storage.models.notification import SentNotificationModel
+            try:
+                with get_session() as session:
+                    session.add(SentNotificationModel(
+                        lead_id=lead.lead_id,
+                        delivery_date=today,
+                        status="sent",
+                    ))
+                # commit happened inside the context manager — this worker won
                 log.info(
-                    f"[Scheduler] Worker {pid} skipped delivery: "
-                    f"Lead {lead.lead_id} already sent for today ({today})"
+                    f"[Scheduler] Worker {pid} WINNER: "
+                    f"Sending Telegram delivery for Lead {lead.lead_id}"
+                )
+            except IntegrityError:
+                log.info(
+                    f"[Scheduler] Worker {pid} skipped: "
+                    f"Lead {lead.lead_id} already notified today ({today})"
                 )
                 return {"status": "skipped", "reason": "already_sent_today",
                         "lead_id": lead.lead_id, "date": today}
-
-            log.info(
-                f"[Scheduler] Worker {pid} winning race: "
-                f"Sending delivery for Lead {lead.lead_id} ({lead.lead_name})"
-            )
 
         # ── 3. Format message (exact Axis 5 format — unchanged) ───────────────
         message = (
