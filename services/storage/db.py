@@ -110,9 +110,19 @@ def _run_column_migrations() -> None:
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS email  VARCHAR(200)",
         "ALTER TABLE leads ADD COLUMN IF NOT EXISTS sector VARCHAR(80)",
         # opportunities — Batch 6 hardening
-        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS normalized_score FLOAT",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS normalized_score    FLOAT",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS raw_score           FLOAT",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS success_probability FLOAT",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS revenue_potential   INTEGER",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS effort_hours        INTEGER",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS committee_rank      INTEGER",
+        "ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS is_committee_winner BOOLEAN DEFAULT FALSE",
         # goals — Batch 6 hardening
-        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS committee_decision TEXT",
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS committee_decision       TEXT",
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS committee_winner_title   VARCHAR(200)",
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS committee_reasoning      TEXT",
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS prioritized_actions_json TEXT",
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS goal_status              VARCHAR(30) DEFAULT 'analyzed'",
     ]
     try:
         with engine.begin() as conn:

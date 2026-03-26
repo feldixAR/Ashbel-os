@@ -73,9 +73,9 @@ def create_goal():
     Runs the full E2E growth pipeline and returns PipelineResult.
     """
     body = request.get_json(silent=True) or {}
-    raw_goal = (body.get("goal") or "").strip()
+    raw_goal = (body.get("objective") or body.get("goal") or "").strip()
     if not raw_goal:
-        return _error("'goal' field is required", 400)
+        return _error("'objective' (or 'goal') field is required", 400)
 
     from services.growth.pipeline import run
     result = run(raw_goal)

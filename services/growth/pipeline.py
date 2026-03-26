@@ -14,7 +14,7 @@ Flow:
                 │
                 ▼
             PipelineResult
-                ├── goal            {id, domain, metric, tracks}
+                ├── goal_id, domain, metric, tracks
                 ├── research        {client_profile, market_map}
                 ├── scored_opportunities  [ScoredOpportunity × N]
                 ├── committee_decision    {winner, votes, reasoning, prioritized_actions}
@@ -28,12 +28,17 @@ Trigger via Orchestrator:
 
 from __future__ import annotations
 
+import json as _json
 import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import pytz as _pytz
+import datetime as _dt
+
 log = logging.getLogger(__name__)
+_IL_TZ = _pytz.timezone("Asia/Jerusalem")
 
 
 # ── Output contract ────────────────────────────────────────────────────────────
@@ -201,39 +206,46 @@ def _reverse_effort(effort_hours: int) -> str:
 # ── DB persistence ─────────────────────────────────────────────────────────────
 
 def _persist(
-    goal_id: str,
+    goal_id:  str,
     raw_goal: str,
-    domain: str,
-    metric: str,
-    tracks: list,
-    scored: list,           # List[ScoredOpportunity]
-    decision: object,       # CommitteeDecision
+    domain:   str,
+    metric:   str,
+    tracks:   list,
+    scored:   list,     # List[ScoredOpportunity]
+    decision: object,   # CommitteeDecision
 ) -> None:
-    """Write GoalModel + OpportunityModels (with scores + committee). Errors logged, not raised."""
-    import json as _json
-    from services.growth.scoring import ScoredOpportunity
-
-    # Build score lookup: opp_id → normalized_score
-    score_map: dict = {o.opp_id: o.normalized_score for o in scored}
-
+    """
+    Write GoalModel + OpportunityModels with full numeric fields and committee data.
+    Errors are logged, not raised — pipeline result is returned regardless.
+    """
     try:
         from services.storage.db import get_session
         from services.storage.models.goal import GoalModel
         from services.storage.models.opportunity import OpportunityModel
 
-        committee_json = _json.dumps(decision.to_dict(), ensure_ascii=False)
+        winner_id            = decision.winner.opp_id
+        committee_json       = _json.dumps(decision.to_dict(), ensure_ascii=False)
+        prioritized_json     = _json.dumps(decision.prioritized_actions, ensure_ascii=False)
+        now_il               = _dt.datetime.now(_IL_TZ).isoformat()
 
         with get_session() as session:
+            # ── Goal record ───────────────────────────────────────────────────
             session.add(GoalModel(
                 id=goal_id,
                 raw_goal=raw_goal,
                 domain=domain,
                 primary_metric=metric,
                 status="active",
+                goal_status="analyzed",
                 tracks=tracks,
                 committee_decision=committee_json,
+                committee_winner_title=decision.winner.title,
+                committee_reasoning=decision.reasoning,
+                prioritized_actions_json=prioritized_json,
             ))
-            for scored_opp in scored:
+
+            # ── Opportunity records (bulk) ────────────────────────────────────
+            for rank, scored_opp in enumerate(scored, start=1):
                 session.add(OpportunityModel(
                     id=scored_opp.opp_id or str(uuid.uuid4()),
                     goal_id=goal_id,
@@ -241,12 +253,25 @@ def _persist(
                     title=scored_opp.title,
                     audience=scored_opp.audience,
                     channel=scored_opp.channel,
+                    # Legacy string categories
                     potential=_reverse_potential(scored_opp.revenue_potential),
                     effort=_reverse_effort(scored_opp.effort),
+                    # Full numeric metrics
                     normalized_score=scored_opp.normalized_score,
+                    raw_score=scored_opp.raw_score,
+                    success_probability=scored_opp.success_probability,
+                    revenue_potential=scored_opp.revenue_potential,
+                    effort_hours=scored_opp.effort,
+                    # Committee fields
+                    committee_rank=rank,
+                    is_committee_winner=(scored_opp.opp_id == winner_id),
                     next_action="",
                     status="open",
                 ))
-        log.info(f"[Pipeline] persisted goal_id={goal_id} opportunities={len(scored)}")
+
+        log.info(
+            f"[Pipeline] persisted goal_id={goal_id} "
+            f"opportunities={len(scored)} winner='{decision.winner.title}'"
+        )
     except Exception as e:
         log.error(f"[Pipeline] DB persist failed goal_id={goal_id}: {e}", exc_info=True)
