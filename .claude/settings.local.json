@@ -64,7 +64,24 @@
       "Bash(git remote:*)",
       "Bash(git -C /c/AshbelOs add api/app.py api/routes/leads.py config/business_registry.py services/storage/models/lead.py services/storage/repositories/lead_repo.py services/storage/migrations/001_initial.sql services/execution/executor.py .gitignore)",
       "Bash(git -C /c/AshbelOs rebase --continue)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "WebFetch(domain:ashbelos.up.railway.app)",
+      "WebFetch(domain:ashbel-os-production.up.railway.app)",
+      "Bash(ls:*)",
+      "Bash(find /c/AshbelOs -type f \\\\\\(-name *.py -o -name *.sql \\\\\\))",
+      "Bash(find C:/AshbelOs -type f \\\\\\(-name *.py -o -name *.sql -o -name *.json -o -name *.yaml -o -name *.yml -o -name *.txt -o -name *.md -o -name *.env* -o -name *.cfg -o -name *.ini -o -name *.toml \\\\\\))",
+      "Bash(grep -r -i dj C:/AshbelOs --include=*.py --include=*.sql --include=*.json --include=*.yaml --include=*.yml --include=*.txt --include=*.md --include=*.env* --include=*.cfg --include=*.ini --include=*.toml)",
+      "Bash(grep -r -i -n dj C:/AshbelOs --include=*.py)",
+      "Bash(grep -r -i -n dj C:/AshbelOs --include=*.py --include=*.sql --include=*.md)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(1:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -rn -i dj /c/Users/feldi/ashbel_real --include=*.py --include=*.json --include=*.yaml --include=*.yml --include=*.md)",
+      "Bash(grep -rn sector /c/Users/feldi/ashbel_real --include=*.py --include=*.json)",
+      "Bash(grep -rn -i dj /c/Users/feldi/ashbel_real --include=*.txt --include=*.md --include=*.env*)",
+      "Bash(grep -rn \"sector\\\\|email\" /c/Users/feldi/ashbel_real/services/storage/models/ --include=*.py)",
+      "Bash(grep -rn -i dj /c/AshbelOs --include=*.py --include=*.json --include=*.yaml --include=*.yml --include=*.md)"
     ]
   }
 }
