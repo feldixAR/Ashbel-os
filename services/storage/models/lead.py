@@ -17,7 +17,7 @@ class LeadModel(Base, TimestampMixin):
     city          = Column(String(120),  nullable=True)
     phone         = Column(String(40),   nullable=True, index=True)
     email         = Column(String(200),  nullable=True)
-    sector        = Column(String(80),   nullable=True, index=True)  # e.g. "aluminum", "dj", "real_estate"
+    sector        = Column(String(80),   nullable=True, index=True)  # free-text; any sector value is valid
     source        = Column(String(60),   nullable=False, default="manual", index=True)
     status        = Column(String(60),   nullable=False, default="חדש", index=True)
     score         = Column(Integer,      nullable=False, default=0, index=True)

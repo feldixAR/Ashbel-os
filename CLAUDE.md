@@ -150,7 +150,7 @@ Commits:
 | `SECRET_KEY` | Railway secret | Flask session key |
 | `ANTHROPIC_API_KEY` | Railway secret | For AI-powered engines |
 | `RAILWAY_TOKEN` | GitHub secret | For CI deploy trigger |
-| `RAILWAY_URL` | GitHub secret | e.g. `https://ashbelos.up.railway.app` |
+| `RAILWAY_URL` | GitHub secret | `https://ashbel-os-production.up.railway.app` |
 
 ---
 
@@ -159,12 +159,12 @@ Commits:
 - [x] `executor.py` fix applied and validated locally
 - [x] `tests/test_executor_bootstrap.py` created
 - [x] `fix/axis1-runtime-flow` branch exists with fix committed
-- [ ] **BLOCKED: GitHub remote not configured** — need repo URL + push access
-- [ ] GitHub push → `fix/axis1-runtime-flow`
-- [ ] Trigger `fix-bootstrap.yml` workflow manually (Actions tab)
-- [ ] Confirm Railway deploy completes (check Railway dashboard)
-- [ ] Confirm `GET /api/health` returns HTTP 200 with `{"status": "ok"}`
-- [ ] Axis 1 closed with real production proof
+- [x] GitHub remote configured and push successful
+- [x] GitHub push → `fix/axis1-runtime-flow`
+- [x] Trigger `fix-bootstrap.yml` workflow manually (Actions tab)
+- [x] Confirm Railway deploy completes (check Railway dashboard)
+- [x] Confirm `GET /api/health` returns HTTP 200 with `{"status": "ok"}` — verified 2026-03-26: `{"data":{"db":true,"status":"ok"},"success":true}`
+- [x] **Axis 1 CLOSED — production proof confirmed**
 
 ---
 

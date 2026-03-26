@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS leads (
     city              VARCHAR(120),
     phone             VARCHAR(40),
     email             VARCHAR(200),
-    sector            VARCHAR(80),            -- e.g. 'aluminum', 'dj', 'real_estate'
+    sector            VARCHAR(80),            -- free-text; any sector value is valid (e.g. 'aluminum', 'real_estate')
     source            VARCHAR(60)  NOT NULL DEFAULT 'manual',
     status            VARCHAR(60)  NOT NULL DEFAULT 'חדש',
     score             INTEGER      NOT NULL DEFAULT 0,
