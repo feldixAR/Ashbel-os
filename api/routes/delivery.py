@@ -1,0 +1,73 @@
+"""
+POST /api/tasks/test-delivery
+
+Axis 5 — External Delivery Proof.
+
+Generates today's daily outreach plan, takes the top-priority lead,
+formats a Telegram message, sends it, and returns delivery status.
+"""
+
+import logging
+from flask import Blueprint
+from api.middleware import require_auth, log_request, ok, _error
+
+log = logging.getLogger(__name__)
+bp  = Blueprint("delivery", __name__)
+
+
+@bp.route("/tasks/test-delivery", methods=["POST"])
+@require_auth
+@log_request
+def test_delivery():
+    # 1. Generate today's plan
+    try:
+        from engines.outreach_engine import daily_outreach_summary
+        summary = daily_outreach_summary()
+    except Exception as e:
+        log.error(f"[Delivery] daily_outreach_summary failed: {e}", exc_info=True)
+        return _error(f"plan generation failed: {e}", 500)
+
+    if not summary.top_priorities:
+        return ok({
+            "delivery_status": "skipped",
+            "reason":          "no leads in top_priorities",
+        })
+
+    # 2. Take the highest-priority lead
+    lead = summary.top_priorities[0]
+
+    # 3. Format Telegram message
+    message = (
+        "🚀 *AshbelOS: Daily Action Plan*\n\n"
+        f"*Lead:* {lead.lead_name}\n"
+        f"*Reason:* {lead.reason}\n"
+        f"*Action:* [Click to Chat]({lead.deep_link})"
+    )
+
+    # 4. Send via Telegram
+    try:
+        from services.telegram_service import telegram_service
+        result = telegram_service.send(message)
+    except Exception as e:
+        log.error(f"[Delivery] telegram_service.send failed: {e}", exc_info=True)
+        return _error(f"telegram send failed: {e}", 500)
+
+    if not result.success:
+        return ok({
+            "delivery_status": "failed",
+            "lead_name":       lead.lead_name,
+            "error":           result.error,
+        }, status=502)
+
+    log.info(
+        f"[Delivery] sent lead={lead.lead_name} "
+        f"channel={lead.channel} message_id={result.message_id}"
+    )
+    return ok({
+        "delivery_status": "success",
+        "message_id":      result.message_id,
+        "lead_name":       lead.lead_name,
+        "channel":         lead.channel,
+        "phone":           lead.phone,
+        "urgency":         lead.urgency,
+    })
