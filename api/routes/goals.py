@@ -83,4 +83,25 @@ def create_goal():
     if not result.success:
         return _error(result.error or "pipeline failed", 500)
 
-    return ok(result.to_dict(), status=201)
+    cd = result.committee_decision or {}
+    winner = cd.get("winner", {})
+
+    return ok({
+        # Core identifiers
+        "goal_id":             result.goal_id,
+        "goal_status":         "analyzed",
+        # Winner summary (top-level for easy consumption)
+        "winner": {
+            "title":             winner.get("title"),
+            "audience":          winner.get("audience"),
+            "channel":           winner.get("channel"),
+            "normalized_score":  winner.get("normalized_score"),
+            "borda_score":       cd.get("winner_borda_score"),
+            "reasoning":         cd.get("reasoning"),
+        },
+        # Primary generated asset (ready to use)
+        "primary_asset":       (result.generated_assets or {}).get("primary_asset"),
+        "execution_record_id": result.execution_record_id,
+        # Full pipeline data
+        "pipeline":            result.to_dict(),
+    }, status=201)

@@ -10,16 +10,21 @@ Flow:
         ├─ [Scoring]          score_all → List[ScoredOpportunity]   (numeric, 1–100)
         ├─ [Committee]        run_committee → CommitteeDecision       (Borda winner)
         ├─ [Goal Engine]      build_asset_draft + build_outreach_plan
+        ├─ [AssetFactory]     generate_assets → AssetBundle           (whatsapp/email/brief)
+        ├─ [ExecutionRecord]  persist → List[ExecutionRecord]         (status=ready)
         └─ [DB]               persist GoalModel + OpportunityModels
                 │
                 ▼
             PipelineResult
                 ├── goal_id, domain, metric, tracks
-                ├── research        {client_profile, market_map}
-                ├── scored_opportunities  [ScoredOpportunity × N]
-                ├── committee_decision    {winner, votes, reasoning, prioritized_actions}
-                ├── asset_draft     {message, portfolio}
-                └── outreach_plan   {sequence}
+                ├── research               {client_profile, market_map}
+                ├── scored_opportunities   [ScoredOpportunity × N]
+                ├── committee_decision     {winner, votes, reasoning, prioritized_actions}
+                ├── asset_draft            {message, portfolio}
+                ├── outreach_plan          {sequence}
+                ├── generated_assets       {assets: [whatsapp, email, brief], primary_asset}
+                ├── execution_record_id    str   (primary OutreachModel.id)
+                └── execution_records      [ExecutionRecord × 3]
 
 Trigger via Orchestrator:
     POST /api/command  {"command": "הגדל מכירות אלומיניום ב-30%"}
@@ -55,6 +60,10 @@ class PipelineResult:
     committee_decision:   dict       # CommitteeDecision.to_dict()
     asset_draft:    dict
     outreach_plan:  dict
+    # Batch 7 — generated assets + execution record
+    generated_assets:      dict = field(default_factory=dict)  # AssetBundle.to_dict()
+    execution_record_id:   str  = ""    # primary OutreachModel.id for the winner's channel
+    execution_records:     list = field(default_factory=list)  # all ExecutionRecord.to_dict()
     success:    bool = True
     error:      Optional[str] = None
 
@@ -70,6 +79,9 @@ class PipelineResult:
             "committee_decision":    self.committee_decision,
             "asset_draft":           self.asset_draft,
             "outreach_plan":         self.outreach_plan,
+            "generated_assets":      self.generated_assets,
+            "execution_record_id":   self.execution_record_id,
+            "execution_records":     self.execution_records,
             "success":               self.success,
             "error":                 self.error,
         }
@@ -149,7 +161,21 @@ def run(raw_goal: str) -> PipelineResult:
         asset_draft   = build_asset_draft(goal_id, decision.winner.audience, decision.winner.channel)
         outreach_plan = build_outreach_plan(goal_id, winner_opp)
 
-        # ── Step 7: Persist to DB ─────────────────────────────────────────────
+        # ── Step 7: Generate tailored assets (Batch 7) ────────────────────────
+        from services.growth.asset_factory import generate_assets
+        from services.growth.execution_record import persist as persist_records, get_primary_record
+
+        asset_bundle  = generate_assets(decision.winner, research)
+        exec_records  = persist_records(goal_id, decision.winner, asset_bundle)
+        primary_rec   = get_primary_record(exec_records, decision.winner.channel)
+        exec_rec_id   = primary_rec.record_id if primary_rec else ""
+
+        log.info(
+            f"[Pipeline] assets generated: {len(asset_bundle.assets)} assets, "
+            f"primary_record_id={exec_rec_id}"
+        )
+
+        # ── Step 8: Persist goal + opportunities to DB ────────────────────────
         _persist(goal_id, raw_goal, domain, metric, tracks, scored, decision)
 
         return PipelineResult(
@@ -163,6 +189,9 @@ def run(raw_goal: str) -> PipelineResult:
             committee_decision=decision.to_dict(),
             asset_draft=asset_draft,
             outreach_plan=outreach_plan,
+            generated_assets=asset_bundle.to_dict(),
+            execution_record_id=exec_rec_id,
+            execution_records=[r.to_dict() for r in exec_records],
         )
 
     except Exception as e:
@@ -178,6 +207,9 @@ def run(raw_goal: str) -> PipelineResult:
             committee_decision={},
             asset_draft={},
             outreach_plan={},
+            generated_assets={},
+            execution_record_id="",
+            execution_records=[],
             success=False,
             error=str(e),
         )
