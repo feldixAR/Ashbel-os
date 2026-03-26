@@ -743,20 +743,30 @@ def _handle_send_outreach(task: TaskModel) -> ExecutionResult:
 
 
 def _handle_daily_plan(task: TaskModel) -> ExecutionResult:
+    import dataclasses
     from engines.outreach_engine import outreach_engine
     started = _now_ms()
-    summary = outreach_engine.build_daily_summary()
-    lines   = []
-    if hasattr(summary, "top_priorities") and summary.top_priorities:
-        for ot in summary.top_priorities[:5]:
-            lines.append(f"• {ot.lead_name} — {ot.message[:60]}...")
-    msg = "תוכנית יומית:\n" + "\n".join(lines) if lines else "אין פניות דחופות להיום."
-    return ExecutionResult(
-        success=True,
-        message=msg,
-        output={"summary": summary.__dict__ if hasattr(summary, "__dict__") else {}},
-        duration_ms=_elapsed_ms(started),
-    )
+    try:
+        summary = outreach_engine.build_daily_summary()
+        lines   = []
+        if hasattr(summary, "top_priorities") and summary.top_priorities:
+            for ot in summary.top_priorities[:5]:
+                lines.append(f"• {ot.lead_name} — {ot.message[:60]}...")
+        msg = "תוכנית יומית:\n" + "\n".join(lines) if lines else "אין פניות דחופות להיום."
+        safe_summary = dataclasses.asdict(summary) if dataclasses.is_dataclass(summary) else {}
+        return ExecutionResult(
+            success=True,
+            message=msg,
+            output={"summary": safe_summary},
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:
+        return ExecutionResult(
+            success=False,
+            message=f"שגיאה בתוכנית יומית: {e}",
+            output={"error": str(e)},
+            duration_ms=_elapsed_ms(started),
+        )
 
 
 def _handle_followup_queue(task: TaskModel) -> ExecutionResult:
@@ -765,11 +775,12 @@ def _handle_followup_queue(task: TaskModel) -> ExecutionResult:
     queue   = outreach_engine.get_followup_queue()
     lines   = [f"• {item.lead_name} ({item.channel}) — ניסיון #{item.attempt}"
                for item in (queue or [])[:10]]
+    import dataclasses
     msg = f"תור follow-up — {len(queue or [])} פניות:\n" + "\n".join(lines) if lines else "תור follow-up ריק."
     return ExecutionResult(
         success=True,
         message=msg,
-        output={"queue": [q.__dict__ if hasattr(q, "__dict__") else q for q in (queue or [])]},
+        output={"queue": [dataclasses.asdict(q) if dataclasses.is_dataclass(q) else q for q in (queue or [])]},
         duration_ms=_elapsed_ms(started),
     )
 
