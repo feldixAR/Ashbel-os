@@ -51,10 +51,11 @@ CREATE INDEX IF NOT EXISTS idx_agent_versions_is_active ON agent_versions(is_act
 -- ── leads ─────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS leads (
     id                VARCHAR(36)  PRIMARY KEY,
-    name              VARCHAR(120) NOT NULL,
-    city              VARCHAR(80),
+    name              VARCHAR(200) NOT NULL,  -- wide enough for any Unicode (Hebrew, Arabic, etc.)
+    city              VARCHAR(120),
     phone             VARCHAR(40),
-    email             VARCHAR(120),
+    email             VARCHAR(200),
+    sector            VARCHAR(80),            -- e.g. 'aluminum', 'dj', 'real_estate'
     source            VARCHAR(60)  NOT NULL DEFAULT 'manual',
     status            VARCHAR(60)  NOT NULL DEFAULT 'חדש',
     score             INTEGER      NOT NULL DEFAULT 0,
@@ -71,6 +72,13 @@ CREATE INDEX IF NOT EXISTS idx_leads_phone  ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_score  ON leads(score);
+CREATE INDEX IF NOT EXISTS idx_leads_sector ON leads(sector);
+
+-- Run this once against an existing Railway DB if the table already existed before this migration:
+-- ALTER TABLE leads ADD COLUMN IF NOT EXISTS sector VARCHAR(80);
+-- ALTER TABLE leads ALTER COLUMN name TYPE VARCHAR(200);
+-- ALTER TABLE leads ALTER COLUMN email TYPE VARCHAR(200);
+-- ALTER TABLE leads ALTER COLUMN city TYPE VARCHAR(120);
 
 -- ── lead_history ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS lead_history (

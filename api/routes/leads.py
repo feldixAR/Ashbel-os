@@ -53,10 +53,12 @@ def create_lead():
 
     lead = LeadRepository().create(
         name=name,
-        city=(body.get("city")   or "").strip(),
-        phone=(body.get("phone") or "").strip(),
+        city=(body.get("city")    or "").strip(),
+        phone=(body.get("phone")  or "").strip(),
+        email=(body.get("email")  or "").strip(),
         source=(body.get("source") or "manual").strip(),
-        notes=(body.get("notes") or "").strip(),
+        sector=(body.get("sector") or "").strip(),
+        notes=(body.get("notes")  or "").strip(),
     )
 
     event_bus.publish(
@@ -97,6 +99,8 @@ def _serialize_lead(lead) -> dict:
         "name":         lead.name,
         "city":         lead.city,
         "phone":        lead.phone,
+        "email":        lead.email,
+        "sector":       lead.sector,
         "source":       lead.source,
         "status":       lead.status,
         "score":        lead.score,

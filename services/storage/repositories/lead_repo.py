@@ -9,12 +9,15 @@ from .base_repo import BaseRepository, utcnow_iso
 class LeadRepository(BaseRepository[LeadModel]):
     model_class = LeadModel
 
-    def create(self, name: str, city: str, phone: str,
-                source: str, notes: str = "") -> LeadModel:
+    def create(self, name: str, city: str = "", phone: str = "",
+                source: str = "manual", notes: str = "",
+                email: str = "", sector: str = "") -> LeadModel:
         from services.storage.models.base import new_uuid
         lead = LeadModel(
             id=new_uuid(), name=name, city=city,
-            phone=phone, source=source, notes=notes,
+            phone=phone, email=email or None,
+            source=source, notes=notes,
+            sector=sector or None,
             status="חדש", score=0, attempts=0,
         )
         with get_session() as s:
