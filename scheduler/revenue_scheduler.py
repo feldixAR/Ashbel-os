@@ -1,10 +1,11 @@
 """
-revenue_scheduler.py — Autonomous Revenue Scheduler (Batch 8/9)
+revenue_scheduler.py — Autonomous Revenue Scheduler (Batch 8/9 + Axis 6)
 
-Runs three recurring jobs:
-  1. followup_job     — every 4h: send due follow-ups for all active goals
-  2. daily_plan_job   — every morning 07:30 IL time: build & log daily revenue plan
-  3. learning_job     — every night 23:00 IL time: run learning cycle
+Runs four recurring jobs:
+  1. followup_job          — every 4h: send due follow-ups for all active goals
+  2. daily_plan_job        — every morning 07:30 IL time: build & log daily revenue plan
+  3. learning_job          — every night 23:00 IL time: run learning cycle
+  4. telegram_delivery_job — every morning 08:00 IL time: send top lead via Telegram
 
 Design principles:
   - Each job is fully self-contained and wrapped in try/except — one failure never kills others.
@@ -18,6 +19,10 @@ import threading
 import datetime
 
 log = logging.getLogger(__name__)
+
+# ── Idempotency guard for telegram_delivery_job ───────────────────────────────
+_telegram_last_sent_date = ""   # ISO date string: "2026-03-26"
+_telegram_lock = threading.Lock()
 
 _scheduler = None
 _started   = False
@@ -104,6 +109,95 @@ def _job_learning_cycle():
         log.error(f"[Scheduler] learning_job crashed: {e}", exc_info=True)
 
 
+def _job_telegram_delivery(force: bool = False) -> dict:
+    """
+    Axis 6 — automated Telegram delivery of top daily lead.
+
+    Mirrors the exact flow from POST /api/tasks/test-delivery (Axis 5):
+      daily_outreach_summary → top lead → format → telegram_service.send
+
+    Idempotency: skips if already sent today (guards against scheduler misfires).
+    Set force=True to bypass the guard (used by run-scheduler-now endpoint).
+
+    Returns a result dict for observability / endpoint responses.
+    """
+    global _telegram_last_sent_date
+
+    today = datetime.date.today().isoformat()
+
+    # ── Idempotency check ─────────────────────────────────────────────────────
+    with _telegram_lock:
+        if not force and _telegram_last_sent_date == today:
+            log.info(f"[Scheduler] telegram_delivery_job: already sent today ({today}), skipping")
+            return {"status": "skipped", "reason": "already_sent_today", "date": today}
+
+    log.info(f"[Scheduler] telegram_delivery_job: job_started date={today} force={force}")
+
+    try:
+        # ── 1. Generate plan ──────────────────────────────────────────────────
+        from engines.outreach_engine import daily_outreach_summary
+        summary = daily_outreach_summary()
+        log.info(
+            f"[Scheduler] telegram_delivery_job: plan_generated "
+            f"leads={len(summary.top_priorities)} date={today}"
+        )
+
+        if not summary.top_priorities:
+            log.info("[Scheduler] telegram_delivery_job: no leads in plan, skipping")
+            return {"status": "skipped", "reason": "no_leads", "date": today}
+
+        lead = summary.top_priorities[0]
+
+        # ── 2. Format message (exact Axis 5 format) ───────────────────────────
+        message = (
+            "🚀 *AshbelOS: Daily Action Plan*\n\n"
+            f"*Lead:* {lead.lead_name}\n"
+            f"*Reason:* {lead.reason}\n"
+            f"*Action:* [Click to Chat]({lead.deep_link})"
+        )
+
+        # ── 3. Send via Telegram ──────────────────────────────────────────────
+        from services.telegram_service import telegram_service
+        result = telegram_service.send(message)
+
+        if result.success:
+            with _telegram_lock:
+                _telegram_last_sent_date = today
+            log.info(
+                f"[Scheduler] telegram_delivery_job: delivery_sent "
+                f"lead={lead.lead_name} message_id={result.message_id} date={today}"
+            )
+            from events.event_bus import event_bus
+            import events.event_types as ET
+            event_bus.publish(
+                ET.SCHEDULER_JOB_RAN,
+                payload={
+                    "job":        "telegram_delivery",
+                    "date":       today,
+                    "lead_name":  lead.lead_name,
+                    "channel":    lead.channel,
+                    "message_id": result.message_id,
+                },
+            )
+            return {
+                "status":     "success",
+                "message_id": result.message_id,
+                "lead_name":  lead.lead_name,
+                "channel":    lead.channel,
+                "date":       today,
+            }
+
+        log.error(
+            f"[Scheduler] telegram_delivery_job: delivery_failed "
+            f"lead={lead.lead_name} error={result.error}"
+        )
+        return {"status": "failed", "error": result.error, "lead_name": lead.lead_name}
+
+    except Exception as e:
+        log.error(f"[Scheduler] telegram_delivery_job crashed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 # ── Scheduler lifecycle ───────────────────────────────────────────────────────
 
 def start():
@@ -151,10 +245,23 @@ def start():
                 misfire_grace_time=1800,
             )
 
+            # Telegram delivery every morning at 08:00 IL (Axis 6)
+            sched.add_job(
+                _job_telegram_delivery,
+                trigger="cron",
+                hour=8, minute=0,
+                id="telegram_delivery",
+                replace_existing=True,
+                misfire_grace_time=1800,
+            )
+
             sched.start()
             _scheduler = sched
             _started   = True
-            log.info("[Scheduler] started — followup/4h, daily_plan/07:30, learning/23:00")
+            log.info(
+                "[Scheduler] started — "
+                "followup/4h, daily_plan/07:30, telegram_delivery/08:00, learning/23:00"
+            )
 
         except ImportError:
             log.warning("[Scheduler] apscheduler not installed — autonomous jobs disabled")

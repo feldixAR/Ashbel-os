@@ -1,10 +1,8 @@
 """
-POST /api/tasks/test-delivery
+Delivery routes — Axis 5 + Axis 6
 
-Axis 5 — External Delivery Proof.
-
-Generates today's daily outreach plan, takes the top-priority lead,
-formats a Telegram message, sends it, and returns delivery status.
+POST /api/tasks/test-delivery   — Axis 5: one-off Telegram delivery proof
+POST /api/tasks/run-scheduler-now — Axis 6: trigger the automated job immediately
 """
 
 import logging
@@ -71,3 +69,23 @@ def test_delivery():
         "phone":           lead.phone,
         "urgency":         lead.urgency,
     })
+
+
+@bp.route("/tasks/run-scheduler-now", methods=["POST"])
+@require_auth
+@log_request
+def run_scheduler_now():
+    """
+    Axis 6 — trigger the automated telegram_delivery job immediately.
+    Bypasses the idempotency guard (force=True) so it always runs on demand.
+    Returns the same result dict the scheduled job would produce.
+    """
+    try:
+        from scheduler.revenue_scheduler import _job_telegram_delivery
+        result = _job_telegram_delivery(force=True)
+    except Exception as e:
+        log.error(f"[Delivery] run_scheduler_now failed: {e}", exc_info=True)
+        return _error(f"scheduler job failed: {e}", 500)
+
+    status_code = 200 if result.get("status") in ("success", "skipped") else 502
+    return ok(result, status=status_code)
