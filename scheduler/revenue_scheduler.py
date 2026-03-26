@@ -15,14 +15,11 @@ Design principles:
 """
 
 import logging
+import os
 import threading
 import datetime
 
 log = logging.getLogger(__name__)
-
-# ── Idempotency guard for telegram_delivery_job ───────────────────────────────
-_telegram_last_sent_date = ""   # ISO date string: "2026-03-26"
-_telegram_lock = threading.Lock()
 
 _scheduler = None
 _started   = False
@@ -109,29 +106,50 @@ def _job_learning_cycle():
         log.error(f"[Scheduler] learning_job crashed: {e}", exc_info=True)
 
 
+def _claim_delivery_slot(lead_id: str, delivery_date: str) -> bool:
+    """
+    Attempt to claim the delivery slot for (lead_id, delivery_date).
+
+    Executes: INSERT INTO sent_notifications (id, lead_id, delivery_date, status)
+              VALUES (...) ON CONFLICT (lead_id, delivery_date) DO NOTHING
+
+    Returns True  if this worker won the race (row inserted).
+    Returns False if another worker already claimed it (conflict → 0 rows inserted).
+    """
+    from services.storage.db import engine
+    from services.storage.models.notification import SentNotificationModel
+    from services.storage.models.base import new_uuid
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy import text
+
+    new_id = new_uuid()
+    stmt = (
+        pg_insert(SentNotificationModel)
+        .values(id=new_id, lead_id=lead_id,
+                delivery_date=delivery_date, status="sent")
+        .on_conflict_do_nothing(
+            constraint="uq_notification_lead_date"
+        )
+    )
+    with engine.begin() as conn:
+        result = conn.execute(stmt)
+        return result.rowcount == 1   # 1 = inserted (winner), 0 = conflict (loser)
+
+
 def _job_telegram_delivery(force: bool = False) -> dict:
     """
     Axis 6 — automated Telegram delivery of top daily lead.
 
-    Mirrors the exact flow from POST /api/tasks/test-delivery (Axis 5):
-      daily_outreach_summary → top lead → format → telegram_service.send
-
-    Idempotency: skips if already sent today (guards against scheduler misfires).
-    Set force=True to bypass the guard (used by run-scheduler-now endpoint).
-
-    Returns a result dict for observability / endpoint responses.
+    Idempotency: distributed DB lock via INSERT ON CONFLICT DO NOTHING
+    on sent_notifications(lead_id, delivery_date). Safe across all Gunicorn workers.
+    force=True skips the DB lock (used by /api/tasks/run-scheduler-now).
     """
-    global _telegram_last_sent_date
+    import pytz
+    pid   = os.getpid()
+    il_tz = pytz.timezone("Asia/Jerusalem")
+    today = datetime.datetime.now(il_tz).strftime("%Y-%m-%d")
 
-    today = datetime.date.today().isoformat()
-
-    # ── Idempotency check ─────────────────────────────────────────────────────
-    with _telegram_lock:
-        if not force and _telegram_last_sent_date == today:
-            log.info(f"[Scheduler] telegram_delivery_job: already sent today ({today}), skipping")
-            return {"status": "skipped", "reason": "already_sent_today", "date": today}
-
-    log.info(f"[Scheduler] telegram_delivery_job: job_started date={today} force={force}")
+    log.info(f"[Scheduler] telegram_delivery_job: job_started pid={pid} date={today}")
 
     try:
         # ── 1. Generate plan ──────────────────────────────────────────────────
@@ -139,16 +157,32 @@ def _job_telegram_delivery(force: bool = False) -> dict:
         summary = daily_outreach_summary()
         log.info(
             f"[Scheduler] telegram_delivery_job: plan_generated "
-            f"leads={len(summary.top_priorities)} date={today}"
+            f"pid={pid} leads={len(summary.top_priorities)} date={today}"
         )
 
         if not summary.top_priorities:
-            log.info("[Scheduler] telegram_delivery_job: no leads in plan, skipping")
+            log.info(f"[Scheduler] telegram_delivery_job: no leads in plan pid={pid}, skipping")
             return {"status": "skipped", "reason": "no_leads", "date": today}
 
         lead = summary.top_priorities[0]
 
-        # ── 2. Format message (exact Axis 5 format) ───────────────────────────
+        # ── 2. Atomic DB lock — only one worker proceeds ──────────────────────
+        if not force:
+            won = _claim_delivery_slot(lead.lead_id, today)
+            if not won:
+                log.info(
+                    f"[Scheduler] Worker {pid} skipped delivery: "
+                    f"Lead {lead.lead_id} already sent for today ({today})"
+                )
+                return {"status": "skipped", "reason": "already_sent_today",
+                        "lead_id": lead.lead_id, "date": today}
+
+            log.info(
+                f"[Scheduler] Worker {pid} winning race: "
+                f"Sending delivery for Lead {lead.lead_id} ({lead.lead_name})"
+            )
+
+        # ── 3. Format message (exact Axis 5 format — unchanged) ───────────────
         message = (
             "🚀 *AshbelOS: Daily Action Plan*\n\n"
             f"*Lead:* {lead.lead_name}\n"
@@ -156,16 +190,14 @@ def _job_telegram_delivery(force: bool = False) -> dict:
             f"*Action:* [Click to Chat]({lead.deep_link})"
         )
 
-        # ── 3. Send via Telegram ──────────────────────────────────────────────
+        # ── 4. Send via Telegram ──────────────────────────────────────────────
         from services.telegram_service import telegram_service
         result = telegram_service.send(message)
 
         if result.success:
-            with _telegram_lock:
-                _telegram_last_sent_date = today
             log.info(
                 f"[Scheduler] telegram_delivery_job: delivery_sent "
-                f"lead={lead.lead_name} message_id={result.message_id} date={today}"
+                f"pid={pid} lead={lead.lead_name} message_id={result.message_id} date={today}"
             )
             from events.event_bus import event_bus
             import events.event_types as ET
@@ -189,49 +221,13 @@ def _job_telegram_delivery(force: bool = False) -> dict:
 
         log.error(
             f"[Scheduler] telegram_delivery_job: delivery_failed "
-            f"lead={lead.lead_name} error={result.error}"
+            f"pid={pid} lead={lead.lead_name} error={result.error}"
         )
         return {"status": "failed", "error": result.error, "lead_name": lead.lead_name}
 
     except Exception as e:
-        log.error(f"[Scheduler] telegram_delivery_job crashed: {e}", exc_info=True)
+        log.error(f"[Scheduler] telegram_delivery_job crashed pid={pid}: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
-
-
-def _job_startup_verification():
-    """
-    Axis 6 — one-shot verification job.
-    Fires automatically 2 minutes after app startup.
-    Proves APScheduler clock is ticking without any manual CURL.
-    Calls the proven delivery flow with force=True (bypasses date idempotency).
-    """
-    log.info("[Scheduler] AUTOMATIC trigger: startup_verification_job starting...")
-    result = _job_telegram_delivery(force=True)
-    if result.get("status") == "success":
-        log.info(
-            f"[Scheduler] AUTOMATIC trigger: startup_verification_job SUCCESS — "
-            f"message_id={result.get('message_id')} lead={result.get('lead_name')}"
-        )
-    elif result.get("status") == "skipped":
-        log.info(
-            f"[Scheduler] AUTOMATIC trigger: startup_verification_job SKIPPED — "
-            f"reason={result.get('reason')}"
-        )
-    else:
-        log.error(
-            f"[Scheduler] AUTOMATIC trigger: startup_verification_job FAILED — "
-            f"error={result.get('error')}"
-        )
-
-
-def _log_registered_jobs(sched) -> None:
-    """Log all registered jobs and their next_run_time after scheduler starts."""
-    jobs = sched.get_jobs()
-    lines = []
-    for job in jobs:
-        nrt = job.next_run_time.strftime("%H:%M %Z") if job.next_run_time else "one-shot"
-        lines.append(f"{job.id} @ {nrt}")
-    log.info(f"[Scheduler] Registered Jobs: [{', '.join(lines)}]")
 
 
 # ── Scheduler lifecycle ───────────────────────────────────────────────────────
@@ -291,24 +287,17 @@ def start():
                 misfire_grace_time=1800,
             )
 
-            # ── Axis 6 verification: one-shot job 2 min after startup ──────────
-            # Fires once automatically to prove the scheduler clock is ticking.
-            # Self-removes after execution (max_instances=1, no repeat trigger).
-            _verify_at = datetime.datetime.now(il_tz) + datetime.timedelta(minutes=2)
-            sched.add_job(
-                _job_startup_verification,
-                trigger="date",
-                run_date=_verify_at,
-                id="startup_verification",
-                replace_existing=True,
-            )
-
             sched.start()
             _scheduler = sched
             _started   = True
 
             # ── Registry log: all jobs + next_run_time ─────────────────────────
-            _log_registered_jobs(sched)
+            jobs  = sched.get_jobs()
+            lines = [
+                f"{j.id} @ {j.next_run_time.strftime('%H:%M %Z') if j.next_run_time else 'pending'}"
+                for j in jobs
+            ]
+            log.info(f"[Scheduler] Registered Jobs: [{', '.join(lines)}]")
 
         except ImportError:
             log.warning("[Scheduler] apscheduler not installed — autonomous jobs disabled")

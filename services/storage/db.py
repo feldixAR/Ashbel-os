@@ -90,9 +90,11 @@ def create_all_tables() -> None:
     import services.storage.models.memory      # noqa
     import services.storage.models.dlq         # noqa
     # Batch 6
-    import services.storage.models.goal        # noqa
-    import services.storage.models.opportunity # noqa
-    import services.storage.models.outreach    # noqa
+    import services.storage.models.goal         # noqa
+    import services.storage.models.opportunity  # noqa
+    import services.storage.models.outreach     # noqa
+    # Axis 6 — distributed idempotency
+    import services.storage.models.notification # noqa
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")
