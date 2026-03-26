@@ -74,5 +74,39 @@ const API = (() => {
 
     // Reports
     dailyReport: () => request('GET', '/reports/daily'),
+
+    // ── CRM — Deals ──────────────────────────────────────────────────────────
+    deals: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request('GET', '/crm/deals' + (qs ? '?' + qs : ''));
+    },
+    deal:            (id)         => request('GET',  `/crm/deals/${id}`),
+    createDeal:      (data)       => request('POST', '/crm/deals', data),
+    updateDeal:      (id, data)   => request('PUT',  `/crm/deals/${id}`, data),
+    transitionStage: (dealId, stage, reason = '', changedBy = 'operator') =>
+      request('POST', `/crm/deals/${dealId}/stage`, { stage, reason, changed_by: changedBy }),
+
+    // ── CRM — Activities ─────────────────────────────────────────────────────
+    logActivity: (leadId, data)  => request('POST', `/crm/leads/${leadId}/activities`, data),
+    activities:  (leadId)        => request('GET',  `/crm/leads/${leadId}/activities`),
+
+    // ── CRM — Timeline ───────────────────────────────────────────────────────
+    timeline: (leadId, limit = 20) =>
+      request('GET', `/crm/leads/${leadId}/timeline?limit=${limit}`),
+
+    // ── CRM — Calendar ───────────────────────────────────────────────────────
+    dailyPlan:    (budget = 240) => request('GET', `/crm/calendar/today?budget_minutes=${budget}`),
+    weeklyCalendar: ()           => request('GET', '/crm/calendar/week'),
+    createCalEvent: (data)       => request('POST', '/crm/calendar/events', data),
+
+    // ── Briefing ─────────────────────────────────────────────────────────────
+    identifyCaller:  (phone)       => request('POST', '/briefing/identify', { phone }),
+    customerSummary: (leadId)      => request('GET',  `/briefing/summary/${leadId}`),
+    briefingContext: (leadId, n=5) => request('GET',  `/briefing/context/${leadId}?limit=${n}`),
+    startCall:       (leadId, callId='') =>
+      request('POST', '/briefing/call/start', { lead_id: leadId, call_id: callId }),
+    endCall: (callId, notes, outcome, durationSec = 0, performedBy = 'operator') =>
+      request('POST', '/briefing/call/end',
+        { call_id: callId, notes, outcome, duration_sec: durationSec, performed_by: performedBy }),
   };
 })();

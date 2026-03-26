@@ -1,145 +1,238 @@
 /**
- * calendar.js — Calendar & Time Layer panel (Batch 10 / Section 8.2)
- * Shows upcoming tasks/meetings and allows quick event creation.
+ * calendar.js — Calendar View (Batch 11)
+ * Weekly Revenue Calendar: events + deals due + revenue at risk per day
  */
 const CalendarPanel = (() => {
 
-  const today = new Date().toISOString().slice(0, 10);
+  const DAY_HE = { 0:'ראשון', 1:'שני', 2:'שלישי', 3:'רביעי', 4:'חמישי', 5:'שישי', 6:'שבת' };
+  const todayStr = new Date().toISOString().slice(0,10);
+
+  function ils(n) { return '₪' + (Number(n)||0).toLocaleString('he-IL'); }
 
   function render() {
     return `
-      <div class="section-head">
-        <div>
-          <div class="section-title">יומן עסקי</div>
-          <div class="section-sub" id="calDate">${today}</div>
+      <div class="ws-split">
+
+        <!-- LEFT: Calendar main -->
+        <div class="ws-main" style="padding:22px">
+
+          <!-- Header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div class="section-title">יומן שבועי</div>
+              <div class="section-sub" id="calWeekLabel">טוען...</div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <div style="text-align:left">
+                <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ils)" id="calPipeTotal">—</div>
+                <div style="font-size:9px;color:var(--muted)">Pipeline בסיכון השבוע</div>
+              </div>
+              <button class="btn btn-ghost" id="calRefresh" style="font-size:12px">↻</button>
+            </div>
+          </div>
+
+          <!-- Week grid -->
+          <div class="week-grid" id="weekGrid">
+            ${Array(7).fill(`<div class="day-col"><span class="skel skel-h12 skel-w60" style="display:block;margin-bottom:6px"></span><span class="skel skel-h20" style="display:block"></span></div>`).join('')}
+          </div>
+
+          <!-- Create event form -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div class="cell-title" style="margin-bottom:0">+ צור אירוע</div>
+              <button class="btn btn-ghost" id="calToggleForm" style="font-size:11px">הצג ▾</button>
+            </div>
+            <div id="calForm" style="display:none">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                <div>
+                  <div class="form-label">כותרת האירוע</div>
+                  <input class="form-input" id="evTitle" placeholder="פגישה עם לקוח..." />
+                </div>
+                <div>
+                  <div class="form-label">מזהה ליד (lead_id)</div>
+                  <input class="form-input" id="evLeadId" placeholder="uuid..." />
+                </div>
+                <div>
+                  <div class="form-label">תאריך ושעה</div>
+                  <input class="form-input" id="evStartsAt" type="datetime-local" />
+                </div>
+                <div>
+                  <div class="form-label">סוג אירוע</div>
+                  <select class="form-select" id="evType">
+                    <option value="meeting">פגישה</option>
+                    <option value="call">שיחה</option>
+                    <option value="demo">הדגמה</option>
+                    <option value="site_visit">ביקור אתר</option>
+                    <option value="other">אחר</option>
+                  </select>
+                </div>
+                <div style="grid-column:1/-1">
+                  <div class="form-label">מיקום / הערות</div>
+                  <input class="form-input" id="evNotes" placeholder="כתובת, קישור זום..." />
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-primary" id="evSubmit">📅 צור אירוע</button>
+                <span id="evResult" style="font-size:11px;color:var(--muted)"></span>
+              </div>
+            </div>
+          </div>
+
         </div>
-        <button class="btn btn-primary" id="calNewBtn">+ אירוע חדש</button>
+
+        <!-- RIGHT: Day detail panel -->
+        <div class="ws-right">
+          <div class="ws-right-label">פרטי יום</div>
+
+          <div id="dayDetail">
+            <div class="no-select" style="padding:40px 0">
+              <div style="font-size:24px;margin-bottom:8px">📅</div>
+              <div style="font-size:11px;color:var(--muted)">לחץ על יום בלוח</div>
+            </div>
+          </div>
+        </div>
+
       </div>
-
-      <!-- New event form (hidden by default) -->
-      <div id="calForm" class="card" style="display:none;margin-bottom:16px">
-        <div style="font-weight:600;margin-bottom:12px">יצירת אירוע / פגישה</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label style="font-size:12px;color:var(--text-muted)">כותרת</label>
-            <input class="modal-input" id="calTitle" placeholder="פגישה עם אדריכל..." style="margin-top:4px" />
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--text-muted)">שם איש קשר</label>
-            <input class="modal-input" id="calContact" placeholder="שם..." style="margin-top:4px" />
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--text-muted)">תאריך</label>
-            <input class="modal-input" id="calDateInput" type="date" value="${today}" style="margin-top:4px" />
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--text-muted)">שעה</label>
-            <input class="modal-input" id="calTime" type="time" value="10:00" style="margin-top:4px" />
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--text-muted)">משך (דקות)</label>
-            <input class="modal-input" id="calDuration" type="number" value="60" style="margin-top:4px" />
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--text-muted)">טלפון</label>
-            <input class="modal-input" id="calPhone" placeholder="050..." style="margin-top:4px" />
-          </div>
-        </div>
-        <textarea class="modal-input" id="calNotes" placeholder="הערות..." style="margin-top:10px;height:60px;resize:vertical"></textarea>
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn btn-primary"   id="calSubmitBtn">📅 צור אירוע</button>
-          <button class="btn btn-secondary" id="calCancelBtn">ביטול</button>
-        </div>
-        <div id="calResult" style="margin-top:10px"></div>
-      </div>
-
-      <!-- Upcoming tasks/meetings pulled from system -->
-      <div style="font-weight:600;font-size:13px;color:var(--text-muted);margin-bottom:10px">📋 משימות ופגישות קרובות</div>
-      <div id="calUpcoming"><div style="color:var(--text-muted);font-size:13px">טוען...</div></div>
-
-      <!-- Follow-up calendar from outreach -->
-      <div style="font-weight:600;font-size:13px;color:var(--text-muted);margin:20px 0 10px">🔄 Follow-ups מתוזמנים</div>
-      <div id="calFollowups"><div style="color:var(--text-muted);font-size:13px">טוען...</div></div>
     `;
   }
 
   async function init() {
-    await Promise.all([loadUpcoming(), loadFollowups()]);
-
-    document.getElementById('calNewBtn')?.addEventListener('click', () => {
-      document.getElementById('calForm').style.display = 'block';
-      document.getElementById('calNewBtn').style.display = 'none';
+    await load();
+    document.getElementById('calRefresh')?.addEventListener('click', load);
+    document.getElementById('calToggleForm')?.addEventListener('click', () => {
+      const f = document.getElementById('calForm');
+      const b = document.getElementById('calToggleForm');
+      const show = f.style.display === 'none';
+      f.style.display = show ? 'block' : 'none';
+      b.textContent = show ? 'הסתר ▴' : 'הצג ▾';
     });
-    document.getElementById('calCancelBtn')?.addEventListener('click', () => {
-      document.getElementById('calForm').style.display = 'none';
-      document.getElementById('calNewBtn').style.display = '';
-    });
-    document.getElementById('calSubmitBtn')?.addEventListener('click', submitEvent);
+    document.getElementById('evSubmit')?.addEventListener('click', submitEvent);
   }
 
-  async function loadUpcoming() {
-    // Pull pending tasks that represent meetings/follow-ups
-    const res = await API.get('/tasks?status=created');
-    const tasks = res.success ? (res.data?.tasks || []) : [];
-    const meetings = tasks.filter(t =>
-      t.action === 'draft_meeting' || t.action === 'set_reminder' || t.type === 'assistant'
-    );
-    document.getElementById('calUpcoming').innerHTML = meetings.length
-      ? meetings.slice(0, 8).map(t => `
-          <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:18px">📅</span>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:500">${t.action === 'set_reminder' ? '⏰ תזכורת' : '🤝 פגישה'} — ${t.type}</div>
-              <div style="font-size:11px;color:var(--text-muted)">${(t.created_at || '').slice(0,16)}</div>
-            </div>
-            <span class="pill pill-steel" style="font-size:11px">${t.status}</span>
-          </div>`).join('')
-      : '<div style="color:var(--text-muted);font-size:13px">אין פגישות מתוזמנות</div>';
+  async function load() {
+    const res = await API.weeklyCalendar();
+    if (!res.success) {
+      document.getElementById('weekGrid').innerHTML = `<div style="grid-column:1/-1;color:var(--red);font-size:12px;padding:16px">שגיאה: ${res.error||'לא ניתן לטעון יומן'}</div>`;
+      return;
+    }
+    const cal = res.data;
+    document.getElementById('calWeekLabel').textContent = `${cal.week_start} — ${cal.week_end}`;
+    document.getElementById('calPipeTotal').textContent = ils(cal.total_pipeline||0);
+
+    renderWeekGrid(cal.days || []);
   }
 
-  async function loadFollowups() {
-    const res = await API.get('/outreach/summary');
-    const pipeline = res.success ? (res.data?.pipeline || []) : [];
-    const withDate = pipeline.filter(p => p.next_followup).sort((a, b) =>
-      (a.next_followup || '').localeCompare(b.next_followup || '')
-    );
-    document.getElementById('calFollowups').innerHTML = withDate.length
-      ? withDate.slice(0, 10).map(p => {
-          const date = (p.next_followup || '').slice(0, 10);
-          const isPast = date < today;
-          return `
-            <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-              <span style="font-size:18px">${isPast ? '⚠️' : '🔄'}</span>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:500">${p.lead_name}</div>
-                <div style="font-size:11px;color:var(--text-muted)">ניסיון #${p.attempt} · ${p.status}</div>
-              </div>
-              <span style="font-size:12px;color:${isPast ? 'var(--danger)' : 'var(--text-muted)'}">${date}</span>
-            </div>`;
-        }).join('')
-      : '<div style="color:var(--text-muted);font-size:13px">אין follow-ups מתוזמנים</div>';
+  function renderWeekGrid(days) {
+    const grid = document.getElementById('weekGrid');
+    grid.innerHTML = days.map(day => {
+      const isToday = day.date_str === todayStr;
+      const dateNum = day.date_str.slice(8);
+      const events  = day.events || [];
+      const deals   = day.deals_due || [];
+      const rev     = day.revenue_at_risk || 0;
+
+      return `
+        <div class="day-col ${isToday?'today-col':''}"
+             onclick="CalendarPanel.selectDay(${JSON.stringify(day).replace(/"/g,'&quot;')})"
+             style="cursor:pointer">
+          <div class="day-head">
+            <div class="day-name">${day.weekday||''}</div>
+            <div class="day-date">${dateNum}</div>
+          </div>
+          ${events.slice(0,3).map(ev=>`<div class="ev-chip" title="${ev.title||''}">${(ev.starts_at_il||'').slice(11,16)} ${ev.title||'אירוע'}</div>`).join('')}
+          ${deals.slice(0,2).map(d=>`<div class="dl-chip" title="${d.title||''}">💰 ${d.title||'עסקה'}</div>`).join('')}
+          ${rev>0?`<div class="day-rev">${ils(rev)}</div>`:''}
+          ${events.length>3?`<div style="font-size:8px;color:var(--muted)">+${events.length-3} עוד</div>`:''}
+        </div>`;
+    }).join('');
+  }
+
+  function selectDay(day) {
+    const panel  = document.getElementById('dayDetail');
+    const events = day.events || [];
+    const deals  = day.deals_due || [];
+
+    const dateHe = new Date(day.date_str).toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'});
+
+    panel.innerHTML = `
+      <div style="margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700">${dateHe}</div>
+        <div style="font-size:10px;color:var(--muted)">${day.date_str}</div>
+      </div>
+
+      <div class="ap-block">
+        <div class="ap-lbl">אירועים (${events.length})</div>
+        ${events.length
+          ? events.map(ev=>`
+              <div style="padding:7px 0;border-bottom:1px solid rgba(34,39,49,.4)">
+                <div style="font-size:12px;font-weight:500">${ev.title||'אירוע'}</div>
+                <div style="font-size:10px;color:var(--muted)">${(ev.starts_at_il||'').slice(11,16)} · ${ev.event_type||''}</div>
+              </div>`).join('')
+          : '<div style="font-size:11px;color:var(--muted)">אין אירועים</div>'}
+      </div>
+
+      <div class="ap-block">
+        <div class="ap-lbl">עסקאות לסגירה (${deals.length})</div>
+        ${deals.length
+          ? deals.map(d=>`
+              <div style="padding:7px 0;border-bottom:1px solid rgba(34,39,49,.4)">
+                <div style="font-size:12px;font-weight:500">${d.title||'עסקה'}</div>
+                <div style="font-size:10px;color:var(--muted)">
+                  <span style="color:var(--ils)">${ils(d.value_ils||0)}</span>
+                  · שווי משוקלל: <span style="color:var(--copper)">${ils(d.weighted_value||0)}</span>
+                </div>
+              </div>`).join('')
+          : '<div style="font-size:11px;color:var(--muted)">אין עסקאות</div>'}
+      </div>
+
+      ${day.revenue_at_risk>0?`
+        <div class="ap-block">
+          <div class="ap-lbl">הכנסה בסיכון</div>
+          <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ils)">${ils(day.revenue_at_risk)}</div>
+        </div>`:``}
+
+      <div class="ap-btn-col">
+        <button class="ap-btn ap-primary" onclick="
+          document.getElementById('evStartsAt').value='${day.date_str}T10:00';
+          document.getElementById('calForm').style.display='block';
+          document.getElementById('calToggleForm').textContent='הסתר ▴';
+        ">+ אירוע ביום זה</button>
+      </div>
+    `;
   }
 
   async function submitEvent() {
-    const btn = document.getElementById('calSubmitBtn');
-    btn.textContent = '...יוצר';
+    const btn = document.getElementById('evSubmit');
+    const res = document.getElementById('evResult');
+    const title   = document.getElementById('evTitle').value.trim();
+    const leadId  = document.getElementById('evLeadId').value.trim();
+    const starts  = document.getElementById('evStartsAt').value;
+    const etype   = document.getElementById('evType').value;
+    const notes   = document.getElementById('evNotes').value.trim();
 
-    const payload = {
-      command: `קבע פגישה ${document.getElementById('calTitle').value} עם ${document.getElementById('calContact').value} בתאריך ${document.getElementById('calDateInput').value} בשעה ${document.getElementById('calTime').value}`,
-    };
-    const res = await API.post('/command', payload);
-    const result = document.getElementById('calResult');
-
-    if (res.success && res.data?.data?.deep_link) {
-      result.innerHTML = `
-        <div style="color:var(--green);margin-bottom:8px">✅ טיוטת אירוע נוצרה</div>
-        <a href="${res.data.data.deep_link}" target="_blank" class="btn btn-primary">📅 פתח ב-Google Calendar</a>`;
-    } else {
-      result.innerHTML = `<div style="color:var(--text-muted);white-space:pre-wrap;font-size:13px">${res.data?.message || res.data?.message || res.message || 'נוצרה בקשה'}</div>`;
+    if (!title || !leadId || !starts) {
+      res.textContent = 'נדרש: כותרת, מזהה ליד, ותאריך';
+      res.style.color = 'var(--red)';
+      return;
     }
+    btn.disabled = true;
+    btn.textContent = '...יוצר';
+    const r = await API.createCalEvent({
+      title, lead_id: leadId, starts_at_il: starts,
+      event_type: etype, notes,
+    });
+    if (r.success) {
+      res.textContent = '✅ אירוע נוצר';
+      res.style.color = 'var(--green)';
+      document.getElementById('evTitle').value = '';
+      await load();
+    } else {
+      res.textContent = r.error || 'שגיאה';
+      res.style.color = 'var(--red)';
+    }
+    btn.disabled = false;
     btn.textContent = '📅 צור אירוע';
-    await loadFollowups();
   }
 
-  return { render, init };
+  return { render, init, selectDay };
 })();
