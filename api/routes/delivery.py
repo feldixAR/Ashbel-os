@@ -1,8 +1,9 @@
 """
-Delivery routes — Axis 5 + Axis 6
+Delivery routes — Axis 5 + Axis 6 + Batch 10.1
 
-POST /api/tasks/test-delivery   — Axis 5: one-off Telegram delivery proof
-POST /api/tasks/run-scheduler-now — Axis 6: trigger the automated job immediately
+POST /api/tasks/test-delivery          — Axis 5: one-off Telegram delivery proof
+POST /api/tasks/run-scheduler-now      — Axis 6: trigger telegram_delivery job immediately
+POST /api/tasks/send-learning-report   — Batch 10.1: trigger daily learning digest immediately
 """
 
 import logging
@@ -88,4 +89,23 @@ def run_scheduler_now():
         return _error(f"scheduler job failed: {e}", 500)
 
     status_code = 200 if result.get("status") in ("success", "skipped") else 502
+    return ok(result, status=status_code)
+
+
+@bp.route("/tasks/send-learning-report", methods=["POST"])
+@require_auth
+@log_request
+def send_learning_report():
+    """
+    Batch 10.1 — trigger the daily learning digest immediately (bypasses 20:00 schedule).
+    Useful for testing and on-demand pushes.
+    """
+    try:
+        from services.notifications.telegram_service import send_daily_learning_report
+        result = send_daily_learning_report()
+    except Exception as e:
+        log.error(f"[Delivery] send_learning_report failed: {e}", exc_info=True)
+        return _error(f"learning report failed: {e}", 500)
+
+    status_code = 200 if result.get("success") else 502
     return ok(result, status=status_code)

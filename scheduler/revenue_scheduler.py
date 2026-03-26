@@ -1,11 +1,12 @@
 """
 revenue_scheduler.py — Autonomous Revenue Scheduler (Batch 8/9 + Axis 6)
 
-Runs four recurring jobs:
-  1. followup_job          — every 4h: send due follow-ups for all active goals
-  2. daily_plan_job        — every morning 07:30 IL time: build & log daily revenue plan
-  3. learning_job          — every night 23:00 IL time: run learning cycle
-  4. telegram_delivery_job — every morning 08:00 IL time: send top lead via Telegram
+Runs five recurring jobs:
+  1. followup_job              — every 4h: send due follow-ups for all active goals
+  2. daily_plan_job            — every morning 07:30 IL time: build & log daily revenue plan
+  3. learning_job              — every night 23:00 IL time: run learning cycle
+  4. telegram_delivery_job     — every morning 08:00 IL time: send top lead via Telegram
+  5. daily_learning_report_job — every evening 20:00 IL time: push learning digest via Telegram
 
 Design principles:
   - Each job is fully self-contained and wrapped in try/except — one failure never kills others.
@@ -85,6 +86,29 @@ def _job_daily_plan():
         log.info(f"[Scheduler] daily_plan_job: due={payload['due_today']} hot={payload['hot_leads']}")
     except Exception as e:
         log.error(f"[Scheduler] daily_plan_job crashed: {e}", exc_info=True)
+
+
+def _job_daily_learning_report():
+    """
+    20:00 IL — Send daily learning KPI digest via Telegram.
+    Calls services/notifications/telegram_service.send_daily_learning_report().
+    Fails silently (missing env vars / API errors are logged, not raised).
+    """
+    try:
+        from services.notifications.telegram_service import send_daily_learning_report
+        result = send_daily_learning_report()
+        if result["success"]:
+            log.info(
+                f"[Scheduler] daily_learning_report_job: sent "
+                f"message_id={result['message_id']}"
+            )
+        else:
+            log.warning(
+                f"[Scheduler] daily_learning_report_job: not sent — "
+                f"{result.get('error', 'unknown')}"
+            )
+    except Exception as e:
+        log.error(f"[Scheduler] daily_learning_report_job crashed: {e}", exc_info=True)
 
 
 def _job_learning_cycle():
@@ -272,6 +296,16 @@ def start():
                 trigger="cron",
                 hour=8, minute=0,
                 id="telegram_delivery",
+                replace_existing=True,
+                misfire_grace_time=1800,
+            )
+
+            # Daily learning report every evening at 20:00 IL (Batch 10.1)
+            sched.add_job(
+                _job_daily_learning_report,
+                trigger="cron",
+                hour=20, minute=0,
+                id="daily_learning_report",
                 replace_existing=True,
                 misfire_grace_time=1800,
             )
