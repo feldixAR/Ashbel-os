@@ -377,3 +377,8 @@ def build_revenue_report(snap: RevenueSnapshot) -> str:
         lines.append(f"{'─' * 45}")
 
     return "\n".join(lines)
+
+
+# ── Aliases (orchestrator.py imports these names) ──────────────────────────────
+revenue_insights     = revenue_snapshot
+identify_bottlenecks = detect_bottlenecks

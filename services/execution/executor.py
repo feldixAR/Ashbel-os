@@ -860,27 +860,18 @@ _HANDLERS = {
 def execute(task: TaskModel) -> ExecutionResult:
     """
     Priority:
-      1. AgentRegistry — agent-based
-      2. _HANDLERS     — direct handlers
-      3. Unhandled     — ExecutionResult(success=False)
+      1. _HANDLERS     — direct handlers (specific, always preferred)
+      2. AgentRegistry — specific registered agents only (no fallback)
+      3. AgentRegistry — fallback (GenericTaskAgent)
     """
     action    = task.action
     task_type = task.type
 
-    # 1. AgentRegistry
-    try:
-        from agents.base.agent_registry import agent_registry
-        agent = agent_registry.find(task_type, action)
-        if agent is not None:
-            log.debug(f"[Executor] ({task_type},{action}) → {agent.name!r}")
-            return agent.execute(task)
-    except Exception as e:
-        log.error(f"[Executor] registry error: {e}", exc_info=True)
-
-    # 2. Direct handlers
+    # 1. Direct handlers — checked first so _HANDLERS always win over GenericTaskAgent fallback
     handler = _HANDLERS.get(action)
     if handler:
         try:
+            log.debug(f"[Executor] ({task_type},{action}) → _HANDLERS")
             return handler(task)
         except Exception as e:
             log.error(f"[Executor] handler crashed action={action}: {e}", exc_info=True)
@@ -889,6 +880,16 @@ def execute(task: TaskModel) -> ExecutionResult:
                 message=f"שגיאה בביצוע '{action}': {e}",
                 output={"error": str(e)},
             )
+
+    # 2. AgentRegistry (specific agents + fallback for truly unknown actions)
+    try:
+        from agents.base.agent_registry import agent_registry
+        agent = agent_registry.find(task_type, action)
+        if agent is not None:
+            log.debug(f"[Executor] ({task_type},{action}) → {agent.name!r}")
+            return agent.execute(task)
+    except Exception as e:
+        log.error(f"[Executor] registry error: {e}", exc_info=True)
 
     # 3. Unhandled
     log.warning(f"[Executor] no handler for ({task_type},{action}) task={task.id}")
