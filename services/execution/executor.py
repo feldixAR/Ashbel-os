@@ -517,15 +517,15 @@ def _handle_retire_agent(task: TaskModel) -> ExecutionResult:
 
 def _handle_set_goal(task: TaskModel) -> ExecutionResult:
     """
-    Full pipeline: Objective → Decompose → Score → Growth Committee → DB persist.
-    Delegates to services/growth/growth_pipeline.py.
+    E2E pipeline: Objective → Goal Engine → Research → Scoring → Committee → DB.
+    Delegates to services/growth/pipeline.py.
     """
     started  = _now_ms()
     p        = _params(task)
     raw_goal = p.get("goal") or p.get("raw_goal") or _command(task)
 
-    from services.growth.growth_pipeline import run_pipeline
-    result = run_pipeline(raw_goal)
+    from services.growth.pipeline import run
+    result = run(raw_goal)
 
     if not result.success:
         return ExecutionResult(
@@ -535,15 +535,16 @@ def _handle_set_goal(task: TaskModel) -> ExecutionResult:
             duration_ms=_elapsed_ms(started),
         )
 
-    winner = result.committee.get("winner", {})
+    decision = result.committee_decision
+    winner   = decision.get("winner", {})
     return ExecutionResult(
         success=True,
         message=(
             f"✅ יעד עסקי הוגדר: {raw_goal}\n"
             f"תחום: {result.domain} | "
             f"{len(result.tracks)} מסלולי צמיחה | "
-            f"{len(result.top_opportunities)} הזדמנויות מדורגות\n"
-            f"ועדת צמיחה: {winner.get('top_path', '')}"
+            f"{len(result.scored_opportunities)} הזדמנויות מדורגות\n"
+            f"מנצח ועדה [{winner.get('normalized_score',0)}/100]: {winner.get('title','')}"
         ),
         output={
             "goal": {
@@ -553,11 +554,11 @@ def _handle_set_goal(task: TaskModel) -> ExecutionResult:
                 "metric":   result.metric,
                 "tracks":   result.tracks,
             },
-            "top_opportunities": result.top_opportunities,
-            "committee":         result.committee,
-            "research":          result.research,
-            "asset_draft":       result.asset_draft,
-            "outreach_plan":     result.outreach_plan,
+            "research":             result.research,
+            "scored_opportunities": result.scored_opportunities,
+            "committee_decision":   result.committee_decision,
+            "asset_draft":          result.asset_draft,
+            "outreach_plan":        result.outreach_plan,
         },
         duration_ms=_elapsed_ms(started),
     )
@@ -577,13 +578,13 @@ def _handle_list_goals(task: TaskModel) -> ExecutionResult:
 
 def _handle_growth_plan(task: TaskModel) -> ExecutionResult:
     """
-    Growth plan: runs full pipeline (with committee) and returns ranked actions.
+    Growth plan: E2E pipeline → Committee decision → ranked prioritized_actions.
     """
     started  = _now_ms()
     raw_goal = _params(task).get("goal") or _command(task)
 
-    from services.growth.growth_pipeline import run_pipeline
-    result = run_pipeline(raw_goal)
+    from services.growth.pipeline import run
+    result = run(raw_goal)
 
     if not result.success:
         return ExecutionResult(
@@ -593,22 +594,25 @@ def _handle_growth_plan(task: TaskModel) -> ExecutionResult:
             duration_ms=_elapsed_ms(started),
         )
 
-    winner = result.committee.get("winner", {})
-    track_summary = [
-        {"track": t.get("name"), "channel": t.get("channel"), "actions": t.get("actions", [])}
-        for t in result.tracks
-    ]
+    decision = result.committee_decision
+    winner   = decision.get("winner", {})
+    actions  = decision.get("prioritized_actions", [])
     return ExecutionResult(
         success=True,
-        message=f"תוכנית צמיחה: {raw_goal}\nמסלול מנצח: {winner.get('top_path', '')}",
+        message=(
+            f"תוכנית צמיחה: {raw_goal}\n"
+            f"מנצח ועדה: {winner.get('title','')} "
+            f"[{winner.get('normalized_score',0)}/100]\n"
+            f"פעולה ראשונה: {actions[0] if actions else '—'}"
+        ),
         output={
-            "goal":              raw_goal,
-            "domain":            result.domain,
-            "tracks":            track_summary,
-            "top_opportunities": result.top_opportunities,
-            "committee":         result.committee,
-            "research":          result.research,
-            "asset":             result.asset_draft,
+            "goal":                 raw_goal,
+            "domain":               result.domain,
+            "research":             result.research,
+            "scored_opportunities": result.scored_opportunities,
+            "committee_decision":   result.committee_decision,
+            "asset":                result.asset_draft,
+            "outreach_plan":        result.outreach_plan,
         },
         duration_ms=_elapsed_ms(started),
     )
