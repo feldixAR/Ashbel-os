@@ -51,7 +51,7 @@ def _job_followup():
 
         if total_sent:
             event_bus.publish(
-                ET.SYSTEM_EVENT,
+                ET.SCHEDULER_JOB_RAN,
                 payload={"job": "followup", "sent": total_sent,
                          "ts": datetime.datetime.utcnow().isoformat()},
             )
@@ -79,7 +79,7 @@ def _job_daily_plan():
             "pipeline_est": snap.pipeline_value if hasattr(snap, "pipeline_value") else 0,
             "ts":           datetime.datetime.utcnow().isoformat(),
         }
-        event_bus.publish(ET.SYSTEM_EVENT, payload=payload)
+        event_bus.publish(ET.SCHEDULER_JOB_RAN, payload=payload)
         log.info(f"[Scheduler] daily_plan_job: due={payload['due_today']} hot={payload['hot_leads']}")
     except Exception as e:
         log.error(f"[Scheduler] daily_plan_job crashed: {e}", exc_info=True)
@@ -95,7 +95,7 @@ def _job_learning_cycle():
         result = learning_engine.run_learning_cycle()
         summary = getattr(result, "cycle_summary", "learning cycle complete")
         event_bus.publish(
-            ET.SYSTEM_EVENT,
+            ET.SCHEDULER_JOB_RAN,
             payload={"job": "learning_cycle", "summary": summary,
                      "ts": datetime.datetime.utcnow().isoformat()},
         )
