@@ -379,6 +379,25 @@ def build_revenue_report(snap: RevenueSnapshot) -> str:
     return "\n".join(lines)
 
 
-# ── Aliases (orchestrator.py imports these names) ──────────────────────────────
-revenue_insights     = revenue_snapshot
-identify_bottlenecks = detect_bottlenecks
+# ── Wrappers (orchestrator.py imports these names) ────────────────────────────
+def revenue_insights() -> dict:
+    """Returns revenue snapshot as dict with 'summary' key for orchestrator."""
+    snap = revenue_snapshot()
+    return {
+        "summary":       build_revenue_report(snap),
+        "total_leads":   snap.total_leads,
+        "hot_leads":     snap.hot_leads,
+        "warm_leads":    snap.warm_leads,
+        "pipeline_value": snap.pipeline_value,
+        "conversion_est": snap.conversion_est,
+        "avg_score":     snap.avg_score,
+        "generated_at":  snap.generated_at,
+    }
+
+
+def identify_bottlenecks() -> list:
+    """Returns bottleneck list for orchestrator (fetches leads internally)."""
+    from services.storage.repositories.lead_repo import LeadRepository
+    leads = LeadRepository().list_all()
+    bottlenecks = detect_bottlenecks(leads)
+    return [b.description for b in bottlenecks]
