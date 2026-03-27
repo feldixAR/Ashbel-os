@@ -1,352 +1,335 @@
 /**
- * dashboard.js — Executive Revenue Command Center
- * Living monitor: radial gauge · pressure dials · action queue · intelligence engine
+ * dashboard.js — Executive Revenue Control Center
+ * Implements the approved preview design: light silver metallic, glass morphism,
+ * animated ring gauge, AI recommendation engine, risk/opportunity queue.
  */
 const DashboardPanel = (() => {
-
-  // ── SVG gradient defs (injected once) ─────────────────────────────────
-  const DEFS = `
-  <svg class="cc-svg-defs" aria-hidden="true">
-    <defs>
-      <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%"   stop-color="#4e6070"/>
-        <stop offset="50%"  stop-color="#c8d2de"/>
-        <stop offset="100%" stop-color="#dde5ef"/>
-      </linearGradient>
-      <linearGradient id="dialGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%"   stop-color="#4e6070"/>
-        <stop offset="100%" stop-color="#c8d2de"/>
-      </linearGradient>
-    </defs>
-  </svg>`;
 
   // ── Helpers ────────────────────────────────────────────────────────────
   function ils(n) {
     n = Number(n) || 0;
-    if (n >= 1_000_000) return `₪${(n/1_000_000).toFixed(1)}M`;
-    if (n >= 1_000)     return `₪${Math.round(n/1_000)}K`;
+    if (n >= 1_000_000) return `₪${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `₪${Math.round(n / 1_000)}K`;
     return `₪${n.toLocaleString('he-IL')}`;
   }
-
-  function initials(name) {
-    return (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  function stageLabel(s) {
+    return ({ new: 'חדש', qualified: 'כשיר', proposal: 'בשלב הצעה',
+              negotiation: 'לקראת סגירה', won: 'זכה', lost: 'הפסיד' })[s] || s || '—';
+  }
+  function riskLabel(deal) {
+    const s = (deal.stage || '').toLowerCase();
+    if (['negotiation','closing'].some(x => s.includes(x))) return 'גבוה';
+    if (['proposal','quote'].some(x => s.includes(x)))     return 'בינוני';
+    return 'נמוך';
   }
 
-  // ── Dial SVG ──────────────────────────────────────────────────────────
-  function dialSVG(id, label) {
-    const circ = 226.19;
-    return `
-    <div class="cc-dial">
-      <svg class="cc-dial-svg" viewBox="0 0 90 90">
-        <circle class="dial-track" cx="45" cy="45" r="36"/>
-        <circle class="dial-fill"  cx="45" cy="45" r="36"
-          stroke-dasharray="${circ}" stroke-dashoffset="${circ}" id="dial-${id}"/>
-        <text class="dial-pct" x="45" y="50" id="dial-pct-${id}">—</text>
-      </svg>
-      <div class="cc-dial-label">${label}</div>
-      <div class="cc-dial-val" id="dial-val-${id}">—</div>
+  // ── Skeleton helpers ───────────────────────────────────────────────────
+  function skelCard() {
+    return `<div class="cc2-decision-card">
+      <div class="skel skel-h12" style="width:70%;background:rgba(0,0,0,.08)"></div>
+      <div class="skel skel-h20" style="width:50%;margin-top:8px;background:rgba(0,0,0,.08)"></div>
+      <div class="skel skel-h12" style="width:80%;margin-top:6px;background:rgba(0,0,0,.08)"></div>
+    </div>`;
+  }
+  function skelSignal() {
+    return `<div class="cc2-signal-card">
+      <div class="skel skel-h12" style="width:80%;background:rgba(0,0,0,.08)"></div>
+      <div class="skel skel-h20" style="width:50%;margin-top:8px;background:rgba(0,0,0,.08)"></div>
+      <div class="skel skel-h12" style="width:70%;margin-top:6px;background:rgba(0,0,0,.08)"></div>
+    </div>`;
+  }
+  function skelQueueItem() {
+    return `<div class="cc2-queue-item">
+      <div class="cc2-qi-head">
+        <div class="skel skel-h12" style="width:55%;background:rgba(255,255,255,.1)"></div>
+        <span class="cc2-qi-dot"></span>
+      </div>
+      <div class="cc2-deal-fields" style="margin-top:10px">
+        ${[0,1,2].map(() => `<div class="cc2-deal-field"><div class="skel skel-h12" style="width:90%;background:rgba(255,255,255,.07)"></div></div>`).join('')}
+      </div>
     </div>`;
   }
 
-  // ── Render shell ──────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────
   function render() {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
+    const topKeys = ['סטטוס מערכת', 'לחץ הכנסה', 'הזדמנויות חיות', 'פעולות חמות'];
+    const chips   = ['זהה את מוקד ההכנסה הבא', 'הצג מעקבים הדורשים תשומת לב', 'הכן מהלך מומלץ לסגירה', 'הצג עסקאות עם סיכון עולה'];
 
     return `
-    ${DEFS}
-    <div class="cc-shell">
+    <div class="cc2-shell" dir="rtl">
+      <div class="cc2-bg"></div>
+      <div class="cc2-grid-overlay"></div>
+      <div class="cc2-glow cc2-glow-r"></div>
+      <div class="cc2-glow cc2-glow-l"></div>
 
-      <!-- Status bar -->
-      <div class="cc-status-bar">
-        <div class="cc-status-item">
-          <div class="cc-pulse-dot"></div>
-          REVENUE COMMAND CENTER
-        </div>
-        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${dateStr}</span>
-        <div class="cc-live-monitors" id="ccMonitors">
-          <div class="cc-monitor"><span class="cc-mon-val">—</span><span class="cc-mon-label">PIPELINE</span></div>
-          <div class="cc-mon-sep"></div>
-          <div class="cc-monitor"><span class="cc-mon-val">—</span><span class="cc-mon-label">DEALS</span></div>
-          <div class="cc-mon-sep"></div>
-          <div class="cc-monitor"><span class="cc-mon-val">—</span><span class="cc-mon-label">HOT</span></div>
-          <div class="cc-mon-sep"></div>
-          <div class="cc-monitor"><span class="cc-mon-val">—</span><span class="cc-mon-label">ACTIONS</span></div>
-        </div>
-        <button class="btn-xs" id="dashRefresh" style="margin-right:auto">↻</button>
-      </div>
-
-      <!-- Main hub -->
-      <div class="cc-hub">
-
-        <!-- Left: Central radial gauge -->
-        <div class="cc-gauge-hub">
-          <div class="cc-gauge-title">PIPELINE REVENUE</div>
-          <div class="cc-radial-wrap">
-            <svg class="cc-radial" viewBox="0 0 200 200">
-              <!-- Deco rings -->
-              <circle class="gauge-deco" cx="100" cy="100" r="95"/>
-              <circle class="gauge-deco" cx="100" cy="100" r="46"/>
-              <!-- Background tracks -->
-              <circle class="gauge-track"    cx="100" cy="100" r="80"/>
-              <circle class="gauge-track-sm" cx="100" cy="100" r="62"/>
-              <!-- Live fill rings -->
-              <circle class="gauge-fill gauge-revenue" cx="100" cy="100" r="80" id="gaugeRevenue"/>
-              <circle class="gauge-fill gauge-deals"   cx="100" cy="100" r="62" id="gaugeDeals"/>
-            </svg>
-            <div class="cc-gauge-center">
-              <div class="cc-gauge-val" id="gaugeVal">—</div>
-              <div class="cc-gauge-sub" id="gaugeSub">טוען...</div>
-            </div>
+      <!-- ── Header ── -->
+      <header class="cc2-header">
+        <div class="cc2-brand">
+          <div class="cc2-logo-ring">
+            <div class="cc2-logo-ping"></div>
+            <div class="cc2-logo-ring2"></div>
+            <span class="cc2-logo-text">AO</span>
           </div>
-          <div class="cc-gauge-meta">
-            <div class="cc-meta-item">
-              <span class="cc-meta-dot dot-silver"></span>
-              <span id="metaDeals">—</span>&nbsp;עסקאות פעילות
-            </div>
-            <div class="cc-meta-item">
-              <span class="cc-meta-dot dot-green"></span>
-              <span id="metaHot">—</span>&nbsp;לידים חמים
-            </div>
+          <div>
+            <div class="cc2-brand-label">ASHBALOS</div>
+            <h1 class="cc2-brand-title">Executive Revenue Control Center</h1>
+            <p class="cc2-brand-sub">מרכז שליטה עסקי חכם עם סדר עדיפויות, לחץ הכנסה ופעולה מומלצת בזמן אמת</p>
           </div>
         </div>
-
-        <!-- Center: Pressure dials + action queue -->
-        <div class="cc-dials-col">
-          <div class="cc-dials-title">STAGE PRESSURE</div>
-          <div class="cc-dials">
-            ${dialSVG('qualif',      'QUALIF.')}
-            ${dialSVG('proposal',    'PROPOSAL')}
-            ${dialSVG('negotiation', 'CLOSING')}
-          </div>
-          <div class="cc-queue-wrap">
-            <div class="cc-queue-title">
-              TODAY'S ACTION QUEUE
-              <span class="cc-queue-count" id="queueCount">—</span>
+        <div class="cc2-top-strip">
+          ${topKeys.map((k, i) => `
+          <div class="cc2-stat-chip">
+            <div class="cc2-chip-label">${k}</div>
+            <div class="cc2-chip-val" dir="ltr">
+              <span class="cc2-live-dot"></span>
+              <span id="cc2s${i}">—</span>
             </div>
-            <div class="cc-queue" id="ccQueue">
-              ${[1,2,3,4].map(() => `
-              <div class="cc-q-item">
-                <span class="cc-q-rank">·</span>
-                <div class="cc-q-info">
-                  <span class="skel skel-h12 skel-w80"></span>
-                  <span class="skel skel-h12 skel-w40" style="margin-top:3px"></span>
+          </div>`).join('')}
+        </div>
+      </header>
+
+      <!-- ── Main ── -->
+      <main class="cc2-main">
+
+        <!-- Left large section -->
+        <section class="cc2-left">
+          <div class="cc2-left-inner">
+
+            <!-- Intelligence priority panel -->
+            <div class="cc2-intel">
+              <div class="cc2-intel-head">
+                <div>
+                  <div class="cc2-section-label">INTELLIGENCE PRIORITY</div>
+                  <h2 class="cc2-intel-title">מה צפוי לייצר את ההשפעה העסקית הקרובה ביותר</h2>
+                  <p class="cc2-intel-desc">בתוך מוקד אחד מוצגים פוטנציאל ההכנסה, רמת הדחיפות, חלון הסיכון וההמלצה הבאה לביצוע. המטרה היא להבין מהר מה מקדם כסף ומה דורש החלטה עכשיו.</p>
                 </div>
-              </div>`).join('')}
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Revenue intelligence engine -->
-        <div class="cc-assistant">
-          <div class="cc-asst-header">
-            <div class="cc-asst-title">
-              <div class="cc-asst-pulse"></div>
-              REVENUE INTELLIGENCE
-            </div>
-            <div class="cc-asst-sub">LIVE RECOMMENDATIONS</div>
-          </div>
-          <div class="cc-asst-body" id="asstBody">
-            ${[1,2,3].map(() => `
-            <div class="cc-signal">
-              <span class="skel" style="width:18px;height:18px;border-radius:3px;flex-shrink:0"></span>
-              <div style="flex:1">
-                <span class="skel skel-h12 skel-w80"></span>
-                <span class="skel skel-h12 skel-w60" style="margin-top:5px"></span>
+                <span class="cc2-intel-badge">מצב בינה פעיל</span>
               </div>
-            </div>`).join('')}
-          </div>
-        </div>
 
-      </div>
+              <div class="cc2-intel-body">
+                <!-- Dark ring card -->
+                <div class="cc2-gauge-card">
+                  <div class="cc2-gauge-top">
+                    <span>מוקד הכנסה מרכזי</span>
+                    <span class="cc2-live-badge">Live</span>
+                  </div>
+                  <div class="cc2-ring-wrap">
+                    <div class="cc2-ring-halo"></div>
+                    <div class="cc2-ring-orbit"></div>
+                    <div class="cc2-ring-spinner"></div>
+                    <div class="cc2-ring-inner"></div>
+                    <div class="cc2-ring-core"></div>
+                    <div class="cc2-ring-center">
+                      <div class="cc2-rc-label">FOCUS SCORE</div>
+                      <div class="cc2-rc-val" id="cc2FocusScore">—</div>
+                      <div class="cc2-rc-sub">סבירות מימוש ברבעון הנוכחי</div>
+                      <div class="cc2-rc-live">
+                        <span class="cc2-rc-dot"></span>
+                        הזדמנות חיה ברמת עדיפות גבוהה
+                      </div>
+                    </div>
+                    <!-- Floating stat chips -->
+                    <div class="cc2-rf cc2-rf-r">
+                      <div class="cc2-rf-label">לחץ הכנסה</div>
+                      <div class="cc2-rf-val cc2-rf-sky" id="cc2Pressure">—</div>
+                    </div>
+                    <div class="cc2-rf cc2-rf-l">
+                      <div class="cc2-rf-label">סיכון</div>
+                      <div class="cc2-rf-val cc2-rf-amber" id="cc2Risk">—</div>
+                    </div>
+                    <div class="cc2-rf cc2-rf-b">
+                      <div class="cc2-rf-label">הצעד הבא</div>
+                      <div class="cc2-rf-val cc2-rf-white" id="cc2Next">—</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Side signal cards -->
+                <div class="cc2-side-signals" id="cc2SideSignals">
+                  ${[0,1,2,3].map(() => skelSignal()).join('')}
+                </div>
+              </div>
+            </div>
+
+            <!-- Right aside: AI rec + command -->
+            <aside class="cc2-aside">
+              <div class="cc2-ai-rec">
+                <div class="cc2-ai-head">
+                  <div>
+                    <div class="cc2-section-label">AI RECOMMENDATION</div>
+                    <div class="cc2-ai-title">מה הפעולה הבאה שהמערכת ממליצה לבצע</div>
+                  </div>
+                  <span class="cc2-live-dot cc2-ld-pulse"></span>
+                </div>
+                <div class="cc2-rec-box">
+                  <div class="cc2-rec-lbl">המלצה מיידית</div>
+                  <div class="cc2-rec-title" id="cc2RecTitle">מנתח...</div>
+                  <p class="cc2-rec-text" id="cc2RecText">טוען נתונים...</p>
+                </div>
+                <div class="cc2-asst-stats" id="cc2AsstStats">
+                  ${[['רמת ביטחון','—'],['חלון סיכון','—'],['פוטנציאל','—']].map(([k,v]) => `
+                  <div class="cc2-asst-stat"><span>${k}</span><span class="cc2-asst-stat-val">${v}</span></div>`).join('')}
+                </div>
+              </div>
+
+              <div class="cc2-command">
+                <div class="cc2-section-label">COMMAND INPUT</div>
+                <div class="cc2-cmd-title">תן הוראה טבעית למערכת</div>
+                <div class="cc2-cmd-text">"נתח את ההזדמנויות הקרובות והצע מהלך שמגדיל את סיכויי הסגירה היום"</div>
+                <div class="cc2-primary-acts">
+                  <button class="cc2-btn cc2-btn-primary" onclick="App.switchTo('workspace')">
+                    <span>הפעל ניתוח חכם</span><span class="cc2-btn-tag">AI</span>
+                  </button>
+                  <button class="cc2-btn cc2-btn-sec" onclick="App.switchTo('workspace')">
+                    <span>פתח פעולות חמות</span><span class="cc2-btn-tag">Live</span>
+                  </button>
+                  <button class="cc2-btn cc2-btn-sec" onclick="App.switchTo('briefing')">
+                    <span>הצג המלצות מיידיות</span><span class="cc2-btn-tag">Next</span>
+                  </button>
+                  <button class="cc2-btn cc2-btn-sec" onclick="App.switchTo('briefing')">
+                    <span>הפעל קלט קולי</span><span>🎙</span>
+                  </button>
+                </div>
+                <div class="cc2-chips">
+                  ${chips.map(c => `<button class="cc2-chip-btn" onclick="App.switchTo('workspace')">${c}</button>`).join('')}
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- Right column -->
+        <section class="cc2-right">
+          <div class="cc2-decisions">
+            <div class="cc2-section-label">DECISION PRIORITIES</div>
+            <div class="cc2-dec-cards" id="cc2DecCards">
+              ${[0,1,2].map(() => skelCard()).join('')}
+            </div>
+          </div>
+
+          <div class="cc2-risk-section">
+            <div class="cc2-risk-head">
+              <div>
+                <div class="cc2-section-label">RISK &amp; OPPORTUNITY</div>
+                <div class="cc2-risk-title">איפה קיים סיכון לאובדן עסקה</div>
+              </div>
+              <button class="cc2-btn cc2-btn-sm" onclick="App.switchTo('crm')">הצג מעקבים חמים</button>
+            </div>
+            <div class="cc2-queue" id="cc2Queue">
+              ${[0,1,2].map(() => skelQueueItem()).join('')}
+            </div>
+          </div>
+        </section>
+
+      </main>
     </div>`;
   }
 
-  // ── Update radial gauge ring ───────────────────────────────────────────
-  function setGauge(id, pct, totalCirc) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const offset = totalCirc * (1 - Math.min(Math.max(pct, 0), 1));
-    el.style.strokeDasharray  = `${totalCirc}`;
-    el.style.strokeDashoffset = `${offset}`;
-  }
-
-  // ── Update pressure dial ───────────────────────────────────────────────
-  function setDial(id, pct, valText) {
-    const circ  = 226.19;
-    const fill  = document.getElementById(`dial-${id}`);
-    const pctEl = document.getElementById(`dial-pct-${id}`);
-    const valEl = document.getElementById(`dial-val-${id}`);
-    if (!fill) return;
-    fill.style.strokeDasharray  = `${circ}`;
-    fill.style.strokeDashoffset = `${circ * (1 - Math.min(Math.max(pct, 0), 1))}`;
-    if (pctEl) pctEl.textContent = Math.round(pct * 100) + '%';
-    if (valEl) valEl.textContent = valText;
-  }
-
-  // ── Build intelligence signals ─────────────────────────────────────────
-  function buildSignals(deals, leads, plan) {
-    const signals = [];
-    const active  = deals.filter(d => !['won','lost'].includes(d.stage));
-    const pipeline = plan?.pipeline_value || active.reduce((s,d) => s+(d.value||d.value_ils||0), 0);
-
-    // Top opportunity: highest-value active deal
-    const top = [...active].sort((a,b) => (b.value||b.value_ils||0) - (a.value||a.value_ils||0))[0];
-    if (top) signals.push({
-      type: 'opportunity',
-      icon: '▲',
-      title: `הזדמנות מובילה: ${top.title || top.name || '—'}`,
-      text:  `${ils(top.value||top.value_ils)} · שלב ${top.stage}`,
-    });
-
-    // Hot leads not yet contacted
-    const hotNew = leads.filter(l => l.status === 'חם' && !l.last_contact).slice(0, 2);
-    hotNew.forEach(l => signals.push({
-      type: 'signal',
-      icon: '◉',
-      title: `ליד חם ללא מגע: ${l.name || l.company || '—'}`,
-      text:  'קבע פגישה או שלח הצעה מחיר',
-    }));
-
-    // Pipeline pressure signal
-    if (pipeline < 30000) signals.push({
-      type: 'risk',
-      icon: '⚠',
-      title: 'לחץ פייפליין נמוך',
-      text:  `${ils(pipeline)} פעיל — הזן עסקאות חדשות`,
-    });
-
-    // Closing stage deals
-    const closing = active.filter(d => ['negotiation','closing'].includes((d.stage||'').toLowerCase()));
-    if (closing.length) signals.push({
-      type: 'opportunity',
-      icon: '◈',
-      title: `${closing.length} עסקאות בשלב סגירה`,
-      text:  `${ils(closing.reduce((s,d)=>s+(d.value||d.value_ils||0),0))} — פעל היום`,
-    });
-
-    // Today's top action
-    const actions = plan?.priority_items || plan?.priorities || [];
-    if (actions.length) signals.push({
-      type: 'action',
-      icon: '→',
-      title: `פעולה ראשונה להיום`,
-      text:  actions[0]?.title || actions[0]?.lead_name || `${actions.length} פריטים בתור`,
-    });
-
-    if (!signals.length) signals.push({
-      type: 'ok', icon: '✓',
-      title: 'כל המערכות תקינות',
-      text:  'אין אזהרות פעילות',
-    });
-
-    return signals;
-  }
-
-  // ── Main async init ────────────────────────────────────────────────────
-  async function init() {
-    await load();
-    document.getElementById('dashRefresh')?.addEventListener('click', load);
-  }
+  // ── Init & data load ───────────────────────────────────────────────────
+  async function init() { await load(); }
 
   async function load() {
-    const [planRes, dealsRes, leadsRes] = await Promise.all([
-      API.dailyPlan(300),
-      API.deals(),
-      API.leads({ limit: 60 }),
+    const [planRes, dealsRes, leadsRes, approvalsRes] = await Promise.all([
+      API.dailyPlan(300), API.deals(), API.leads({ limit: 60 }), API.approvals(),
     ]);
 
-    const plan   = planRes.success  ? (planRes.data  || {}) : {};
-    const deals  = dealsRes.success ? (dealsRes.data?.deals || []) : [];
-    const leads  = leadsRes.success ? (leadsRes.data?.leads || []) : [];
-    const active = deals.filter(d => !['won','lost'].includes(d.stage));
+    const plan      = planRes.success      ? (planRes.data || {})                 : {};
+    const deals     = dealsRes.success     ? (dealsRes.data?.deals || [])         : [];
+    const leads     = leadsRes.success     ? (leadsRes.data?.leads || [])         : [];
+    const approvals = approvalsRes.success ? (approvalsRes.data?.approvals || []) : [];
 
-    const pipeline = plan.pipeline_value ||
-      active.reduce((s,d) => s + (d.value||d.value_ils||0), 0);
-    const TARGET   = 200_000;
+    const active   = deals.filter(d => !['won','lost'].includes(d.stage));
+    const closing  = active.filter(d => ['negotiation','closing'].some(x => (d.stage||'').toLowerCase().includes(x)));
+    const pipeline = plan.pipeline_value || active.reduce((s,d) => s+(d.value||d.value_ils||0), 0);
+    const actions  = plan.priority_items || plan.priorities || [];
     const hotCount = leads.filter(l => l.status === 'חם').length;
 
-    // ── Central gauge ─────────────────────────────────────────────────────
-    setGauge('gaugeRevenue', pipeline / TARGET, 502.65);
-    setGauge('gaugeDeals',   Math.min(active.length / 20, 1), 389.56);
+    // Top strip
+    const stripVals = ['Online', 'High', String(active.length), String(actions.length)];
+    stripVals.forEach((v, i) => { const el = document.getElementById(`cc2s${i}`); if (el) el.textContent = v; });
 
-    document.getElementById('gaugeVal').textContent = ils(pipeline);
-    document.getElementById('gaugeSub').textContent = 'PIPELINE ACTIVE';
-    document.getElementById('metaDeals').textContent = active.length;
-    document.getElementById('metaHot').textContent   = hotCount;
+    // Focus score
+    const focusPct = Math.min(Math.round((pipeline / 200_000) * 100), 99) || 1;
+    const fEl = document.getElementById('cc2FocusScore');
+    if (fEl) fEl.textContent = focusPct + '%';
 
-    // ── Status bar monitors ───────────────────────────────────────────────
-    const actions = plan.priority_items || plan.priorities || [];
-    document.getElementById('ccMonitors').innerHTML = `
-      <div class="cc-monitor">
-        <span class="cc-mon-val cc-mon-ils">${ils(pipeline)}</span>
-        <span class="cc-mon-label">PIPELINE</span>
-      </div>
-      <div class="cc-mon-sep"></div>
-      <div class="cc-monitor">
-        <span class="cc-mon-val">${active.length}</span>
-        <span class="cc-mon-label">DEALS</span>
-      </div>
-      <div class="cc-mon-sep"></div>
-      <div class="cc-monitor">
-        <span class="cc-mon-val cc-mon-ok">${hotCount}</span>
-        <span class="cc-mon-label">HOT LEADS</span>
-      </div>
-      <div class="cc-mon-sep"></div>
-      <div class="cc-monitor">
-        <span class="cc-mon-val">${actions.length}</span>
-        <span class="cc-mon-label">ACTIONS</span>
-      </div>`;
+    // Floating ring chips
+    const pressureScore = Math.min(Math.round((closing.length / Math.max(active.length, 1)) * 100), 99);
+    const riskCount     = active.filter(d => {
+      const s = (d.stage||'').toLowerCase();
+      return ['negotiation','closing'].some(x => s.includes(x));
+    }).length;
+    const topClosing = [...closing].sort((a,b) => (b.value||b.value_ils||0)-(a.value||a.value_ils||0))[0];
+    _setText('cc2Pressure', pressureScore);
+    _setText('cc2Risk',     riskCount);
+    _setText('cc2Next',     topClosing ? 'שיחת סגירה' : 'מעקב');
 
-    // ── Pressure dials (deals by stage) ───────────────────────────────────
-    const stageBuckets = { qualif: 0, proposal: 0, negotiation: 0 };
-    const stageVals    = { qualif: 0, proposal: 0, negotiation: 0 };
-    active.forEach(d => {
-      const s = (d.stage || '').toLowerCase();
-      const v = d.value || d.value_ils || 0;
-      if (['new','qualified','contact'].some(x => s.includes(x))) {
-        stageBuckets.qualif++;   stageVals.qualif   += v;
-      } else if (['proposal','quote','offer'].some(x => s.includes(x))) {
-        stageBuckets.proposal++; stageVals.proposal += v;
-      } else if (['negotiation','closing','neg'].some(x => s.includes(x))) {
-        stageBuckets.negotiation++; stageVals.negotiation += v;
-      }
-    });
-    const maxB = Math.max(...Object.values(stageBuckets), 1);
-    setDial('qualif',      stageBuckets.qualif      / maxB, ils(stageVals.qualif));
-    setDial('proposal',    stageBuckets.proposal    / maxB, ils(stageVals.proposal));
-    setDial('negotiation', stageBuckets.negotiation / maxB, ils(stageVals.negotiation));
+    // Side signals
+    const nearClose = active.filter(d => ['negotiation','proposal'].some(x => (d.stage||'').toLowerCase().includes(x)));
+    const nearVal   = nearClose.reduce((s,d) => s+(d.value||d.value_ils||0), 0);
+    const urgency   = approvals.length > 2 ? 'גבוהה' : approvals.length > 0 ? 'בינונית' : 'נמוכה';
+    const topAction = actions[0]?.title || (topClosing ? 'סגירה' : 'מעקב');
+    _html('cc2SideSignals', [
+      { label: 'פוטנציאל מימוש קרוב', value: ils(nearVal),  sub: `${nearClose.length} הזדמנויות פעילות` },
+      { label: 'רמת דחיפות ניהולית', value: urgency,       sub: `${approvals.length} החלטות מחכות להכרעה` },
+      { label: 'חשיפת סיכון',         value: String(riskCount), sub: 'עסקאות דורשות התערבות' },
+      { label: 'הפעולה המומלצת כעת',  value: topAction.slice(0,12), sub: 'פעל היום לסגירה' },
+    ].map(s => `
+    <div class="cc2-signal-card">
+      <div class="cc2-sc-label">${s.label}</div>
+      <div class="cc2-sc-val">${s.value}</div>
+      <div class="cc2-sc-sub">${s.sub}</div>
+    </div>`).join(''));
 
-    // ── Action queue ──────────────────────────────────────────────────────
-    const queue = actions.length
-      ? actions
-      : active.slice(0, 6).map(d => ({ title: d.title, stage: d.stage, value: d.value||d.value_ils }));
+    // AI recommendation
+    if (topClosing) {
+      const name = topClosing.title || topClosing.name || 'עסקה מובילה';
+      _setText('cc2RecTitle', `לסגור היום את ${name} לפני ירידת מומנטום`);
+      _setText('cc2RecText', 'הלקוח חם, ההצעה פתוחה וחלון ההחלטה מצטמצם. מומלץ לבצע שיחת הנהלה ולהפעיל מהלך סגירה מונחה.');
+    } else {
+      _setText('cc2RecTitle', 'הגדר עסקאות פעילות לקבלת המלצות מדויקות');
+      _setText('cc2RecText',  'אין עסקאות בשלב סגירה כרגע. הוסף עסקאות לקבלת ניתוח AI מותאם.');
+    }
+    _html('cc2AsstStats', [
+      ['רמת ביטחון', focusPct + '%'],
+      ['חלון סיכון',  '6 שעות'],
+      ['פוטנציאל',    topClosing ? ils(topClosing.value||topClosing.value_ils||0) : '—'],
+    ].map(([k,v]) => `
+    <div class="cc2-asst-stat"><span>${k}</span><span class="cc2-asst-stat-val">${v}</span></div>`).join(''));
 
-    document.getElementById('queueCount').textContent = queue.length;
-    document.getElementById('ccQueue').innerHTML = queue.slice(0, 7).map((it, i) => {
-      const urgency = Math.round((1 - i * 0.13) * 100);
-      return `
-      <div class="cc-q-item" onclick="App.switchTo('workspace')">
-        <span class="cc-q-rank">${i+1}</span>
-        <div class="cc-q-info">
-          <div class="cc-q-title">${it.title || it.lead_name || '—'}</div>
-          <div class="cc-q-sub">${it.stage||''} ${(it.value||it.value_ils) ? '· '+ils(it.value||it.value_ils) : ''}</div>
+    // Decision priorities
+    const won = deals.filter(d => d.stage === 'won');
+    _html('cc2DecCards', [
+      { title: 'מה צפוי לייצר הכנסה עכשיו', value: `${closing.length} עסקאות קרובות`,        note: `${Math.min(closing.length,2)} מהן עם הסתברות גבוהה` },
+      { title: 'איפה נדרשת הכרעה שלך',       value: `${approvals.length||Math.min(active.length,2)} החלטות`, note: approvals.length ? 'אחת מהן קריטית לשעתיים הקרובות' : 'בדוק עסקאות פתוחות' },
+      { title: 'מה המערכת קידמה עבורך',       value: `${actions.length} פעולות`,              note: 'פולואפים, תזכורות והנעה אוטומטית' },
+    ].map(c => `
+    <div class="cc2-decision-card">
+      <div class="cc2-dc-title">${c.title}</div>
+      <div class="cc2-dc-val">${c.value}</div>
+      <div class="cc2-dc-note">${c.note}</div>
+    </div>`).join(''));
+
+    // Risk queue
+    const queue = [...active].sort((a,b) => (b.value||b.value_ils||0)-(a.value||a.value_ils||0)).slice(0,3);
+    _html('cc2Queue', queue.length
+      ? queue.map(d => `
+      <div class="cc2-queue-item">
+        <div class="cc2-qi-head">
+          <span class="cc2-qi-name">${d.title||d.name||'—'}</span>
+          <span class="cc2-qi-dot"></span>
         </div>
-        <div class="cc-q-urgency" style="width:${urgency}%"></div>
-      </div>`;
-    }).join('');
-
-    // ── Intelligence signals ──────────────────────────────────────────────
-    const signals = buildSignals(deals, leads, plan);
-    document.getElementById('asstBody').innerHTML = signals.map(s => `
-    <div class="cc-signal cc-signal-${s.type}">
-      <div class="cc-signal-icon">${s.icon}</div>
-      <div class="cc-signal-body">
-        <div class="cc-signal-title">${s.title}</div>
-        <div class="cc-signal-text">${s.text}</div>
-      </div>
-    </div>`).join('');
+        <div class="cc2-deal-fields">
+          <div class="cc2-deal-field"><div class="cc2-df-lbl">שלב</div><div class="cc2-df-val">${stageLabel(d.stage)}</div></div>
+          <div class="cc2-deal-field"><div class="cc2-df-lbl">פוטנציאל</div><div class="cc2-df-val" dir="ltr">${ils(d.value||d.value_ils||0)}</div></div>
+          <div class="cc2-deal-field"><div class="cc2-df-lbl">סיכון</div><div class="cc2-df-val">${riskLabel(d)}</div></div>
+        </div>
+      </div>`).join('')
+      : '<div style="text-align:center;color:rgba(255,255,255,.35);padding:24px 0;font-size:13px">אין עסקאות פעילות</div>');
   }
+
+  function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+  function _html(id, html)   { const el = document.getElementById(id); if (el) el.innerHTML  = html; }
 
   return { render, init };
 })();
