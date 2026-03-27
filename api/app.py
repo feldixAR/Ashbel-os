@@ -55,11 +55,19 @@ def create_app() -> Flask:
 
     @app.route("/")
     def serve_index():
-        return send_from_directory(ui_root, "index.html")
+        resp = send_from_directory(ui_root, "index.html")
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"]  = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
 
     @app.route("/ui/<path:path>")
     def serve_ui(path):
-        return send_from_directory(ui_root, path)
+        resp = send_from_directory(ui_root, path)
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"]  = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
 
     @app.route("/api/health")
     def health():

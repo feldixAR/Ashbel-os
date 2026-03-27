@@ -3,22 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>AshbalOS — אשבל אלומיניום</title>
-  <link rel="stylesheet" href="/ui/css/app.css" />
+  <link rel="stylesheet" href="/ui/css/app.css?v=b11r2" />
 </head>
 <body>
 
 <!-- ── API Key Modal ──────────────────────────────────────────────────── -->
 <div class="modal-overlay hidden" id="apiModal">
   <div class="modal">
-    <h2>כניסה ל-AshbalOS</h2>
-    <p>הכנס את מפתח ה-API כדי להתחבר למערכת.<br/>
-       המפתח נשמר לסשן הנוכחי בלבד.</p>
+    <h2>AshbalOS</h2>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.5px">
+      SECURE ACCESS — API KEY REQUIRED
+    </p>
     <input class="modal-input" id="apiKeyInput" type="password"
-           placeholder="API key..." autocomplete="off" />
-    <button class="btn btn-primary" id="apiKeySubmit" style="width:100%">התחבר</button>
+           placeholder="Enter API key..." autocomplete="off" />
+    <button class="btn btn-primary" id="apiKeySubmit" style="width:100%">CONNECT</button>
     <div class="modal-note">
-      ⓘ  המפתח מוגדר במשתנה הסביבה <code>OS_API_KEY</code> בשרת.
+      ⓘ  Set <code>OS_API_KEY</code> environment variable on Railway.
     </div>
   </div>
 </div>
@@ -33,34 +37,34 @@
       <span class="logo-name">Ashbal<span>OS</span></span>
     </a>
 
-    <!-- Live KPI strip -->
     <div class="header-meta">
+      <!-- Live KPI strip -->
       <div class="header-kpi-group" id="headerKpis" style="display:none">
         <div class="hkpi">
           <span class="hkpi-val hkpi-ils" id="hkPipeline">—</span>
-          <span class="hkpi-label">Pipeline</span>
+          <span class="hkpi-label">PIPELINE</span>
         </div>
         <div class="hkpi-sep"></div>
         <div class="hkpi">
           <span class="hkpi-val" id="hkDeals">—</span>
-          <span class="hkpi-label">עסקאות</span>
+          <span class="hkpi-label">DEALS</span>
         </div>
         <div class="hkpi-sep"></div>
         <div class="hkpi">
           <span class="hkpi-val hkpi-good" id="hkHot">—</span>
-          <span class="hkpi-label">חמים</span>
+          <span class="hkpi-label">HOT</span>
         </div>
       </div>
 
       <div class="header-live">
         <div class="pulse"></div>
-        <span>מערכת פעילה</span>
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:.5px">SYSTEM ONLINE</span>
       </div>
     </div>
 
     <button class="bell-btn" id="bellBtn">
-      <span>⏸</span>
-      <span id="bellTxt">אישורים</span>
+      <span>⚑</span>
+      <span id="bellTxt">APPROVALS</span>
       <span class="bell-badge hidden" id="bellBadge">0</span>
     </button>
   </header>
@@ -70,9 +74,9 @@
     <div id="sideNav"></div>
   </nav>
 
-  <!-- Main -->
+  <!-- Main content area -->
   <main class="main">
-    <!-- Revenue CRM screens (Batch 11) -->
+    <!-- Batch 11 — Revenue CRM screens -->
     <div id="panel-dashboard"  class="panel"></div>
     <div id="panel-workspace"  class="panel"></div>
     <div id="panel-crm"        class="panel"></div>
@@ -93,29 +97,29 @@
 
 </div>
 
-<!-- ── Scripts — order matters ────────────────────────────────────────── -->
-<script src="/ui/js/api.js"></script>
-<script src="/ui/js/components/toast.js"></script>
+<!-- ── Scripts — version-stamped to bust all browser caches ──────────── -->
+<script src="/ui/js/api.js?v=b11r2"></script>
+<script src="/ui/js/components/toast.js?v=b11r2"></script>
 
 <!-- Batch 11 — Revenue CRM panels -->
-<script src="/ui/js/panels/dashboard.js"></script>
-<script src="/ui/js/panels/workspace.js"></script>
-<script src="/ui/js/panels/crm.js"></script>
-<script src="/ui/js/panels/revenue.js"></script>
-<script src="/ui/js/panels/calendar.js"></script>
-<script src="/ui/js/panels/briefing.js"></script>
+<script src="/ui/js/panels/dashboard.js?v=b11r2"></script>
+<script src="/ui/js/panels/workspace.js?v=b11r2"></script>
+<script src="/ui/js/panels/crm.js?v=b11r2"></script>
+<script src="/ui/js/panels/revenue.js?v=b11r2"></script>
+<script src="/ui/js/panels/calendar.js?v=b11r2"></script>
+<script src="/ui/js/panels/briefing.js?v=b11r2"></script>
 
 <!-- Existing panels -->
-<script src="/ui/js/panels/command.js"></script>
-<script src="/ui/js/panels/leads.js"></script>
-<script src="/ui/js/panels/pipeline.js"></script>
-<script src="/ui/js/panels/goals.js"></script>
-<script src="/ui/js/panels/tasks.js"></script>
-<script src="/ui/js/panels/agents.js"></script>
-<script src="/ui/js/panels/approvals.js"></script>
-<script src="/ui/js/panels/reports.js"></script>
+<script src="/ui/js/panels/command.js?v=b11r2"></script>
+<script src="/ui/js/panels/leads.js?v=b11r2"></script>
+<script src="/ui/js/panels/pipeline.js?v=b11r2"></script>
+<script src="/ui/js/panels/goals.js?v=b11r2"></script>
+<script src="/ui/js/panels/tasks.js?v=b11r2"></script>
+<script src="/ui/js/panels/agents.js?v=b11r2"></script>
+<script src="/ui/js/panels/approvals.js?v=b11r2"></script>
+<script src="/ui/js/panels/reports.js?v=b11r2"></script>
 
-<script src="/ui/js/app.js"></script>
+<script src="/ui/js/app.js?v=b11r2"></script>
 
 </body>
 </html>
