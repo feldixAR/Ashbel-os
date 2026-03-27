@@ -149,6 +149,19 @@ def _run_column_migrations() -> None:
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS deal_id          VARCHAR(36)",
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS duration_sec     INTEGER",
         "ALTER TABLE activities ADD COLUMN IF NOT EXISTS performed_at_il  VARCHAR(40)",
+        # leads — Batch 7 Revenue CRM
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS company          VARCHAR(200)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS domain           VARCHAR(100)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS potential_value  INTEGER DEFAULT 0",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner            VARCHAR(120)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action      TEXT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action_due  VARCHAR(40)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_activity_at VARCHAR(40)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS priority_score   FLOAT DEFAULT 0",
+        # deals — Batch 7 Revenue CRM
+        "ALTER TABLE deals ADD COLUMN IF NOT EXISTS expected_profit  INTEGER DEFAULT 0",
+        "ALTER TABLE deals ADD COLUMN IF NOT EXISTS commercial_stage VARCHAR(60)",
+        "ALTER TABLE deals ADD COLUMN IF NOT EXISTS lost_reason      TEXT",
     ]
     try:
         with engine.begin() as conn:

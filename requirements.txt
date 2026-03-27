@@ -37,4 +37,4 @@ requests>=2.31.0
 httpx>=0.27.0                  # sync HTTP client for Telegram / external APIs
 
 # trigger redeploy 1774333173553
-# v1.13.0-preview-impl
+# v2.2-batch7-core

@@ -291,3 +291,166 @@ def create_event():
             created_by=body.get("created_by", "api"),
         ))
     return ok({"event_id": ev_id, "lead_id": lead_id}, status=201)
+
+
+# ── Lead Full Record View (Batch 7) ────────────────────────────────────────────
+
+@bp.route("/crm/leads/<lead_id>/full", methods=["GET"])
+@require_auth
+@log_request
+def lead_full(lead_id: str):
+    """
+    Full record view: lead + open deals + unified timeline + AI summary.
+    GET /api/crm/leads/<lead_id>/full
+    """
+    try:
+        from services.storage.db import get_session
+        from services.storage.models.lead import LeadModel
+        from services.storage.models.deal import DealModel
+        from services.storage.models.activity import ActivityModel
+        from services.storage.models.message import MessageModel
+        from services.storage.models.stage_history import StageHistoryModel
+        from services.storage.models.calendar_event import CalendarEventModel
+        from services.engines.priority_engine import compute_lead_score
+
+        with get_session() as s:
+            lead = s.query(LeadModel).filter_by(id=lead_id).first()
+            if not lead:
+                return _error("lead not found", 404)
+
+            deals   = s.query(DealModel).filter_by(lead_id=lead_id).all()
+            acts    = s.query(ActivityModel).filter_by(lead_id=lead_id)\
+                       .order_by(ActivityModel.created_at.desc()).limit(30).all()
+            msgs    = s.query(MessageModel).filter_by(lead_id=lead_id)\
+                       .order_by(MessageModel.created_at.desc()).limit(20).all()
+            stages  = s.query(StageHistoryModel).filter_by(lead_id=lead_id)\
+                       .order_by(StageHistoryModel.created_at.desc()).limit(15).all()
+            events  = s.query(CalendarEventModel).filter_by(lead_id=lead_id)\
+                       .order_by(CalendarEventModel.starts_at_il.desc()).limit(10).all()
+
+            lead_dict  = _lead_to_dict(lead)
+            deal_dicts = [d.to_dict() for d in deals]
+            ev_dicts   = [e.to_dict() for e in events]
+
+        priority = compute_lead_score(lead_dict, deals=deal_dicts, events=ev_dicts)
+        timeline = _build_timeline(acts, msgs, stages, events)
+        summary  = _ai_summary(lead_dict, deal_dicts, acts)
+
+        return ok({
+            "lead":           lead_dict,
+            "open_deals":     [d for d in deal_dicts if d["stage"] not in ("won", "lost")],
+            "timeline":       timeline,
+            "priority_score": priority,
+            "ai_summary":     summary,
+        })
+    except Exception as e:
+        log.exception("[CRM] lead_full error")
+        return _error(str(e), 500)
+
+
+# ── Helpers for lead_full ──────────────────────────────────────────────────────
+
+def _lead_to_dict(lead) -> dict:
+    return {
+        "id":              lead.id,
+        "name":            lead.name,
+        "company":         getattr(lead, "company", None),
+        "phone":           lead.phone,
+        "email":           lead.email,
+        "city":            lead.city,
+        "source":          lead.source,
+        "status":          lead.status,
+        "sector":          lead.sector,
+        "domain":          getattr(lead, "domain", None),
+        "score":           lead.score,
+        "potential_value": getattr(lead, "potential_value", 0) or 0,
+        "owner":           getattr(lead, "owner", None),
+        "next_action":     getattr(lead, "next_action", None),
+        "next_action_due": getattr(lead, "next_action_due", None),
+        "last_activity_at": getattr(lead, "last_activity_at", None) or lead.last_contact,
+        "priority_score":  getattr(lead, "priority_score", 0) or 0,
+        "notes":           lead.notes,
+        "created_at":      str(lead.created_at) if lead.created_at else None,
+        "updated_at":      str(lead.updated_at) if lead.updated_at else None,
+    }
+
+
+def _build_timeline(acts, msgs, stages, events) -> list:
+    _ICON = {"call": "📞", "email": "📧", "whatsapp": "📱", "meeting": "🤝",
+             "note": "📝", "demo": "🎯"}
+    items = []
+    for a in acts:
+        d = a.to_dict()
+        items.append({
+            "type":  d["activity_type"],
+            "icon":  _ICON.get(d["activity_type"], "●"),
+            "title": d.get("subject") or d["activity_type"],
+            "body":  d.get("notes") or "",
+            "actor": d.get("performed_by") or "",
+            "ts":    d.get("created_at") or "",
+        })
+    for m in msgs:
+        d = m.to_dict()
+        items.append({
+            "type":  "message",
+            "icon":  "💬",
+            "title": d.get("subject") or f"{d['channel']} {d['direction']}",
+            "body":  (d.get("body") or "")[:120],
+            "actor": d.get("direction") or "",
+            "ts":    d.get("created_at") or "",
+        })
+    for sh in stages:
+        d = sh.to_dict()
+        items.append({
+            "type":  "stage_change",
+            "icon":  "🔄",
+            "title": f"שינוי שלב: {d['from_stage']} → {d['to_stage']}",
+            "body":  d.get("reason") or "",
+            "actor": d.get("changed_by") or "",
+            "ts":    d.get("created_at") or "",
+        })
+    for ev in events:
+        d = ev.to_dict()
+        items.append({
+            "type":  "calendar",
+            "icon":  "📅",
+            "title": d.get("title") or "אירוע",
+            "body":  d.get("notes") or "",
+            "actor": d.get("created_by") or "",
+            "ts":    d.get("starts_at_il") or d.get("created_at") or "",
+        })
+    items.sort(key=lambda x: x["ts"] or "0", reverse=True)
+    return items[:30]
+
+
+def _ai_summary(lead: dict, deals: list, acts) -> dict:
+    open_deals = [d for d in deals if d["stage"] not in ("won", "lost")]
+    lost_deals  = [d for d in deals if d["stage"] == "lost"]
+
+    what_they_want = ""
+    if open_deals:
+        top = max(open_deals, key=lambda d: d.get("value_ils", 0) or 0)
+        what_they_want = f"עסקה בשלב {top['stage']} בשווי ₪{top.get('value_ils',0):,}"
+    elif lead.get("notes"):
+        what_they_want = str(lead["notes"])[:100]
+    else:
+        what_they_want = "לא ידוע — השלם פרטי ליד"
+
+    risk = ""
+    if not lead.get("next_action"):
+        risk = "אין פעולה הבאה מוגדרת — סיכון לאיבוד קשר"
+    elif lead.get("status") in ("קר", "לא רלוונטי"):
+        risk = "ליד לא פעיל — בדוק רלוונטיות לפני פנייה"
+
+    objection = ""
+    if lost_deals:
+        reason = lost_deals[-1].get("lost_reason") or lost_deals[-1].get("close_reason") or ""
+        objection = f"עסקה קודמת אבדה: {reason[:80]}" if reason else "עסקה קודמת לא נסגרה"
+
+    return {
+        "what_they_want":             what_they_want,
+        "what_was_promised":          "בדוק ציר הפעילות",
+        "objection":                  objection or "לא ידוע",
+        "risk":                       risk or "ללא אזהרות פעילות",
+        "next_action_recommendation": lead.get("next_action") or "הגדר פעולה הבאה",
+    }

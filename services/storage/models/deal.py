@@ -24,6 +24,10 @@ class DealModel(Base, TimestampMixin):
     next_action_at     = Column(String(40),  nullable=True)   # ISO-8601 IL tz
     closed_at          = Column(String(40),  nullable=True)
     close_reason       = Column(Text,        nullable=True)
+    # Batch 7 — Revenue CRM
+    expected_profit    = Column(Integer,     nullable=False, default=0)  # ILS margin
+    commercial_stage   = Column(String(60),  nullable=True)  # granular stage label
+    lost_reason        = Column(Text,        nullable=True)   # explicit loss reason
 
     def weighted_value(self) -> int:
         return int(self.value_ils * self.probability)
@@ -44,6 +48,9 @@ class DealModel(Base, TimestampMixin):
             "next_action_at":      self.next_action_at,
             "closed_at":           self.closed_at,
             "close_reason":        self.close_reason,
+            "expected_profit":     self.expected_profit,
+            "commercial_stage":    self.commercial_stage,
+            "lost_reason":         self.lost_reason,
             "created_at":          str(self.created_at) if self.created_at else None,
             "updated_at":          str(self.updated_at) if self.updated_at else None,
         }

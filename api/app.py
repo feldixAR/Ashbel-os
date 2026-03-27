@@ -55,8 +55,9 @@ def create_app() -> Flask:
     app.register_blueprint(webhooks_bp, url_prefix='/api')
     app.register_blueprint(briefing_bp, url_prefix='/api')
 
-    # Auth key — accepts OS_API_KEY (preferred) or API_KEY (Railway legacy name)
-    _active_key = os.getenv("OS_API_KEY") or os.getenv("API_KEY") or ""
+    # Auth key — OS_API_KEY only (Batch 7: API_KEY fallback removed)
+    _active_key = os.getenv("OS_API_KEY", "")
+    print(f"Auth: OS_API_KEY Check: {_active_key[:3] if _active_key else 'MISSING'}...")
     log.info(f"[App] auth key loaded: {'yes' if _active_key else 'MISSING — all API calls will be rejected'}")
 
     ui_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")

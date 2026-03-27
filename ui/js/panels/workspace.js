@@ -122,21 +122,27 @@ const WorkspacePanel = (() => {
     }
 
     el.innerHTML = list.map(l => {
-      const pillCls = PILL_CLS[l.status] || '';
+      const pillCls  = PILL_CLS[l.status] || '';
       const isActive = _selected?.id === l.id;
-      const score = l.score || 0;
+      const score    = l.priority_score || l.score || 0;
       const scoreCls = score >= 70 ? 'score-hot' : score >= 40 ? 'score-warm' : 'score-cold';
+      // RED border for missing next_action (Batch 7 enforcement)
+      const missingAction = !l.next_action;
+      const rowBorder = missingAction
+        ? 'border-right:3px solid var(--red);padding-right:6px;'
+        : '';
       return `
         <div onclick="WorkspacePanel.selectLead('${l.id}')"
-             style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid rgba(34,39,49,.4);cursor:pointer;border-radius:5px;transition:.15s;${isActive?'background:rgba(184,115,51,.06);':''}">
+             style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid rgba(34,39,49,.4);cursor:pointer;border-radius:5px;transition:.15s;${rowBorder}${isActive?'background:rgba(184,115,51,.06);':''}">
           <div class="hot-av" style="${score>=70?'background:linear-gradient(135deg,var(--red),#c0392b)':''}">${initials(l.name)}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.name}</div>
             <div style="font-size:10px;color:var(--muted)">${l.company||l.sector||l.phone||''}</div>
+            ${missingAction ? '<div style="font-size:9px;color:var(--red);margin-top:2px">⚠ חסרה פעולה הבאה</div>' : ''}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
             <span class="pill ${pillCls}" style="font-size:9px">${l.status||'—'}</span>
-            <span class="score ${scoreCls}" style="font-size:10px">${score}</span>
+            <span class="score ${scoreCls}" style="font-size:10px">${Math.round(score)}</span>
           </div>
         </div>`;
     }).join('');
@@ -146,51 +152,98 @@ const WorkspacePanel = (() => {
     const lead = _leads.find(l => l.id === leadId);
     if (!lead) return;
     _selected = lead;
-    renderList(); // refresh active state
+    renderList();
 
     const detail = document.getElementById('wsLeadDetail');
+    // Skeleton while loading full record
     detail.innerHTML = `
+      <div style="padding:12px 0">
+        <div class="skel skel-h20 skel-w80" style="margin-bottom:8px"></div>
+        <div class="skel skel-h12 skel-w60"></div>
+      </div>
+      <div class="skel skel-h12 skel-w80" style="margin:12px 0"></div>
+      ${[0,1,2,3].map(()=>'<div class="skel skel-h12 skel-w80" style="margin-bottom:6px"></div>').join('')}`;
+
+    // Fetch full record
+    const res = await API.leadFull(leadId);
+    const full   = res.success ? res.data : null;
+    const record = full?.lead || lead;
+    const deals  = full?.open_deals || [];
+    const tl     = full?.timeline || [];
+    const ai     = full?.ai_summary || {};
+    const score  = full?.priority_score ?? (record.score || 0);
+
+    const missingAction = !record.next_action;
+    const alertBanner   = missingAction
+      ? `<div style="background:rgba(224,82,82,.1);border:1px solid var(--red);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--red)">⚠ אין פעולה הבאה מוגדרת — הוסף כדי לשמור על קשר</div>`
+      : '';
+
+    detail.innerHTML = `
+      ${alertBanner}
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <div class="hot-av" style="width:38px;height:38px;font-size:15px">${(lead.name||'').trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
-        <div>
-          <div style="font-size:15px;font-weight:700">${lead.name}</div>
-          <div style="font-size:10px;color:var(--muted)">${lead.company||lead.sector||''}</div>
+        <div class="hot-av" style="width:38px;height:38px;font-size:15px">${initials(record.name)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700">${record.name}</div>
+          <div style="font-size:10px;color:var(--muted)">${record.company||record.sector||''}</div>
         </div>
+        <span class="pill ${PILL_CLS[record.status]||''}">${record.status||'—'}</span>
       </div>
 
-      <div class="ap-block">
-        <div class="ap-lbl">סטטוס</div>
-        <div class="ap-row">
-          <span class="ap-key">סטטוס</span>
-          <span class="ap-val"><span class="pill ${PILL_CLS[lead.status]||''}">${lead.status||'—'}</span></span>
-        </div>
-        <div class="ap-row">
-          <span class="ap-key">ניקוד</span>
-          <span class="ap-val" style="color:var(--copper);font-family:var(--mono)">${lead.score||0}</span>
-        </div>
-        <div class="ap-row">
-          <span class="ap-key">קשר אחרון</span>
-          <span class="ap-val">${lead.last_contact||'—'}</span>
-        </div>
-        <div class="ap-row">
-          <span class="ap-key">טלפון</span>
-          <span class="ap-val" style="direction:ltr;text-align:left">${lead.phone||'—'}</span>
-        </div>
+      <!-- Next action -->
+      <div class="ap-block" style="${missingAction?'border:1px solid rgba(224,82,82,.3);':''}">
+        <div class="ap-lbl" style="${missingAction?'color:var(--red)':''}">פעולה הבאה</div>
+        <div style="font-size:12px;color:var(--text);padding:4px 0">${record.next_action||'<span style="color:var(--red)">לא מוגדרת</span>'}</div>
+        ${record.next_action_due ? `<div style="font-size:10px;color:var(--muted)">עד: ${record.next_action_due}</div>` : ''}
       </div>
 
+      <!-- AI Summary -->
+      ${ai.what_they_want ? `
       <div class="ap-block">
-        <div class="ap-lbl">הערות מרכזיות</div>
-        <div style="font-size:11px;color:var(--text);line-height:1.6">${lead.notes||lead.response||'אין הערות'}</div>
+        <div class="ap-lbl">AI Summary</div>
+        <div class="ap-row"><span class="ap-key">רוצה</span><span class="ap-val">${ai.what_they_want||'—'}</span></div>
+        <div class="ap-row"><span class="ap-key">סיכון</span><span class="ap-val" style="color:var(--red)">${ai.risk||'—'}</span></div>
+        <div class="ap-row"><span class="ap-key">התנגדות</span><span class="ap-val">${ai.objection||'—'}</span></div>
+      </div>` : ''}
+
+      <!-- Lead stats -->
+      <div class="ap-block">
+        <div class="ap-lbl">פרטים</div>
+        <div class="ap-row"><span class="ap-key">ציון עדיפות</span><span class="ap-val" style="font-family:var(--mono);color:var(--silver)">${Math.round(score)}</span></div>
+        <div class="ap-row"><span class="ap-key">פוטנציאל</span><span class="ap-val" style="color:var(--ils);font-family:var(--mono)">₪${(record.potential_value||0).toLocaleString('he-IL')}</span></div>
+        <div class="ap-row"><span class="ap-key">טלפון</span><span class="ap-val" dir="ltr">${record.phone||'—'}</span></div>
+        <div class="ap-row"><span class="ap-key">מקור</span><span class="ap-val">${record.source||'—'}</span></div>
       </div>
 
+      <!-- Open deals -->
+      ${deals.length ? `
       <div class="ap-block">
-        <div class="ap-lbl">Timeline מהיר</div>
-        <div id="wsTimeline" style="font-size:11px;color:var(--muted)">טוען...</div>
+        <div class="ap-lbl">עסקאות פתוחות (${deals.length})</div>
+        ${deals.map(d=>`
+        <div class="ap-row" onclick="App.switchTo('crm')" style="cursor:pointer">
+          <span class="ap-key">${d.title||'—'}</span>
+          <span class="ap-val" style="font-family:var(--mono);color:var(--ils)">₪${(d.value_ils||0).toLocaleString()}</span>
+        </div>`).join('')}
+      </div>` : ''}
+
+      <!-- Timeline -->
+      <div class="ap-block">
+        <div class="ap-lbl">ציר פעילות</div>
+        <div id="wsTimeline">
+          ${tl.length ? tl.slice(0,6).map(ev=>`
+          <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(34,39,49,.3)">
+            <span style="font-size:14px;flex-shrink:0">${ev.icon||'●'}</span>
+            <div>
+              <div style="font-size:11px;font-weight:500">${ev.title||'—'}</div>
+              <div style="font-size:9px;color:var(--muted)">${ev.body||''} ${ev.ts?'· '+ev.ts.slice(0,10):''}</div>
+            </div>
+          </div>`).join('')
+          : '<div style="font-size:11px;color:var(--muted)">אין פעילות רשומה</div>'}
+        </div>
       </div>
 
       <div class="ap-btn-col">
-        <button class="ap-btn ap-primary" onclick="WorkspacePanel.openBriefing('${lead.id}')">📞 פתח briefing</button>
-        <button class="ap-btn" onclick="WorkspacePanel.logCallPrompt('${lead.id}')">📝 רשום שיחה</button>
+        <button class="ap-btn ap-primary" onclick="WorkspacePanel.openBriefing('${record.id}')">📞 פתח briefing</button>
+        <button class="ap-btn" onclick="WorkspacePanel.logCallPrompt('${record.id}')">📝 רשום שיחה</button>
         <button class="ap-btn" onclick="App.switchTo('crm')">📋 עסקאות</button>
       </div>
 

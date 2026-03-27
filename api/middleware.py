@@ -11,7 +11,7 @@ Usage:
 
 Auth:
     Every request must include header: X-API-Key: <token>
-    Token is compared against API_KEY env var.
+    Token is compared against OS_API_KEY env var.
     Returns 401 if missing or invalid.
 """
 
@@ -24,8 +24,8 @@ from flask import request, jsonify, g
 
 log = logging.getLogger(__name__)
 
-# Accepts OS_API_KEY (preferred) or API_KEY (legacy Railway secret name).
-_API_KEY = os.getenv("OS_API_KEY") or os.getenv("API_KEY") or ""
+# Batch 7: OS_API_KEY only. API_KEY fallback removed.
+_API_KEY = os.getenv("OS_API_KEY", "")
 
 
 def require_auth(fn):

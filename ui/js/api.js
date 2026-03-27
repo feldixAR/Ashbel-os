@@ -99,6 +99,12 @@ const API = (() => {
     weeklyCalendar: ()           => request('GET', '/crm/calendar/week'),
     createCalEvent: (data)       => request('POST', '/crm/calendar/events', data),
 
+    // ── CRM — Lead Full Record View (Batch 7) ────────────────────────────────
+    leadFull: (leadId) => request('GET', `/crm/leads/${leadId}/full`),
+
+    // ── Dashboard Command Center (Batch 7) ───────────────────────────────────
+    dashboardSummary: () => request('GET', '/dashboard/summary'),
+
     // ── Briefing ─────────────────────────────────────────────────────────────
     identifyCaller:  (phone)       => request('POST', '/briefing/identify', { phone }),
     customerSummary: (leadId)      => request('GET',  `/briefing/summary/${leadId}`),

@@ -13,11 +13,13 @@ class LeadModel(Base, TimestampMixin):
     __tablename__ = "leads"
 
     id            = Column(String(36),  primary_key=True, default=new_uuid)
-    name          = Column(String(200),  nullable=False)   # supports Unicode (Hebrew, Arabic, etc.)
+    name          = Column(String(200),  nullable=False)
+    company       = Column(String(200),  nullable=True)    # Batch 7: business/company name
     city          = Column(String(120),  nullable=True)
     phone         = Column(String(40),   nullable=True, index=True)
     email         = Column(String(200),  nullable=True)
-    sector        = Column(String(80),   nullable=True, index=True)  # free-text; any sector value is valid
+    sector        = Column(String(80),   nullable=True, index=True)
+    domain        = Column(String(100),  nullable=True)    # Batch 7: business domain
     source        = Column(String(60),   nullable=False, default="manual", index=True)
     status        = Column(String(60),   nullable=False, default="חדש", index=True)
     score         = Column(Integer,      nullable=False, default=0, index=True)
@@ -26,6 +28,13 @@ class LeadModel(Base, TimestampMixin):
     response      = Column(Text,         nullable=True)
     notes         = Column(Text,         nullable=True)
     assigned_agent_id = Column(String(36), nullable=True)
+    # Batch 7 — Revenue CRM
+    potential_value  = Column(Integer,      nullable=False, default=0)   # ILS
+    owner            = Column(String(120),  nullable=True)
+    next_action      = Column(Text,         nullable=True)
+    next_action_due  = Column(String(40),   nullable=True)   # ISO-8601
+    last_activity_at = Column(String(40),   nullable=True)   # ISO-8601
+    priority_score   = Column(Float,        nullable=False, default=0.0)  # 0-100
 
     history = relationship("LeadHistoryModel",
                            back_populates="lead",
