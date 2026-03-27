@@ -37,4 +37,4 @@ requests>=2.31.0
 httpx>=0.27.0                  # sync HTTP client for Telegram / external APIs
 
 # trigger redeploy 1774333173553
-# cache-bust: 1774480000  # Batch 11 silver-chrome UI
+# cache-bust: 1774560000  # Batch 11 full override — silver-chrome, no legacy
