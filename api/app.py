@@ -11,7 +11,11 @@ def create_app() -> Flask:
     app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
     app.config["JSON_AS_ASCII"] = False
-    CORS(app)
+    CORS(app, resources={r"/api/*": {
+        "origins": "*",
+        "allow_headers": ["Content-Type", "X-API-Key"],
+        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    }})
     from services.storage.db import create_all_tables
     create_all_tables()
     from events.event_dispatcher import bootstrap
