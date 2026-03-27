@@ -1233,3 +1233,483 @@ tr:hover td { background: rgba(200,210,222,.015); }
 .record-value { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--ils); }
 .no-select    { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 12px; }
 .hidden       { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Executive Revenue Command Center — Living Monitor Layer
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Command center shell ───────────────────────────────────────────────── */
+.cc-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: calc(100vh - 52px - 48px);
+  min-height: 560px;
+  overflow: hidden;
+}
+
+/* ── Status bar ─────────────────────────────────────────────────────────── */
+.cc-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--metal-border);
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+.cc-status-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--silver-dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.cc-pulse-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: cc-pulse 2.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes cc-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--green); }
+  50%       { opacity: .5; box-shadow: 0 0 14px var(--green); }
+}
+.cc-live-monitors {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-right: auto;
+}
+.cc-monitor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 18px;
+  border-right: 1px solid var(--metal-border);
+  gap: 1px;
+}
+.cc-monitor:last-child { border-right: none; }
+.cc-mon-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--silver);
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(200,210,222,.25);
+}
+.cc-mon-val.cc-mon-ils { color: var(--ils); text-shadow: 0 0 10px rgba(240,180,41,.25); }
+.cc-mon-val.cc-mon-ok  { color: var(--green); }
+.cc-mon-label {
+  font-family: var(--mono);
+  font-size: 7px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.cc-mon-sep { width: 1px; height: 28px; background: var(--metal-border); }
+
+/* ── Main hub grid ──────────────────────────────────────────────────────── */
+.cc-hub {
+  display: grid;
+  grid-template-columns: 320px 1fr 260px;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Central radial gauge (left column) ─────────────────────────────────── */
+.cc-gauge-hub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: radial-gradient(ellipse at 50% 30%, rgba(200,210,222,.04) 0%, transparent 65%),
+              linear-gradient(180deg, #13171e 0%, #0f1318 100%);
+  border: 1px solid rgba(200,210,222,.12);
+  border-radius: var(--radius-lg);
+  padding: 20px 16px 16px;
+  position: relative;
+  overflow: hidden;
+}
+.cc-gauge-hub::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--silver) 50%, transparent);
+  opacity: .35;
+}
+.cc-gauge-title {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--silver-dim);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+/* ── SVG radial gauge ───────────────────────────────────────────────────── */
+.cc-radial-wrap {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+.cc-radial {
+  width: 200px;
+  height: 200px;
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 0 10px rgba(200,210,222,.12));
+}
+/* Background rings */
+.gauge-track {
+  fill: none;
+  stroke: rgba(200,210,222,.06);
+  stroke-width: 10;
+}
+.gauge-track-sm {
+  fill: none;
+  stroke: rgba(200,210,222,.04);
+  stroke-width: 8;
+}
+/* Fill rings — animated */
+.gauge-fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 502.65;
+  stroke-dashoffset: 502.65;
+  transition: stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1);
+}
+.gauge-revenue {
+  stroke: url(#gaugeGrad);
+  filter: drop-shadow(0 0 6px rgba(200,210,222,.35));
+}
+.gauge-deals {
+  stroke: rgba(61,186,122,.6);
+  stroke-width: 8;
+  stroke-dasharray: 389.56;
+  stroke-dashoffset: 389.56;
+  filter: drop-shadow(0 0 4px rgba(61,186,122,.3));
+}
+/* Concentric decoration rings */
+.gauge-deco {
+  fill: none;
+  stroke: rgba(200,210,222,.03);
+  stroke-width: 1;
+}
+/* Center text overlay */
+.cc-gauge-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+.cc-gauge-val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--silver-hi);
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(200,210,222,.4);
+  margin-bottom: 4px;
+}
+.cc-gauge-sub {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--silver-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ── Gauge legend ───────────────────────────────────────────────────────── */
+.cc-gauge-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  width: 100%;
+}
+.cc-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--silver-dim);
+}
+.cc-meta-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-silver { background: var(--silver); box-shadow: 0 0 5px rgba(200,210,222,.5); }
+.dot-green  { background: var(--green);  box-shadow: 0 0 5px rgba(61,186,122,.5); }
+
+/* ── Center column: dials + queue ───────────────────────────────────────── */
+.cc-dials-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+.cc-dials-title {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--silver-dim);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.cc-dials {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  flex-shrink: 0;
+}
+.cc-dial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(160deg, #14181f 0%, #111419 100%);
+  border: 1px solid rgba(200,210,222,.09);
+  border-radius: var(--radius-lg);
+  padding: 12px 8px 10px;
+  position: relative;
+  overflow: hidden;
+}
+.cc-dial::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200,210,222,.2), transparent);
+}
+.cc-dial-svg {
+  width: 80px;
+  height: 80px;
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 0 6px rgba(200,210,222,.1));
+}
+.dial-track {
+  fill: none;
+  stroke: rgba(200,210,222,.06);
+  stroke-width: 7;
+}
+.dial-fill {
+  fill: none;
+  stroke: url(#dialGrad);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 226.19;
+  stroke-dashoffset: 226.19;
+  transition: stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1);
+  filter: drop-shadow(0 0 4px rgba(200,210,222,.2));
+}
+.dial-pct {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--silver-hi);
+  text-anchor: middle;
+  dominant-baseline: central;
+  /* override the parent rotate */
+  transform: rotate(90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.cc-dial-label {
+  font-family: var(--mono);
+  font-size: 7px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 6px;
+  text-align: center;
+}
+.cc-dial-val {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--silver);
+  margin-top: 2px;
+}
+
+/* ── Priority action queue ──────────────────────────────────────────────── */
+.cc-queue-wrap {
+  background: linear-gradient(170deg, #14181f 0%, #111419 100%);
+  border: 1px solid rgba(200,210,222,.09);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cc-queue-title {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--silver-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.cc-queue-count {
+  background: rgba(200,210,222,.08);
+  border: 1px solid rgba(200,210,222,.15);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 9px;
+  color: var(--silver);
+}
+.cc-queue { flex: 1; overflow-y: auto; }
+.cc-q-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(34,39,49,.5);
+  cursor: pointer;
+  position: relative;
+  transition: background .1s;
+}
+.cc-q-item:last-child { border-bottom: none; }
+.cc-q-item:hover { background: rgba(200,210,222,.02); border-radius: 4px; }
+.cc-q-rank {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--silver-dim);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.cc-q-info { flex: 1; min-width: 0; }
+.cc-q-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-q-sub   { font-size: 9px; color: var(--muted); }
+.cc-q-urgency {
+  position: absolute;
+  bottom: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--silver));
+  border-radius: 1px;
+  opacity: .35;
+  transition: width .6s ease;
+}
+
+/* ── Assistant recommendation engine (right column) ────────────────────── */
+.cc-assistant {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(170deg, #0f1319 0%, #0d1016 100%);
+  border: 1px solid rgba(200,210,222,.11);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.cc-asst-header {
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid rgba(200,210,222,.07);
+  flex-shrink: 0;
+  background: rgba(200,210,222,.02);
+}
+.cc-asst-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--silver);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.cc-asst-pulse {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--silver);
+  box-shadow: 0 0 8px rgba(200,210,222,.6);
+  animation: cc-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.cc-asst-sub {
+  font-family: var(--mono);
+  font-size: 7px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.cc-asst-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Signal cards ───────────────────────────────────────────────────────── */
+.cc-signal {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: rgba(200,210,222,.03);
+  border: 1px solid rgba(200,210,222,.08);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  transition: border-color .15s;
+}
+.cc-signal:hover { border-color: rgba(200,210,222,.18); }
+.cc-signal-opportunity { border-color: rgba(61,186,122,.15); background: rgba(61,186,122,.03); }
+.cc-signal-risk        { border-color: rgba(224,82,82,.15);  background: rgba(224,82,82,.03); }
+.cc-signal-action      { border-color: rgba(200,210,222,.15); background: rgba(200,210,222,.04); }
+.cc-signal-signal      { border-color: rgba(240,180,41,.15); background: rgba(240,180,41,.03); }
+.cc-signal-ok          { border-color: rgba(61,186,122,.1);  }
+.cc-signal-icon {
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 18px;
+  text-align: center;
+  color: var(--silver-dim);
+}
+.cc-signal-opportunity .cc-signal-icon { color: var(--green); }
+.cc-signal-risk        .cc-signal-icon { color: var(--red); }
+.cc-signal-signal      .cc-signal-icon { color: var(--ils); }
+.cc-signal-action      .cc-signal-icon { color: var(--silver); }
+.cc-signal-body { flex: 1; min-width: 0; }
+.cc-signal-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 3px;
+  color: var(--text);
+}
+.cc-signal-text {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── SVG gradient defs (injected inline in JS) ──────────────────────────── */
+.cc-svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ── Responsive collapse ────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .cc-hub { grid-template-columns: 280px 1fr 220px; }
+}
+@media (max-width: 860px) {
+  .cc-hub { grid-template-columns: 1fr; overflow-y: auto; }
+  .cc-shell { height: auto; overflow: visible; }
+}
