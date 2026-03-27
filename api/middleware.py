@@ -24,18 +24,17 @@ from flask import request, jsonify, g
 
 log = logging.getLogger(__name__)
 
-# Batch 7: OS_API_KEY only. API_KEY fallback removed.
-_API_KEY = os.getenv("OS_API_KEY", "")
-
-
 def require_auth(fn):
     """Decorator — validates X-API-Key header before calling the route."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        key = request.headers.get("X-API-Key", "")
-        if not key or not _API_KEY or key != _API_KEY:
+        # Read per-request: avoids module-import-time env var timing issue
+        # (Gunicorn worker fork may not have env vars at import time)
+        api_key = os.getenv("OS_API_KEY", "").strip()
+        key     = request.headers.get("X-API-Key", "").strip()
+        if not key or not api_key or key != api_key:
             log.warning(f"[Auth] rejected {request.method} {request.path} "
-                        f"from {request.remote_addr}")
+                        f"key_present={bool(key)} server_key_present={bool(api_key)}")
             return _error("unauthorized", 401)
         return fn(*args, **kwargs)
     return wrapper
