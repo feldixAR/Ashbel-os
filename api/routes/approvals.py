@@ -108,4 +108,5 @@ def _serialize(a) -> dict:
         "resolved_by": a.resolved_by,
         "resolved_at": a.resolved_at,
         "created_at":  str(a.created_at) if a.created_at else None,
+        "details":     a.details or {},   # includes outreach_task when present
     }

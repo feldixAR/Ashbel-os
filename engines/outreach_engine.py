@@ -111,19 +111,92 @@ def prioritize_daily(queue: List[OutreachTask], max_tasks: int = 10) -> List[Out
     week  = [t for t in queue if t.urgency == "this_week"]
     return (today + week)[:max_tasks]
 
+def _normalize_e164(phone: str) -> str:
+    """Convert Israeli phone (05X-XXXXXXX, 05XXXXXXXX, +972...) to E.164 (9725XXXXXXX)."""
+    digits = re.sub(r"\D", "", phone or "")
+    if digits.startswith("972"):
+        return digits
+    if digits.startswith("0") and len(digits) >= 9:
+        return "972" + digits[1:]
+    return digits
+
+
+def _send_email(task: OutreachTask) -> OutreachResult:
+    """Send via SMTP when configured; fall back to 'logged' mode if not."""
+    import os, smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    now = datetime.datetime.utcnow().isoformat()
+    host = os.environ.get("SMTP_HOST", "")
+    user = os.environ.get("SMTP_USER", "")
+    pwd  = os.environ.get("SMTP_PASS", "")
+    to   = task.phone  # for email channel, 'phone' field carries the email address
+
+    if host and user and pwd and "@" in (to or ""):
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = f"אשבל אלומיניום — {task.lead_name}"
+            msg["From"]    = user
+            msg["To"]      = to
+            msg.attach(MIMEText(task.message, "plain", "utf-8"))
+            port = int(os.environ.get("SMTP_PORT", "587"))
+            with smtplib.SMTP(host, port, timeout=10) as srv:
+                srv.starttls()
+                srv.login(user, pwd)
+                srv.sendmail(user, [to], msg.as_string())
+            log.info(f"[Email] sent to {to} lead={task.lead_id}")
+            return OutreachResult(
+                success=True, task_id=task.task_id, lead_name=task.lead_name,
+                channel="email", mode="smtp", message_id="", sent_at=now,
+            )
+        except Exception as e:
+            log.error(f"[Email] SMTP failed to={to}: {e}")
+            return OutreachResult(
+                success=False, task_id=task.task_id, lead_name=task.lead_name,
+                channel="email", mode="smtp", error=str(e), sent_at=now,
+            )
+
+    # SMTP not configured — log the intended message, return 'logged' mode
+    log.info(f"[Email] SMTP not configured — logged lead={task.lead_id} to={to}")
+    return OutreachResult(
+        success=True, task_id=task.task_id, lead_name=task.lead_name,
+        channel="email", mode="logged", message_id="", sent_at=now,
+    )
+
+
 def execute_outreach(task: OutreachTask) -> OutreachResult:
     import os
     now = datetime.datetime.utcnow().isoformat()
+
+    # ── Email channel ──────────────────────────────────────────────────────────
+    if task.channel == "email":
+        return _send_email(task)
+
+    # ── WhatsApp channel ───────────────────────────────────────────────────────
     try:
         from services.integrations.whatsapp_client import WhatsAppClient
-        token = os.environ.get("WHATSAPP_ACCESS_TOKEN",""); phone_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID","")
+        token    = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+        phone_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
         if token and phone_id:
-            result = WhatsAppClient(phone_id, token).send_text(task.phone, task.message)
+            e164 = _normalize_e164(task.phone)   # FIX: normalize before API call
+            result = WhatsAppClient(phone_id, token).send_text(e164, task.message)
             if result.get("success"):
-                return OutreachResult(success=True, task_id=task.task_id, lead_name=task.lead_name, channel=task.channel, mode="api", message_id=result.get("message_id",""), sent_at=now)
+                return OutreachResult(
+                    success=True, task_id=task.task_id, lead_name=task.lead_name,
+                    channel=task.channel, mode="api",
+                    message_id=result.get("message_id", ""), sent_at=now,
+                )
+            # API returned failure — log and fall through to deeplink
+            log.warning(f"[Outreach] WhatsApp API returned failure: {result.get('error')}")
     except Exception as e:
-        log.warning(f"[Outreach] API failed: {e}")
-    return OutreachResult(success=True, task_id=task.task_id, lead_name=task.lead_name, channel=task.channel, mode="deeplink", deep_link=task.deep_link, sent_at=now)
+        log.warning(f"[Outreach] WhatsApp API exception: {e}")
+
+    # ── Safe deeplink fallback (all other channels or API unavailable) ─────────
+    return OutreachResult(
+        success=True, task_id=task.task_id, lead_name=task.lead_name,
+        channel=task.channel, mode="deeplink", deep_link=task.deep_link, sent_at=now,
+    )
 
 def _write_activity(lead_id: str, atype: str, subject: str, notes: str,
                     direction: str = "outbound", outcome: str = "completed") -> bool:

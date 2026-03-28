@@ -199,6 +199,41 @@ def _snapshot(record) -> dict:
     }
 
 
+def promote_overdue_records() -> int:
+    """
+    Sweep OutreachModel WHERE lifecycle_status='awaiting_response'
+    AND next_action_at <= now → set lifecycle_status='followup_due'.
+
+    This bridges the gap between 'awaiting_response' (set after send) and
+    'followup_due' (consumed by process_pending_followups). Must run before
+    process_pending_followups() for the follow-up cycle to work end-to-end.
+
+    Returns count of records promoted.
+    """
+    from services.storage.db import get_session
+    from services.storage.models.outreach import OutreachModel
+    from services.growth.policy import is_followup_overdue
+
+    now_iso = datetime.datetime.utcnow().isoformat()
+    promoted = 0
+    try:
+        with get_session() as session:
+            candidates = (
+                session.query(OutreachModel)
+                .filter_by(lifecycle_status="awaiting_response")
+                .filter(OutreachModel.next_action_at.isnot(None))
+                .all()
+            )
+            for rec in candidates:
+                if is_followup_overdue(rec.next_action_at):
+                    rec.lifecycle_status = "followup_due"
+                    promoted += 1
+        log.info(f"[FollowupEngine] promoted {promoted} records → followup_due")
+    except Exception as e:
+        log.error(f"[FollowupEngine] promote_overdue_records failed: {e}", exc_info=True)
+    return promoted
+
+
 def _set_lifecycle(record_id: str, lifecycle_status: str) -> None:
     try:
         from services.storage.db import get_session

@@ -138,19 +138,82 @@ def list_followup_due():
 def run_followup_engine():
     """
     POST /api/outreach/followups/process
-    Trigger the follow-up engine: generate reminder assets for all
-    followup_due records. Records are created with status=ready.
-    Dispatch is human-in-the-loop (not automatic).
+    Step 1: promote awaiting_response records past next_action_at → followup_due.
+    Step 2: generate reminder assets for all followup_due records.
+    Records are created with status=ready. Dispatch is human-in-the-loop.
     """
-    from services.growth.followup_engine import process_pending_followups
-    results = process_pending_followups(limit=20)
+    from services.growth.followup_engine import process_pending_followups, promote_overdue_records
+    promoted = promote_overdue_records()          # must run first
+    results  = process_pending_followups(limit=20)
     succeeded = [r for r in results if r.success]
     failed    = [r for r in results if not r.success]
     return ok({
+        "promoted":  promoted,
         "processed": len(results),
         "succeeded": len(succeeded),
         "failed":    len(failed),
         "results":   [r.to_dict() for r in results],
+    })
+
+
+@bp.route("/outreach/request-approval", methods=["POST"])
+@require_auth
+def request_outreach_approval():
+    """
+    POST /api/outreach/request-approval
+    Create an ApprovalModel for a pending outreach action.
+    The approval.details.outreach_task payload is what gets executed
+    when the approval is resolved as 'approve' via POST /api/approvals/<id>.
+
+    Body: {
+      "lead_id":   "...",
+      "lead_name": "...",
+      "phone":     "...",
+      "message":   "...",
+      "channel":   "whatsapp",   (optional, default whatsapp)
+      "audience":  "general",    (optional)
+      "attempt":   1,            (optional)
+      "risk_level": 1            (optional, 0-3)
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    lead_id   = (data.get("lead_id")   or "").strip()
+    lead_name = (data.get("lead_name") or "").strip()
+    phone     = (data.get("phone")     or "").strip()
+    message   = (data.get("message")   or "").strip()
+
+    if not lead_id or not phone or not message:
+        return _error("lead_id, phone, and message are required", 400)
+
+    channel   = data.get("channel",   "whatsapp")
+    audience  = data.get("audience",  "general")
+    attempt   = int(data.get("attempt", 1))
+    risk_level= int(data.get("risk_level", 1))
+
+    from services.storage.repositories.approval_repo import ApprovalRepository
+    approval = ApprovalRepository().create(
+        action    = f"שליחת {channel} ל-{lead_name}",
+        details   = {
+            "outreach_task": {
+                "lead_id":   lead_id,
+                "lead_name": lead_name,
+                "phone":     phone,
+                "message":   message,
+                "channel":   channel,
+                "audience":  audience,
+                "attempt":   attempt,
+            }
+        },
+        risk_level = risk_level,
+        task_id    = None,
+        requested_by = "operator",
+    )
+    log.info(f"[Outreach] approval requested id={approval.id} lead={lead_id}")
+    return ok({
+        "approval_id": approval.id,
+        "action":      approval.action,
+        "status":      approval.status,
+        "risk_level":  approval.risk_level,
     })
 
 
