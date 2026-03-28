@@ -6,16 +6,26 @@
 
 const API = (() => {
   const BASE    = '/api';
-  const SS_KEY  = 'ashbal_api_key';   // current sessionStorage key name
-  const LS_OLD  = 'api_key';          // legacy localStorage key — purge on load
+  const SS_KEY  = 'ashbal_api_key';    // sessionStorage key (current session)
+  const LS_KEY  = 'ashbal_api_key_r';  // localStorage key  (remembered across sessions)
+  const LS_OLD  = 'api_key';           // legacy key — purge on load
 
   // ── One-time: flush stale key from old localStorage name ─────────────────
   try { localStorage.removeItem(LS_OLD); } catch (_) {}
 
+  // ── On load: if a remembered key exists, promote to sessionStorage ────────
+  try {
+    const remembered = localStorage.getItem(LS_KEY);
+    if (remembered && !sessionStorage.getItem(SS_KEY)) {
+      sessionStorage.setItem(SS_KEY, remembered);
+    }
+  } catch (_) {}
+
   function getKey() {
-    // Read from sessionStorage only — no truncation, no fallback
-    const k = sessionStorage.getItem(SS_KEY) || '';
-    return k;
+    // sessionStorage first (current session), then localStorage (remembered)
+    try {
+      return sessionStorage.getItem(SS_KEY) || localStorage.getItem(LS_KEY) || '';
+    } catch (_) { return ''; }
   }
 
   function headers() {
@@ -40,13 +50,22 @@ const API = (() => {
   }
 
   return {
-    setKey(key) {
-      // Store exactly what is provided — app.js already calls .trim() before this
+    setKey(key, remember = false) {
       sessionStorage.setItem(SS_KEY, key);
-      console.log('Key stored. Len:', key.length);
+      if (remember) {
+        try { localStorage.setItem(LS_KEY, key); } catch (_) {}
+      }
     },
-    clearKey()  { sessionStorage.removeItem(SS_KEY); },
-    hasKey()    { return !!getKey(); },
+    clearKey() {
+      sessionStorage.removeItem(SS_KEY);
+      try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    },
+    hasKey()          { return !!getKey(); },
+    isRemembered()    { try { return !!localStorage.getItem(LS_KEY); } catch(_){return false;} },
+
+    // Admin
+    adminStatus: () => request('GET', '/admin/status'),
+    adminUsage:  () => request('GET', '/admin/usage'),
 
     // Generic helpers used by panels
     get:  (path)        => request('GET',  path),

@@ -2038,3 +2038,59 @@ tr:hover td { background: rgba(200,210,222,.015); }
   .cc-hub { grid-template-columns: 1fr; overflow-y: auto; }
   .cc-shell { height: auto; overflow: visible; }
 }
+
+/* ── Batch 10: Mobile FAB (Floating Action Button) ──────────────────────── */
+#mobileFab {
+  position: fixed;
+  bottom: 22px;
+  left: 18px;
+  z-index: 9000;
+  display: none;           /* hidden on desktop */
+}
+@media (max-width: 640px) {
+  #mobileFab { display: block; }
+}
+.fab-main {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--steel), #2a5a70);
+  border: 1px solid rgba(200,210,222,.2);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  transition: transform .15s;
+}
+.fab-main:active { transform: scale(.93); }
+.fab-sheet {
+  position: absolute;
+  bottom: 60px;
+  left: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 6px;
+  min-width: 180px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fab-sheet.hidden { display: none; }
+.fab-action {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  text-align: right;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .1s;
+}
+.fab-action:hover, .fab-action:active {
+  background: var(--faint);
+}

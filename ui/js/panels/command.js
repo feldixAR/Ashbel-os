@@ -32,6 +32,7 @@ const CommandPanel = (() => {
           <input class="cmd-input" id="cmdInput"
             placeholder='למשל: שלחי הודעה לשרי / הוסף ליד יוסי כהן תל אביב 0501234567 / תקבעי פגישה עם דוד ביום חמישי'
             autocomplete="off" spellcheck="false" />
+          <button class="btn btn-ghost" id="cmdMic" title="פקודה קולית" style="font-size:16px;padding:0 10px">🎤</button>
           <button class="btn btn-primary" id="cmdSubmit">שלח ↵</button>
         </div>
         <div class="quick-cmds" id="quickCmds"></div>
@@ -83,6 +84,41 @@ const CommandPanel = (() => {
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) runCommand();
     });
+
+    // ── Voice command (Web Speech API) ────────────────────────────────────
+    const micBtn = document.getElementById('cmdMic');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      // Browser doesn't support speech — hide mic button gracefully
+      if (micBtn) micBtn.style.display = 'none';
+    } else {
+      const recognition = new SR();
+      recognition.lang        = 'he-IL';   // Hebrew
+      recognition.continuous  = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = e => {
+        const transcript = e.results[0][0].transcript;
+        input.value = transcript;
+        micBtn.textContent = '🎤';
+        micBtn.style.color = '';
+        runCommand();  // auto-submit on voice result
+      };
+      recognition.onerror = () => {
+        micBtn.textContent = '🎤';
+        micBtn.style.color = '';
+      };
+      recognition.onend = () => {
+        micBtn.textContent = '🎤';
+        micBtn.style.color = '';
+      };
+
+      micBtn?.addEventListener('click', () => {
+        micBtn.textContent = '🔴';
+        micBtn.style.color = 'var(--red)';
+        recognition.start();
+      });
+    }
 
     // Draft action buttons
     document.getElementById('draftApprove').onclick = approveDraft;

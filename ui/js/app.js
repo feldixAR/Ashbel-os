@@ -63,18 +63,31 @@ const App = (() => {
     }
 
     // API key form — init dashboard only AFTER key is stored
+    // Pre-check "remember" if key is already in localStorage
+    if (API.isRemembered()) {
+      document.getElementById('apiRemember').checked = true;
+    }
+
     document.getElementById('apiKeySubmit').onclick = () => {
-      const key = document.getElementById('apiKeyInput').value.trim();
+      const key      = document.getElementById('apiKeyInput').value.trim();
+      const remember = document.getElementById('apiRemember').checked;
       if (!key) return;
-      API.setKey(key);
+      API.setKey(key, remember);
       document.getElementById('apiModal').classList.add('hidden');
-      switchTo('dashboard');   // first authenticated panel init
+      switchTo('dashboard');
       refreshBadge();
       refreshHeaderKpis();
+      _loadProfileBadge();
     };
 
     // Bell → approvals
     document.getElementById('bellBtn').onclick = () => switchTo('approvals');
+
+    // Load active business profile badge into sidebar footer
+    if (API.hasKey()) _loadProfileBadge();
+
+    // ── Mobile FAB (Floating Action Button) ─────────────────────────────────
+    _initFab();
 
     // Periodic refresh
     setInterval(refreshBadge, 30_000);
@@ -143,6 +156,53 @@ const App = (() => {
     document.getElementById('hkDeals').textContent    = deals;
     document.getElementById('hkHot').textContent      = hot;
     document.getElementById('headerKpis').style.display = '';
+  }
+
+  // ── Business profile badge in sidebar footer ─────────────────────────────
+  async function _loadProfileBadge() {
+    try {
+      const res = await API.get('/businesses');
+      if (!res.success) return;
+      const active = res.data?.active || 'ashbel';
+      const biz    = (res.data?.businesses || []).find(b => b.id === active);
+      const name   = biz?.name || active;
+      let badge = document.getElementById('bizBadge');
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'bizBadge';
+        badge.style.cssText = 'padding:10px 16px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);margin-top:auto';
+        document.getElementById('sideNav').after(badge);
+      }
+      badge.textContent = `⬡ ${name}`;
+    } catch (_) {}
+  }
+
+  // ── Mobile Floating Action Button ────────────────────────────────────────
+  function _initFab() {
+    // Only render on mobile viewport — CSS hides on desktop
+    const fab = document.createElement('div');
+    fab.id = 'mobileFab';
+    fab.innerHTML = `
+      <button class="fab-main" id="fabMain" title="פעולות מהירות">＋</button>
+      <div class="fab-sheet hidden" id="fabSheet">
+        <button class="fab-action" onclick="App.switchTo('cmd');document.getElementById('fabSheet').classList.add('hidden');setTimeout(()=>document.getElementById('cmdInput')?.focus(),150)">✍️ פקודה מהירה</button>
+        <button class="fab-action" onclick="App.switchTo('workspace');document.getElementById('fabSheet').classList.add('hidden')">📞 יומן שיחות</button>
+        <button class="fab-action" onclick="App.switchTo('revenue');document.getElementById('fabSheet').classList.add('hidden')">📊 תוכנית היום</button>
+        <button class="fab-action" onclick="App.switchTo('calendar');document.getElementById('fabSheet').classList.add('hidden')">📅 יומן</button>
+      </div>`;
+    document.body.appendChild(fab);
+
+    document.getElementById('fabMain').addEventListener('click', () => {
+      const sheet = document.getElementById('fabSheet');
+      sheet.classList.toggle('hidden');
+    });
+
+    // Close sheet when tapping outside
+    document.addEventListener('click', e => {
+      if (!fab.contains(e.target)) {
+        document.getElementById('fabSheet')?.classList.add('hidden');
+      }
+    });
   }
 
   return { init, switchTo, rerender, refreshBadge };
