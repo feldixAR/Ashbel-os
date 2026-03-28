@@ -125,16 +125,109 @@ def execute_outreach(task: OutreachTask) -> OutreachResult:
         log.warning(f"[Outreach] API failed: {e}")
     return OutreachResult(success=True, task_id=task.task_id, lead_name=task.lead_name, channel=task.channel, mode="deeplink", deep_link=task.deep_link, sent_at=now)
 
-def record_outreach_sent(task: OutreachTask) -> bool:
+def _write_activity(lead_id: str, atype: str, subject: str, notes: str,
+                    direction: str = "outbound", outcome: str = "completed") -> bool:
+    """Write an outreach execution event to ActivityModel → appears in lead timeline."""
+    if not lead_id:
+        return False
     try:
+        import uuid as _u, datetime as _dt
+        import pytz
+        from services.storage.db import get_session
+        from services.storage.models.activity import ActivityModel
+        tz = pytz.timezone("Asia/Jerusalem")
+        now_il = _dt.datetime.now(tz).isoformat()
+        with get_session() as s:
+            s.add(ActivityModel(
+                id=str(_u.uuid4()), lead_id=lead_id,
+                activity_type=atype, direction=direction,
+                subject=subject, notes=notes, outcome=outcome,
+                performed_by="system", performed_at_il=now_il,
+            ))
+        return True
+    except Exception as e:
+        log.error(f"[Outreach] _write_activity failed: {e}")
+        return False
+
+
+def record_outreach_sent(task: OutreachTask, mode: str = "deeplink") -> bool:
+    try:
+        import datetime as _dt
         from services.storage.repositories.outreach_repo import OutreachRepository
         from services.storage.repositories.lead_repo import LeadRepository
-        OutreachRepository().create(goal_id=task.goal_id or "", opp_id=task.opp_id or "", contact_name=task.lead_name, contact_phone=task.phone, channel=task.channel, message_body=task.message)
+        from services.storage.db import get_session
+        from services.storage.models.outreach import OutreachModel
+
+        # Create outreach record
+        repo    = OutreachRepository()
+        created = repo.create(
+            goal_id=task.goal_id or "", opp_id=task.opp_id or "",
+            contact_name=task.lead_name, contact_phone=task.phone,
+            channel=task.channel, message_body=task.message,
+        )
+
+        # Advance lifecycle: awaiting_response + next follow-up date
+        next_action = (_dt.datetime.utcnow() + _dt.timedelta(days=3)).isoformat()
+        with get_session() as s:
+            rec = s.get(OutreachModel, created.id)
+            if rec:
+                rec.lifecycle_status = "awaiting_response"
+                rec.next_action_at   = next_action
+                rec.status           = "sent"
+                rec.sent_at          = _dt.datetime.utcnow().isoformat()
+
+        # Lead counters
         LeadRepository().increment_attempts(task.lead_id)
-        if task.attempt == 1: LeadRepository().update_status(task.lead_id, "ניסיון קשר")
+        if task.attempt == 1:
+            LeadRepository().update_status(task.lead_id, "ניסיון קשר")
+
+        # Write to unified timeline
+        ch_label = {"whatsapp": "WhatsApp", "email": "אימייל", "sms": "SMS"}.get(task.channel, task.channel)
+        _write_activity(
+            lead_id   = task.lead_id,
+            atype     = task.channel if task.channel in ("whatsapp", "email") else "note",
+            subject   = f"שליחת {ch_label} (ניסיון {task.attempt})",
+            notes     = (task.message or "")[:300],
+            direction = "outbound",
+            outcome   = "follow_up_needed",
+        )
         return True
     except Exception as e:
         log.error(f"[Outreach] record failed: {e}"); return False
+
+
+def record_outreach_failed(task: OutreachTask, error: str = "") -> bool:
+    """Record a send failure to OutreachModel + timeline."""
+    try:
+        import uuid as _u, datetime as _dt
+        from services.storage.db import get_session
+        from services.storage.models.outreach import OutreachModel
+        from services.storage.repositories.outreach_repo import OutreachRepository
+
+        created = OutreachRepository().create(
+            goal_id=task.goal_id or "", opp_id=task.opp_id or "",
+            contact_name=task.lead_name, contact_phone=task.phone,
+            channel=task.channel, message_body=task.message,
+        )
+        with get_session() as s:
+            rec = s.get(OutreachModel, created.id)
+            if rec:
+                rec.status          = "failed"
+                rec.delivery_status = "failed"
+                rec.failure_reason  = error[:400] if error else "unknown"
+                rec.lifecycle_status = "sent"  # stays at sent — not awaiting_response
+
+        _write_activity(
+            lead_id   = task.lead_id,
+            atype     = "note",
+            subject   = f"שגיאת שליחה ב-{task.channel}",
+            notes     = error[:200] if error else "שגיאה לא ידועה",
+            direction = "outbound",
+            outcome   = "no_answer",
+        )
+        return True
+    except Exception as e:
+        log.error(f"[Outreach] record_failed error: {e}"); return False
 
 def update_pipeline_status(outreach_id: str, status: str, notes: str = "") -> bool:
     try:

@@ -51,7 +51,50 @@ def resolve_approval(approval_id: str):
         "task_id":     result.task_id,
     })
 
-    return ok({"approval": _serialize(result)})
+    # ── Approval-driven outreach execution ───────────────────────────────────
+    # If details contains outreach_task and action=approve → execute immediately.
+    exec_result = None
+    if action == "approve":
+        details = result.details or {}
+        ot = details.get("outreach_task") if isinstance(details, dict) else None
+        if ot and isinstance(ot, dict) and ot.get("lead_id") and ot.get("phone"):
+            try:
+                import uuid as _uuid
+                from engines.outreach_engine import (
+                    OutreachTask, execute_outreach,
+                    record_outreach_sent, record_outreach_failed,
+                    _build_whatsapp_link,
+                )
+                msg  = ot.get("message", "")
+                task = OutreachTask(
+                    task_id  = str(_uuid.uuid4()),
+                    lead_id  = ot["lead_id"],
+                    lead_name= ot.get("lead_name", ""),
+                    phone    = ot["phone"],
+                    channel  = ot.get("channel", "whatsapp"),
+                    message  = msg,
+                    audience = ot.get("audience", "general"),
+                    priority = ot.get("priority", 1),
+                    urgency  = "today",
+                    reason   = f"אושר על-ידי בעלים (approval {approval_id[:8]})",
+                    attempt  = ot.get("attempt", 1),
+                    deep_link= _build_whatsapp_link(ot["phone"], msg),
+                )
+                res = execute_outreach(task)
+                exec_result = {"executed": True, "mode": res.mode, "success": res.success}
+                if res.success:
+                    record_outreach_sent(task, mode=res.mode)
+                else:
+                    record_outreach_failed(task, error=res.error or "execution failed")
+                log.info(f"[Approvals] post-approval outreach lead={task.lead_id} mode={res.mode}")
+            except Exception as ex:
+                log.error(f"[Approvals] post-approval execution error: {ex}")
+                exec_result = {"executed": False, "error": str(ex)}
+
+    resp = {"approval": _serialize(result)}
+    if exec_result:
+        resp["outreach_execution"] = exec_result
+    return ok(resp)
 
 
 def _serialize(a) -> dict:

@@ -12,6 +12,7 @@ const WorkspacePanel = (() => {
   let _leads    = [];
   let _filter   = 'all';
   let _selected = null;
+  let _view     = 'leads'; // 'leads' | 'execution'
 
   function ils(n)       { return '₪' + (Number(n)||0).toLocaleString('he-IL'); }
   function initials(nm) { return (nm||'?').trim().split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
@@ -36,11 +37,18 @@ const WorkspacePanel = (() => {
               <div class="section-title">סביבת עבודה</div>
               <div class="section-sub" id="wsSub">טוען לידים...</div>
             </div>
-            <button class="btn btn-ghost" id="wsRefresh" style="font-size:12px">↻</button>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn btn-ghost" id="wsViewLeads"  style="font-size:11px;padding:4px 8px">👥 לידים</button>
+              <button class="btn btn-ghost" id="wsViewExec"   style="font-size:11px;padding:4px 8px">⚡ ביצוע</button>
+              <button class="btn btn-ghost" id="wsRefresh"    style="font-size:12px">↻</button>
+            </div>
           </div>
 
+          <!-- Execution view (hidden until toggled) -->
+          <div id="wsExecView" style="display:none"></div>
+
           <!-- Filters -->
-          <div class="leads-filter" id="wsFilters">
+          <div class="leads-filter" id="wsLeadFilters">
             <button class="filter-pill active" data-f="all">הכל</button>
             <button class="filter-pill" data-f="חם">🔥 חם</button>
             <button class="filter-pill" data-f="בטיפול">בטיפול</button>
@@ -81,11 +89,34 @@ const WorkspacePanel = (() => {
 
     await loadLeads();
 
-    document.getElementById('wsRefresh')?.addEventListener('click', loadLeads);
+    document.getElementById('wsRefresh')?.addEventListener('click', () => {
+      if (_view === 'execution') loadExecView(); else loadLeads();
+    });
 
-    document.querySelectorAll('.filter-pill').forEach(btn => {
+    document.getElementById('wsViewLeads')?.addEventListener('click', () => {
+      _view = 'leads';
+      document.getElementById('wsExecView').style.display  = 'none';
+      document.getElementById('wsLeadFilters').style.display = '';
+      document.getElementById('wsSearch').style.display    = '';
+      document.getElementById('wsLeadList').style.display  = '';
+      document.getElementById('wsViewLeads').style.opacity  = '1';
+      document.getElementById('wsViewExec').style.opacity   = '0.5';
+    });
+
+    document.getElementById('wsViewExec')?.addEventListener('click', () => {
+      _view = 'execution';
+      document.getElementById('wsExecView').style.display  = 'block';
+      document.getElementById('wsLeadFilters').style.display = 'none';
+      document.getElementById('wsSearch').style.display    = 'none';
+      document.getElementById('wsLeadList').style.display  = 'none';
+      document.getElementById('wsViewLeads').style.opacity  = '0.5';
+      document.getElementById('wsViewExec').style.opacity   = '1';
+      loadExecView();
+    });
+
+    document.querySelectorAll('#wsLeadFilters .filter-pill').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.filter-pill').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('#wsLeadFilters .filter-pill').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
         _filter = btn.dataset.f;
         renderList();
@@ -301,5 +332,110 @@ const WorkspacePanel = (() => {
     }
   }
 
-  return { render, init, selectLead, openBriefing, logCallPrompt };
+  // ── Execution View (Batch 8) ────────────────────────────────────────────────
+
+  async function loadExecView() {
+    const el = document.getElementById('wsExecView');
+    if (!el) return;
+    el.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px 0">טוען נתוני ביצוע...</div>`;
+
+    const [inboxRes, followupRes, queueRes, approvalsRes] = await Promise.all([
+      API.inbox({ limit: 20 }),
+      API.outreachFollowups(),
+      API.outreachQueue(),
+      API.approvals(),
+    ]);
+
+    const inboxThreads  = inboxRes.success  ? (inboxRes.data?.threads  || []) : [];
+    const followups     = followupRes.success? (followupRes.data?.records|| []) : [];
+    const queueTasks    = queueRes.success   ? (queueRes.data?.daily_tasks|| []) : [];
+    const approvals     = approvalsRes.success? (approvalsRes.data?.approvals|| []) : [];
+
+    const attentionThreads = inboxThreads.filter(t => t.needs_attention);
+
+    function block(icon, title, badge, content) {
+      const badgeCls = badge > 0 ? 'color:var(--red);font-weight:700' : 'color:var(--muted)';
+      return `
+        <div class="ap-block" style="margin-bottom:12px">
+          <div class="ap-lbl" style="display:flex;justify-content:space-between;align-items:center">
+            <span>${icon} ${title}</span>
+            <span style="${badgeCls}">${badge}</span>
+          </div>
+          ${content || '<div style="font-size:11px;color:var(--muted);padding:4px 0">אין פריטים</div>'}
+        </div>`;
+    }
+
+    // ── Block 1: Inbox needs attention ────────────────────────────────────────
+    const inboxContent = attentionThreads.slice(0, 5).map(t => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(34,39,49,.3);cursor:pointer"
+           onclick="WorkspacePanel.selectLeadByName('${(t.lead_name||'').replace(/'/g,'\\'')}')">
+        <div>
+          <div style="font-size:12px;font-weight:600">${t.lead_name||'לא ידוע'}</div>
+          <div style="font-size:10px;color:var(--muted)">${t.last_message?.body?.slice(0,60)||'—'}</div>
+        </div>
+        <span style="font-size:9px;color:var(--red);flex-shrink:0">● דורש תשובה</span>
+      </div>`).join('');
+
+    // ── Block 2: Due follow-ups ───────────────────────────────────────────────
+    const followupContent = followups.slice(0, 5).map(f => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(34,39,49,.3)">
+        <div>
+          <div style="font-size:12px;font-weight:600">${f.contact_name||'—'}</div>
+          <div style="font-size:10px;color:var(--muted)">${f.channel||''} · ניסיון ${f.attempt||1}</div>
+        </div>
+        <span style="font-size:9px;color:var(--amber)">${f.next_action_at?.slice(0,10)||'—'}</span>
+      </div>`).join('');
+
+    // ── Block 3: Ready to send (first contact queue) ──────────────────────────
+    const queueContent = queueTasks.slice(0, 5).map(t => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(34,39,49,.3)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${t.lead_name||'—'}</div>
+          <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.message?.slice(0,55)||''}</div>
+        </div>
+        ${t.deep_link ? `<a href="${t.deep_link}" target="_blank" style="font-size:10px;color:var(--cyan);flex-shrink:0;margin-right:4px">📱 שלח</a>` : ''}
+      </div>`).join('');
+
+    // ── Block 4: Pending approvals ────────────────────────────────────────────
+    const approvalContent = approvals.slice(0, 5).map(a => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(34,39,49,.3)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${a.action||'—'}</div>
+          <div style="font-size:10px;color:var(--muted)">סיכון: ${a.risk_level||0}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button onclick="WorkspacePanel.approveItem('${a.id}')" style="font-size:10px;padding:2px 6px;background:rgba(52,211,153,.15);border:1px solid #34d399;border-radius:4px;cursor:pointer;color:#34d399">✓</button>
+          <button onclick="WorkspacePanel.denyItem('${a.id}')"    style="font-size:10px;padding:2px 6px;background:rgba(224,82,82,.1);border:1px solid var(--red);border-radius:4px;cursor:pointer;color:var(--red)">✗</button>
+        </div>
+      </div>`).join('');
+
+    el.innerHTML =
+      block('📥', 'inbox — דורש תשובה',   attentionThreads.length, inboxContent)  +
+      block('⏰', 'follow-ups בפיגור',     followups.length,          followupContent) +
+      block('📤', 'מוכן לשליחה',           queueTasks.length,         queueContent)   +
+      block('⚑',  'ממתין לאישור',         approvals.length,          approvalContent);
+  }
+
+  async function selectLeadByName(name) {
+    const lead = _leads.find(l => l.name === name);
+    if (lead) selectLead(lead.id);
+  }
+
+  async function approveItem(approvalId) {
+    const res = await API.approve(approvalId);
+    if (res.success) {
+      Toast?.show('אושר ✓');
+      loadExecView();
+    }
+  }
+
+  async function denyItem(approvalId) {
+    const res = await API.deny(approvalId);
+    if (res.success) {
+      Toast?.show('נדחה');
+      loadExecView();
+    }
+  }
+
+  return { render, init, selectLead, selectLeadByName, openBriefing, logCallPrompt, approveItem, denyItem };
 })();

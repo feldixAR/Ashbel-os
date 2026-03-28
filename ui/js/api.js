@@ -118,6 +118,21 @@ const API = (() => {
     // ── Dashboard Command Center (Batch 7) ───────────────────────────────────
     dashboardSummary: () => request('GET', '/dashboard/summary'),
 
+    // ── Batch 8: Outreach & Execution ────────────────────────────────────────
+    outreachQueue:     ()       => request('GET',  '/outreach/queue'),
+    outreachFollowups: ()       => request('GET',  '/outreach/followups'),
+    executeOutreach:   (data)   => request('POST', '/outreach/execute', data),
+    sendToLead:        (data)   => request('POST', '/outreach/send',    data),
+    outreachLifecycle: (status) => request('GET',  `/outreach/lifecycle/${status}`),
+    setOutreachStatus: (id, lifecycleStatus, notes = '') =>
+      request('POST', `/outreach/${id}/status`, { lifecycle_status: lifecycleStatus, notes }),
+
+    // ── Batch 8: Inbox ───────────────────────────────────────────────────────
+    inbox: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request('GET', '/crm/inbox' + (qs ? '?' + qs : ''));
+    },
+
     // ── Briefing ─────────────────────────────────────────────────────────────
     identifyCaller:  (phone)       => request('POST', '/briefing/identify', { phone }),
     customerSummary: (leadId)      => request('GET',  `/briefing/summary/${leadId}`),

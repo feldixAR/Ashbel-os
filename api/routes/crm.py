@@ -454,3 +454,112 @@ def _ai_summary(lead: dict, deals: list, acts) -> dict:
         "risk":                       risk or "ללא אזהרות פעילות",
         "next_action_recommendation": lead.get("next_action") or "הגדר פעולה הבאה",
     }
+
+
+# ── Batch 8: Operational Inbox ────────────────────────────────────────────────
+
+@bp.route("/crm/inbox", methods=["GET"])
+@require_auth
+def inbox():
+    """
+    GET /api/crm/inbox
+    Returns inbound messages from the last 30 days grouped by lead,
+    with a needs_attention flag (no outbound reply within 24h).
+    Query params: ?limit=50&days=30
+    """
+    import datetime as _dt
+    from services.storage.db       import get_session
+    from services.storage.models.message import MessageModel
+    from services.storage.models.lead    import LeadModel
+
+    limit = min(int(request.args.get("limit", 50)), 200)
+    days  = min(int(request.args.get("days",  30)), 90)
+    cutoff = (_dt.datetime.utcnow() - _dt.timedelta(days=days)).isoformat()
+    now    = _dt.datetime.utcnow()
+
+    try:
+        with get_session() as s:
+            # All inbound messages within window
+            inbound = (
+                s.query(MessageModel)
+                .filter(
+                    MessageModel.direction == "inbound",
+                    MessageModel.sent_at_il >= cutoff,
+                )
+                .order_by(MessageModel.sent_at_il.desc())
+                .limit(limit)
+                .all()
+            )
+
+            # For each unique lead_id, check if there's a recent outbound reply
+            lead_ids = list({m.lead_id for m in inbound if m.lead_id})
+            outbound_lead_ids = set()
+            if lead_ids:
+                cutoff_24h = (_dt.datetime.utcnow() - _dt.timedelta(hours=24)).isoformat()
+                recent_out = (
+                    s.query(MessageModel.lead_id)
+                    .filter(
+                        MessageModel.direction == "outbound",
+                        MessageModel.lead_id.in_(lead_ids),
+                        MessageModel.sent_at_il >= cutoff_24h,
+                    )
+                    .distinct()
+                    .all()
+                )
+                outbound_lead_ids = {r.lead_id for r in recent_out}
+
+            # Fetch lead names
+            lead_map = {}
+            if lead_ids:
+                leads = s.query(LeadModel.id, LeadModel.name, LeadModel.phone).filter(
+                    LeadModel.id.in_(lead_ids)
+                ).all()
+                lead_map = {l.id: {"name": l.name, "phone": l.phone} for l in leads}
+
+        threads = {}
+        for m in inbound:
+            lid = m.lead_id or "unknown"
+            if lid not in threads:
+                linfo = lead_map.get(lid, {})
+                threads[lid] = {
+                    "lead_id":        lid,
+                    "lead_name":      linfo.get("name", "לא ידוע"),
+                    "lead_phone":     linfo.get("phone", ""),
+                    "needs_attention": lid not in outbound_lead_ids,
+                    "message_count":  0,
+                    "last_message":   None,
+                    "messages":       [],
+                }
+            threads[lid]["message_count"] += 1
+            msg_dict = {
+                "id":        m.id,
+                "channel":   m.channel,
+                "direction": m.direction,
+                "subject":   m.subject,
+                "body":      (m.body or "")[:300],
+                "status":    m.status,
+                "sent_at":   m.sent_at_il,
+            }
+            if threads[lid]["last_message"] is None:
+                threads[lid]["last_message"] = msg_dict
+            threads[lid]["messages"].append(msg_dict)
+
+        # Sort: needs_attention first, then by last message time
+        result = sorted(
+            threads.values(),
+            key=lambda t: (
+                not t["needs_attention"],
+                -(t["last_message"]["sent_at"] or "0") if t["last_message"] else "0",
+            ),
+        )
+
+        attention_count = sum(1 for t in result if t["needs_attention"])
+        return ok({
+            "total_threads":    len(result),
+            "attention_count":  attention_count,
+            "threads":          result,
+        })
+
+    except Exception as e:
+        log.error(f"[Inbox] failed: {e}", exc_info=True)
+        return _error(str(e), 500)
