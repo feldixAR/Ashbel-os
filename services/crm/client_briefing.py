@@ -230,22 +230,36 @@ def start_call_session(lead_id: str, call_id: str = "") -> CallSession:
 
 
 def end_call_session(
-    call_id:      str,
-    notes:        str,
-    outcome:      str,
-    duration_sec: int = 0,
-    performed_by: str = "operator",
+    call_id:          str,
+    notes:            str,
+    outcome:          str,
+    duration_sec:     int = 0,
+    performed_by:     str = "operator",
+    lead_id_fallback: str = "",
 ) -> Optional[dict]:
     """
     Close a call session, persist an ActivityModel, update Lead last_contact.
     Returns the persisted Activity.to_dict() or None on failure.
+
+    lead_id_fallback: used when call_id is not found in _active_sessions
+    (Gunicorn multi-worker: start and end may hit different workers).
+    If provided, the session is treated as valid even if not in memory.
     """
     session_data = _active_sessions.pop(call_id, {})
-    lead_id      = session_data.get("lead_id", "")
+    lead_id      = session_data.get("lead_id", "") or lead_id_fallback.strip()
 
     if not lead_id:
-        log.warning(f"[Briefing] end_call_session: unknown call_id={call_id}")
+        log.warning(
+            f"[Briefing] end_call_session: unknown call_id={call_id} "
+            f"and no lead_id_fallback provided"
+        )
         return None
+
+    if not session_data and lead_id_fallback:
+        log.info(
+            f"[Briefing] end_call_session: session not in memory — "
+            f"using lead_id_fallback={lead_id} (multi-worker fallback)"
+        )
 
     now_il = datetime.datetime.now(_IL_TZ).isoformat()
 

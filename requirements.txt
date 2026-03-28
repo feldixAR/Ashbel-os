@@ -37,4 +37,4 @@ requests>=2.31.0
 httpx>=0.27.0                  # sync HTTP client for Telegram / external APIs
 
 # trigger redeploy 1774333173553
-# v2.7-batch8-urlfix
+# v2.8-batch9-close

@@ -328,7 +328,9 @@ const BriefingPanel = (() => {
 
     let res;
     if (_callId) {
-      res = await API.endCall(_callId, notes, outcome, dur);
+      // Pass lead_id as fallback: if call/start and call/end hit different Gunicorn workers,
+      // the server-side session dict won't have the call_id — lead_id allows graceful persist.
+      res = await API.endCall(_callId, notes, outcome, dur, 'operator', _identity?.lead_id || '');
     } else {
       // Fallback: log activity directly
       res = await API.logActivity(_identity.lead_id, {

@@ -112,13 +112,14 @@ def end_call():
     """
     body         = request.get_json(silent=True) or {}
     call_id      = body.get("call_id", "").strip()
+    lead_id      = body.get("lead_id", "").strip()   # fallback for multi-worker
     notes        = body.get("notes", "")
     outcome      = body.get("outcome", "")
     duration_sec = int(body.get("duration_sec", 0))
     performed_by = body.get("performed_by", "operator")
 
-    if not call_id:
-        return _error("call_id is required", 400)
+    if not call_id and not lead_id:
+        return _error("call_id or lead_id is required", 400)
 
     from services.crm.client_briefing import end_call_session
     result = end_call_session(
@@ -127,6 +128,7 @@ def end_call():
         outcome=outcome,
         duration_sec=duration_sec,
         performed_by=performed_by,
+        lead_id_fallback=lead_id,
     )
     if result is None:
         return _error(f"call_id '{call_id}' not found or already ended", 404)

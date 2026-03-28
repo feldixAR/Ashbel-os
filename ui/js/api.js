@@ -139,8 +139,10 @@ const API = (() => {
     briefingContext: (leadId, n=5) => request('GET',  `/briefing/context/${leadId}?limit=${n}`),
     startCall:       (leadId, callId='') =>
       request('POST', '/briefing/call/start', { lead_id: leadId, call_id: callId }),
-    endCall: (callId, notes, outcome, durationSec = 0, performedBy = 'operator') =>
+    // leadId passed as fallback for multi-worker Gunicorn (session may live on different worker)
+    endCall: (callId, notes, outcome, durationSec = 0, performedBy = 'operator', leadId = '') =>
       request('POST', '/briefing/call/end',
-        { call_id: callId, notes, outcome, duration_sec: durationSec, performed_by: performedBy }),
+        { call_id: callId, lead_id: leadId, notes, outcome,
+          duration_sec: durationSec, performed_by: performedBy }),
   };
 })();
