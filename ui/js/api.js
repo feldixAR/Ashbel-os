@@ -5,10 +5,17 @@
  */
 
 const API = (() => {
-  const BASE = '/api';
+  const BASE    = '/api';
+  const SS_KEY  = 'ashbal_api_key';   // current sessionStorage key name
+  const LS_OLD  = 'api_key';          // legacy localStorage key — purge on load
+
+  // ── One-time: flush stale key from old localStorage name ─────────────────
+  try { localStorage.removeItem(LS_OLD); } catch (_) {}
 
   function getKey() {
-    return sessionStorage.getItem('ashbal_api_key') || '';
+    // Read from sessionStorage only — no truncation, no fallback
+    const k = sessionStorage.getItem(SS_KEY) || '';
+    return k;
   }
 
   function headers() {
@@ -20,7 +27,9 @@ const API = (() => {
 
   async function request(method, path, body = null) {
     try {
-      const opts = { method, headers: headers() };
+      const key  = getKey();
+      console.log('Outbound Key Len:', key.length, '| Path:', path);
+      const opts = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': key } };
       if (body) opts.body = JSON.stringify(body);
       const res  = await fetch(BASE + path, opts);
       const json = await res.json();
@@ -31,8 +40,12 @@ const API = (() => {
   }
 
   return {
-    setKey(key) { sessionStorage.setItem('ashbal_api_key', key); },
-    clearKey()  { sessionStorage.removeItem('ashbal_api_key'); },
+    setKey(key) {
+      // Store exactly what is provided — app.js already calls .trim() before this
+      sessionStorage.setItem(SS_KEY, key);
+      console.log('Key stored. Len:', key.length);
+    },
+    clearKey()  { sessionStorage.removeItem(SS_KEY); },
     hasKey()    { return !!getKey(); },
 
     // Generic helpers used by panels
