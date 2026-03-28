@@ -113,7 +113,11 @@ const WorkspacePanel = (() => {
       (l.phone||'').includes(q)
     );
 
-    list = [...list].sort((a,b) => (STATUS_W[b.status]||0) - (STATUS_W[a.status]||0) || (b.score||0) - (a.score||0));
+    // Batch 7: sort by computed priority_score first, then status weight, then legacy score
+    list = [...list].sort((a,b) =>
+      (b.priority_score||b.score||0) - (a.priority_score||a.score||0) ||
+      (STATUS_W[b.status]||0) - (STATUS_W[a.status]||0)
+    );
 
     const el = document.getElementById('wsLeadList');
     if (!list.length) {
@@ -126,11 +130,15 @@ const WorkspacePanel = (() => {
       const isActive = _selected?.id === l.id;
       const score    = l.priority_score || l.score || 0;
       const scoreCls = score >= 70 ? 'score-hot' : score >= 40 ? 'score-warm' : 'score-cold';
-      // RED border for missing next_action (Batch 7 enforcement)
+      // Batch 7: differentiate Missing (no next_action) vs Overdue (past due date)
+      const now          = Date.now();
       const missingAction = !l.next_action;
-      const rowBorder = missingAction
-        ? 'border-right:3px solid var(--red);padding-right:6px;'
-        : '';
+      const overdueAction = !missingAction && l.next_action_due &&
+                            new Date(l.next_action_due).getTime() < now;
+      const rowBorder = missingAction  ? 'border-right:3px solid var(--red);padding-right:6px;' :
+                        overdueAction  ? 'border-right:3px solid var(--amber);padding-right:6px;' : '';
+      const actionTag = missingAction ? '<div style="font-size:9px;color:var(--red);margin-top:2px">⚠ חסרה פעולה הבאה</div>' :
+                        overdueAction ? `<div style="font-size:9px;color:var(--amber);margin-top:2px">⏰ פעולה באיחור: ${l.next_action_due?.slice(0,10)}</div>` : '';
       return `
         <div onclick="WorkspacePanel.selectLead('${l.id}')"
              style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid rgba(34,39,49,.4);cursor:pointer;border-radius:5px;transition:.15s;${rowBorder}${isActive?'background:rgba(184,115,51,.06);':''}">
@@ -138,7 +146,7 @@ const WorkspacePanel = (() => {
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.name}</div>
             <div style="font-size:10px;color:var(--muted)">${l.company||l.sector||l.phone||''}</div>
-            ${missingAction ? '<div style="font-size:9px;color:var(--red);margin-top:2px">⚠ חסרה פעולה הבאה</div>' : ''}
+            ${actionTag}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
             <span class="pill ${pillCls}" style="font-size:9px">${l.status||'—'}</span>
@@ -260,25 +268,7 @@ const WorkspacePanel = (() => {
       </div>
     `;
 
-    loadTimeline(leadId);
     document.getElementById('wsLogSubmit')?.addEventListener('click', () => logCall(leadId));
-  }
-
-  async function loadTimeline(leadId) {
-    const res = await API.timeline(leadId, 5);
-    const el  = document.getElementById('wsTimeline');
-    if (!el) return;
-    const events = res.success ? (res.data?.events || []) : [];
-    el.innerHTML = events.length
-      ? events.map(ev=>`
-          <div class="tl-item" style="padding:5px 0">
-            <div class="tl-icon" style="width:22px;height:22px;font-size:10px">${EV_ICON[ev.event_type]||'●'}</div>
-            <div class="tl-body">
-              <div class="tl-title" style="font-size:11px">${ev.title||ev.description||ev.event_type||'פעילות'}</div>
-              <div class="tl-meta" style="font-size:9px">${relTime(ev.occurred_at)}</div>
-            </div>
-          </div>`).join('')
-      : '<div style="font-size:10px;color:var(--muted)">אין פעילות רשומה</div>';
   }
 
   function openBriefing(leadId) {
@@ -306,9 +296,8 @@ const WorkspacePanel = (() => {
       notes,
     });
     if (res.success) {
-      document.getElementById('wsLogForm').style.display = 'none';
       document.getElementById('wsNotes').value = '';
-      await loadTimeline(leadId);
+      await selectLead(leadId);
     }
   }
 

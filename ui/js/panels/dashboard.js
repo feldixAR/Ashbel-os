@@ -229,51 +229,52 @@ const DashboardPanel = (() => {
   async function init() { await load(); }
 
   async function load() {
-    const [planRes, dealsRes, leadsRes, approvalsRes] = await Promise.all([
-      API.dailyPlan(300), API.deals(), API.leads({ limit: 60 }), API.approvals(),
-    ]);
+    // ── Single source of truth: /api/dashboard/summary (Batch 7) ──────────
+    const res = await API.dashboardSummary();
+    if (!res.success) {
+      _setText('cc2FocusScore', 'ERR');
+      _setText('cc2RecTitle', 'שגיאה בטעינת נתונים — נסה שוב');
+      _setText('cc2RecText', res.error || 'לא ניתן לטעון את מרכז השליטה');
+      return;
+    }
 
-    const plan      = planRes.success      ? (planRes.data || {})                 : {};
-    const deals     = dealsRes.success     ? (dealsRes.data?.deals || [])         : [];
-    const leads     = leadsRes.success     ? (leadsRes.data?.leads || [])         : [];
-    const approvals = approvalsRes.success ? (approvalsRes.data?.approvals || []) : [];
+    const snap  = res.data.revenue_snapshot    || {};
+    const queue = res.data.today_queue         || [];   // top-7 priority leads
+    const hot   = res.data.hot_leads           || [];   // status === 'חם'
+    const stuck = res.data.stuck_deals         || [];   // no activity 5d
+    const bott  = res.data.bottlenecks         || [];   // missing next_action
+    const recs  = res.data.recommended_actions || [];   // AI rec list
 
-    const active   = deals.filter(d => !['won','lost'].includes(d.stage));
-    const closing  = active.filter(d => ['negotiation','closing'].some(x => (d.stage||'').toLowerCase().includes(x)));
-    const pipeline = plan.pipeline_value || active.reduce((s,d) => s+(d.value||d.value_ils||0), 0);
-    const actions  = plan.priority_items || plan.priorities || [];
-    const hotCount = leads.filter(l => l.status === 'חם').length;
+    const pipeline = snap.pipeline    || 0;
+    const weighted = snap.weighted    || 0;
+    const topRec   = recs[0]          || {};
+    const topStuck = stuck[0]         || null;
 
-    // Top strip
-    const stripVals = ['Online', 'High', String(active.length), String(actions.length)];
-    stripVals.forEach((v, i) => { const el = document.getElementById(`cc2s${i}`); if (el) el.textContent = v; });
+    // ── Top strip ──────────────────────────────────────────────────────────
+    [
+      'Online',
+      ils(weighted),
+      String(snap.active_deals || 0),
+      String(snap.hot_leads_count || 0),
+    ].forEach((v, i) => _setText(`cc2s${i}`, v));
 
-    // Focus score
-    const focusPct = Math.min(Math.round((pipeline / 200_000) * 100), 99) || 1;
-    const fEl = document.getElementById('cc2FocusScore');
-    if (fEl) fEl.textContent = focusPct + '%';
+    // ── Focus score: weighted / pipeline ratio ─────────────────────────────
+    const focusPct = pipeline > 0
+      ? Math.min(Math.round((weighted / pipeline) * 100), 99)
+      : 1;
+    _setText('cc2FocusScore', focusPct + '%');
 
-    // Floating ring chips
-    const pressureScore = Math.min(Math.round((closing.length / Math.max(active.length, 1)) * 100), 99);
-    const riskCount     = active.filter(d => {
-      const s = (d.stage||'').toLowerCase();
-      return ['negotiation','closing'].some(x => s.includes(x));
-    }).length;
-    const topClosing = [...closing].sort((a,b) => (b.value||b.value_ils||0)-(a.value||a.value_ils||0))[0];
-    _setText('cc2Pressure', pressureScore);
-    _setText('cc2Risk',     riskCount);
-    _setText('cc2Next',     topClosing ? 'שיחת סגירה' : 'מעקב');
+    // ── Floating ring chips ────────────────────────────────────────────────
+    _setText('cc2Pressure', String(bott.length));     // missing next_action = revenue pressure
+    _setText('cc2Risk',     String(stuck.length));    // stuck deals = risk exposure
+    _setText('cc2Next',     topRec.action ? topRec.action.slice(0, 8) : 'מעקב');
 
-    // Side signals
-    const nearClose = active.filter(d => ['negotiation','proposal'].some(x => (d.stage||'').toLowerCase().includes(x)));
-    const nearVal   = nearClose.reduce((s,d) => s+(d.value||d.value_ils||0), 0);
-    const urgency   = approvals.length > 2 ? 'גבוהה' : approvals.length > 0 ? 'בינונית' : 'נמוכה';
-    const topAction = actions[0]?.title || (topClosing ? 'סגירה' : 'מעקב');
+    // ── Side signal cards ──────────────────────────────────────────────────
     _html('cc2SideSignals', [
-      { label: 'פוטנציאל מימוש קרוב', value: ils(nearVal),  sub: `${nearClose.length} הזדמנויות פעילות` },
-      { label: 'רמת דחיפות ניהולית', value: urgency,       sub: `${approvals.length} החלטות מחכות להכרעה` },
-      { label: 'חשיפת סיכון',         value: String(riskCount), sub: 'עסקאות דורשות התערבות' },
-      { label: 'הפעולה המומלצת כעת',  value: topAction.slice(0,12), sub: 'פעל היום לסגירה' },
+      { label: 'צינור עסקאות פעיל',  value: ils(pipeline),              sub: `${snap.active_deals||0} עסקאות פתוחות` },
+      { label: 'לידים חמים',          value: String(snap.hot_leads_count||0), sub: `${hot.length} לידים בעדיפות גבוהה` },
+      { label: 'עסקאות תקועות',       value: String(stuck.length),       sub: 'ללא פעילות 5 ימים' },
+      { label: 'חסרה פעולה הבאה',     value: String(bott.length),        sub: 'לידים דורשים הגדרת מהלך' },
     ].map(s => `
     <div class="cc2-signal-card">
       <div class="cc2-sc-label">${s.label}</div>
@@ -281,28 +282,38 @@ const DashboardPanel = (() => {
       <div class="cc2-sc-sub">${s.sub}</div>
     </div>`).join(''));
 
-    // AI recommendation
-    if (topClosing) {
-      const name = topClosing.title || topClosing.name || 'עסקה מובילה';
-      _setText('cc2RecTitle', `לסגור היום את ${name} לפני ירידת מומנטום`);
-      _setText('cc2RecText', 'הלקוח חם, ההצעה פתוחה וחלון ההחלטה מצטמצם. מומלץ לבצע שיחת הנהלה ולהפעיל מהלך סגירה מונחה.');
+    // ── AI recommendation: recommended_actions[0] ──────────────────────────
+    if (topRec.lead_name) {
+      _setText('cc2RecTitle', `${topRec.action || 'פעל עכשיו'} — ${topRec.lead_name}`);
+      _setText('cc2RecText',  topRec.reason || 'ליד בעדיפות גבוהה דורש טיפול מיידי.');
     } else {
-      _setText('cc2RecTitle', 'הגדר עסקאות פעילות לקבלת המלצות מדויקות');
-      _setText('cc2RecText',  'אין עסקאות בשלב סגירה כרגע. הוסף עסקאות לקבלת ניתוח AI מותאם.');
+      _setText('cc2RecTitle', 'הגדר עסקאות ופעולות לקבלת המלצות');
+      _setText('cc2RecText',  'אין המלצות פעילות. הוסף פעולות הבאות ללידים להמשך.');
     }
     _html('cc2AsstStats', [
-      ['רמת ביטחון', focusPct + '%'],
-      ['חלון סיכון',  '6 שעות'],
-      ['פוטנציאל',    topClosing ? ils(topClosing.value||topClosing.value_ils||0) : '—'],
-    ].map(([k,v]) => `
+      ['ציון עדיפות',      topRec.score ? Math.round(topRec.score) + '/100' : '—'],
+      ['עסקאות תקועות',    String(stuck.length)],
+      ['פוטנציאל משוקלל',  ils(weighted)],
+    ].map(([k, v]) => `
     <div class="cc2-asst-stat"><span>${k}</span><span class="cc2-asst-stat-val">${v}</span></div>`).join(''));
 
-    // Decision priorities
-    const won = deals.filter(d => d.stage === 'won');
+    // ── Decision priorities: today_queue / hot_leads / bottlenecks ─────────
     _html('cc2DecCards', [
-      { title: 'מה צפוי לייצר הכנסה עכשיו', value: `${closing.length} עסקאות קרובות`,        note: `${Math.min(closing.length,2)} מהן עם הסתברות גבוהה` },
-      { title: 'איפה נדרשת הכרעה שלך',       value: `${approvals.length||Math.min(active.length,2)} החלטות`, note: approvals.length ? 'אחת מהן קריטית לשעתיים הקרובות' : 'בדוק עסקאות פתוחות' },
-      { title: 'מה המערכת קידמה עבורך',       value: `${actions.length} פעולות`,              note: 'פולואפים, תזכורות והנעה אוטומטית' },
+      {
+        title: 'פעולות היום לפי עדיפות',
+        value: `${queue.length} לידים בתור`,
+        note:  queue[0] ? `${queue[0].lead_name} — ציון ${Math.round(queue[0].score||0)}` : 'אין לידים פעילים',
+      },
+      {
+        title: 'לידים חמים לפעולה מיידית',
+        value: `${hot.length} לידים חמים`,
+        note:  hot[0] ? `${hot[0].name} — ${ils(hot[0].potential_value||0)}` : 'אין לידים חמים',
+      },
+      {
+        title: 'צווארי בקבוק לטיפול',
+        value: `${bott.length} חסרי מהלך`,
+        note:  bott[0] ? `${bott[0].name} — הגדר פעולה הבאה` : 'אין צווארי בקבוק',
+      },
     ].map(c => `
     <div class="cc2-decision-card">
       <div class="cc2-dc-title">${c.title}</div>
@@ -310,22 +321,21 @@ const DashboardPanel = (() => {
       <div class="cc2-dc-note">${c.note}</div>
     </div>`).join(''));
 
-    // Risk queue
-    const queue = [...active].sort((a,b) => (b.value||b.value_ils||0)-(a.value||a.value_ils||0)).slice(0,3);
-    _html('cc2Queue', queue.length
-      ? queue.map(d => `
+    // ── Risk queue: stuck_deals ────────────────────────────────────────────
+    _html('cc2Queue', stuck.length
+      ? stuck.slice(0, 3).map(d => `
       <div class="cc2-queue-item">
         <div class="cc2-qi-head">
-          <span class="cc2-qi-name">${d.title||d.name||'—'}</span>
+          <span class="cc2-qi-name">${d.title || d.name || '—'}</span>
           <span class="cc2-qi-dot"></span>
         </div>
         <div class="cc2-deal-fields">
           <div class="cc2-deal-field"><div class="cc2-df-lbl">שלב</div><div class="cc2-df-val">${stageLabel(d.stage)}</div></div>
-          <div class="cc2-deal-field"><div class="cc2-df-lbl">פוטנציאל</div><div class="cc2-df-val" dir="ltr">${ils(d.value||d.value_ils||0)}</div></div>
-          <div class="cc2-deal-field"><div class="cc2-df-lbl">סיכון</div><div class="cc2-df-val">${riskLabel(d)}</div></div>
+          <div class="cc2-deal-field"><div class="cc2-df-lbl">פוטנציאל</div><div class="cc2-df-val" dir="ltr">${ils(d.value_ils||0)}</div></div>
+          <div class="cc2-deal-field"><div class="cc2-df-lbl">סיכון</div><div class="cc2-df-val" style="color:#f87171">גבוה</div></div>
         </div>
       </div>`).join('')
-      : '<div style="text-align:center;color:rgba(255,255,255,.35);padding:24px 0;font-size:13px">אין עסקאות פעילות</div>');
+      : '<div style="text-align:center;color:rgba(255,255,255,.35);padding:24px 0;font-size:13px">אין עסקאות תקועות</div>');
   }
 
   function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }

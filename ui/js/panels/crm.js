@@ -156,11 +156,11 @@ const CrmPanel = (() => {
     _detail = res.success ? res.data : null;
     renderDetail(deal, _detail);
 
-    // Load unified timeline
+    // Load unified timeline via leadFull (Batch 7)
     document.getElementById('crmTimeline').style.display = 'block';
     if (deal.lead_id) {
-      const tlRes = await API.timeline(deal.lead_id, 15);
-      const events = tlRes.success ? (tlRes.data?.events || []) : [];
+      const tlRes = await API.leadFull(deal.lead_id);
+      const events = tlRes.success ? (tlRes.data?.timeline || []) : [];
       renderTimeline(events);
     }
   }
@@ -239,12 +239,12 @@ const CrmPanel = (() => {
     el.innerHTML = events.length
       ? events.map(ev=>`
           <div class="tl-item">
-            <div class="tl-icon">${EV_ICON[ev.event_type]||'●'}</div>
+            <div class="tl-icon">${ev.icon||EV_ICON[ev.type]||'●'}</div>
             <div class="tl-body">
-              <div class="tl-title">${ev.title||ev.description||ev.event_type||'פעילות'}</div>
-              <div class="tl-meta">${ev.channel||ev.direction||''}</div>
+              <div class="tl-title">${ev.title||ev.type||'פעילות'}</div>
+              <div class="tl-meta">${ev.body||''}</div>
             </div>
-            <span class="tl-when">${relTime(ev.occurred_at)}</span>
+            <span class="tl-when">${relTime(ev.ts)}</span>
           </div>`).join('')
       : '<div class="empty-state"><div class="empty-state-msg">אין פעילות רשומה</div></div>';
   }
