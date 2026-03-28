@@ -46,7 +46,7 @@ def create_app() -> Flask:
         app.register_blueprint(blueprint, url_prefix="/api")
 
     app.register_blueprint(research_bp,  url_prefix='/api/research')
-    app.register_blueprint(outreach_bp,  url_prefix='/api/outreach')
+    app.register_blueprint(outreach_bp,  url_prefix='/api')
     app.register_blueprint(learning_bp,  url_prefix='/api/learning')
     app.register_blueprint(dashboard_bp, url_prefix='/api')
     app.register_blueprint(delivery_bp,  url_prefix='/api')
