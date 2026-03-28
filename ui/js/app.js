@@ -55,15 +55,20 @@ const App = (() => {
       nav.appendChild(el);
     });
 
-    // Render initial panel
-    switchTo('dashboard');
+    // Render initial panel only when key is already present.
+    // If key is missing, the modal is visible — do NOT init any panel yet
+    // (prevents unauthenticated prefetch of /api/dashboard/summary and others).
+    if (API.hasKey()) {
+      switchTo('dashboard');
+    }
 
-    // API key form
+    // API key form — init dashboard only AFTER key is stored
     document.getElementById('apiKeySubmit').onclick = () => {
       const key = document.getElementById('apiKeyInput').value.trim();
       if (!key) return;
       API.setKey(key);
       document.getElementById('apiModal').classList.add('hidden');
+      switchTo('dashboard');   // first authenticated panel init
       refreshBadge();
       refreshHeaderKpis();
     };

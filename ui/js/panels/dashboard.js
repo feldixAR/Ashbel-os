@@ -229,6 +229,11 @@ const DashboardPanel = (() => {
   async function init() { await load(); }
 
   async function load() {
+    // ── Guard: never fire without a key (defense-in-depth) ────────────────
+    if (!API.hasKey()) {
+      console.warn('[Dashboard] load() aborted — no API key in sessionStorage');
+      return;
+    }
     // ── Single source of truth: /api/dashboard/summary (Batch 7) ──────────
     const res = await API.dashboardSummary();
     if (!res.success) {
