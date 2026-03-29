@@ -189,3 +189,70 @@ Do not introduce the following unless explicitly approved:
 - Remote file writes
 - Additional external connectors
 - New infrastructure not required by the current approved phase
+
+---
+
+## Token Discipline Policy
+
+This policy is binding for all work in this repository.
+
+### Core rule
+
+Always optimize for maximum token efficiency without reducing code quality, correctness, safety, or implementation clarity.
+
+### Required behavior
+
+* Stay in execution mode once scope is approved.
+* Start from current repo state only.
+* Do not restart broad analysis unless a true blocker requires it.
+* Do not recap old context that is already established.
+* Do not reopen closed architecture decisions.
+* Do not ask for confirmation for normal repo work.
+* Do not create parallel systems when existing modules can be extended.
+* Prefer direct implementation over long investigation.
+
+### Repo reading discipline
+
+* Read only files required for the current task or phase.
+* Do not rescan the whole repo unless strictly necessary.
+* Do not reread files that were already verified unless they changed or are directly relevant.
+* Prefer targeted inspection over broad exploration.
+
+### Tool and agent discipline
+
+* Do not launch broad subagents unless strictly necessary.
+* Use the smallest effective tool/action path.
+* Avoid repeated scans, repeated status checks, and repeated summaries.
+* Prefer one focused pass over multiple exploratory passes.
+
+### Output discipline
+
+* Return compact status only unless more detail is explicitly requested.
+* Keep updates short and execution-first.
+* Mark completed checklist items with [x].
+* Report only what changed, what is in progress, and true blockers.
+
+### Scope discipline
+
+* Work in controlled phases.
+* Complete the current approved phase before expanding scope.
+* Do not mix unrelated batches in one run unless explicitly requested.
+* Stop only for:
+
+  * true external blockers
+  * missing credentials
+  * destructive risk
+  * deployment/runtime actions outside the repo
+
+### Architectural discipline
+
+* Preserve approved business logic, sensitive flow, auditability, fallback behavior, and AshbelOS as the independent business core.
+* No token-saving shortcut may weaken architecture or correctness.
+
+### Priority order
+
+1. Safety and correctness
+2. Approved architecture and policy compliance
+3. Token efficiency
+4. Execution speed
+5. Extra explanation
