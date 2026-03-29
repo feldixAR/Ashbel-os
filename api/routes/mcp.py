@@ -71,10 +71,6 @@ def mcp():
     if method == "notifications/initialized":
         return ("", 204)
 
-    # all other methods require auth
-    if not _auth_ok():
-        return _rpc(rid, error={"code": -32001, "message": "unauthorized"}), 401
-
     if method == "tools/list":
         return _rpc(rid, {"tools": _TOOLS})
 
