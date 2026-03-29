@@ -125,7 +125,7 @@ WhatsApp / Dashboard UI
 | Variable | Source | Notes |
 |----------|--------|-------|
 | `DATABASE_URL` | Railway PostgreSQL add-on | Auto-injected by Railway |
-| `API_KEY` | Railway secret | Required for all API routes (`Ashbel2026`) |
+| `OS_API_KEY` | Railway secret | Required for all API routes (`Ashbel2026`) |
 | `SECRET_KEY` | Railway secret | Flask session key |
 | `ANTHROPIC_API_KEY` | Railway secret | For AI-powered engines |
 | `BUSINESS_ID` | Railway env | Set to `ashbel` (default if unset) |
