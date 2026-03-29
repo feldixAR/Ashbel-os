@@ -81,7 +81,20 @@
       "Bash(grep -rn sector /c/Users/feldi/ashbel_real --include=*.py --include=*.json)",
       "Bash(grep -rn -i dj /c/Users/feldi/ashbel_real --include=*.txt --include=*.md --include=*.env*)",
       "Bash(grep -rn \"sector\\\\|email\" /c/Users/feldi/ashbel_real/services/storage/models/ --include=*.py)",
-      "Bash(grep -rn -i dj /c/AshbelOs --include=*.py --include=*.json --include=*.yaml --include=*.yml --include=*.md)"
+      "Bash(grep -rn -i dj /c/AshbelOs --include=*.py --include=*.json --include=*.yaml --include=*.yml --include=*.md)",
+      "Bash(grep -n \"delivery\\\\|telegram\\\\|test.delivery\" /c/AshbelOs/api/app.py /c/AshbelOs/api/routes/*.py)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(grep -rn \"OS_API_KEY\\\\|API_KEY\\\\|setKey\\\\|api_key\" C:/AshbelOs/api/ C:/AshbelOs/config/ --include=*.py)",
+      "Bash(find C:/AshbelOs -name .env* -not -path */.git/*)",
+      "Bash(grep -rn \"Ashbel\\\\|ashbel\\\\|2026\\\\|api.key\\\\|apikey\" C:/AshbelOs/api/ C:/AshbelOs/config/ --include=*.py --include=*.cfg --include=*.ini --include=*.env)",
+      "Bash(grep -rn \"Ashbel\\\\|ashbel\\\\|2026\" C:/AshbelOs/ui/ --include=*.js --include=*.html)",
+      "Bash(Path: ...\" to browser console before every fetch:*)",
+      "Bash(find /c/AshbelOs/ui/js/panels -type f -name *.js)",
+      "Bash(grep -r \"class.*Model\" /c/AshbelOs/services/storage/models/*.py)",
+      "Bash(grep \"\\\\.py$\")",
+      "Bash(echo \"=== Approve it ===\" curl -s -X POST \"https://ashbel-os-production.up.railway.app/api/approvals/83709307-916a-403b-ad4f-b43929fdbf0c\" -H \"X-API-Key: Ashbel2026\" -H \"Content-Type: application/json\" -d \"{\"\"action\"\":\"\"approve\"\"}\")",
+      "Bash(xargs basename:*)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_phase11_engine.py -v 2>&1)"
     ]
   }
 }
