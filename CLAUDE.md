@@ -80,6 +80,11 @@ WhatsApp / Dashboard UI
 | 7 | Research & Asset Engine | ✅ Implemented |
 | 8 | Outreach & Execution Engine | ✅ Implemented |
 | 9 | Revenue Learning Engine | ✅ Implemented |
+| 10 | Mobile Quick Actions / Voice / Fast Access / Admin Layer | ✅ Implemented |
+| 11 | Revenue Queue Scoring Engine (`GET /api/daily_revenue_queue`) | ✅ Implemented |
+| Bridge | Claude Dispatch (`POST /api/claude/preview`, `/dispatch`, `/tasks/<id>`) — sensitive flow enforced | ✅ Implemented |
+| Bridge | GPT Connector (`/api/gpt/*`) — review, redispatch, OpenAPI schema | ✅ Implemented |
+| Bridge | MCP Endpoint (`POST /api/mcp`) — ChatGPT-compatible, no-auth, `get_latest_claude_task` | ✅ Implemented |
 
 ---
 
