@@ -21,6 +21,70 @@ import logging
 from flask import Blueprint, request, jsonify
 from api.middleware import require_auth
 
+_OPENAPI_SPEC = {
+  "openapi": "3.1.0",
+  "info": {"title": "AshbelOS GPT Connector", "version": "1.0.0"},
+  "servers": [{"url": "https://ashbel-os-production.up.railway.app"}],
+  "paths": {
+    "/api/gpt/latest_task": {
+      "get": {
+        "operationId": "get_latest_claude_task",
+        "summary": "Get the most recent Claude task",
+        "security": [{"ApiKeyAuth": []}],
+        "responses": {"200": {"description": "Latest task"}}
+      }
+    },
+    "/api/gpt/tasks/{task_id}": {
+      "get": {
+        "operationId": "get_claude_task",
+        "summary": "Get a Claude task by ID",
+        "security": [{"ApiKeyAuth": []}],
+        "parameters": [{"name": "task_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "Task"}}
+      }
+    },
+    "/api/gpt/tasks/{task_id}/review": {
+      "post": {
+        "operationId": "save_review_notes",
+        "summary": "Save GPT review notes for a Claude task",
+        "security": [{"ApiKeyAuth": []}],
+        "parameters": [{"name": "task_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": True,
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "required": ["notes"],
+            "properties": {"notes": {"type": "string"}}
+          }}}
+        },
+        "responses": {"200": {"description": "Updated task"}}
+      }
+    },
+    "/api/gpt/tasks/{task_id}/redispatch": {
+      "post": {
+        "operationId": "approve_review_and_redispatch",
+        "summary": "Approve review and redispatch a follow-up instruction to Claude",
+        "security": [{"ApiKeyAuth": []}],
+        "parameters": [{"name": "task_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+        "requestBody": {
+          "required": True,
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "required": ["approved_instruction"],
+            "properties": {"approved_instruction": {"type": "string"}}
+          }}}
+        },
+        "responses": {"200": {"description": "Follow-up task result"}}
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"}
+    }
+  }
+}
+
 log = logging.getLogger(__name__)
 bp  = Blueprint("gpt_connector", __name__)
 
@@ -31,6 +95,13 @@ def _ok(data: dict, status: int = 200):
 
 def _err(message: str, status: int = 400):
     return jsonify({"success": False, "error": message}), status
+
+
+# ── GET /api/gpt/openapi.json (ChatGPT Actions schema) ───────────────────────
+
+@bp.route("/gpt/openapi.json", methods=["GET"])
+def openapi_schema():
+    return jsonify(_OPENAPI_SPEC)
 
 
 # ── GET /api/gpt/latest_task ──────────────────────────────────────────────────
