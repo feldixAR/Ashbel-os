@@ -83,8 +83,10 @@ const ClientsPanel = (() => {
     // Build enriched client list
     _clients = wonLeads.map(lead => {
       const openDeals = allDeals.filter(d => d.lead_id === lead.id && !['won','lost'].includes(d.stage));
+      const wonDeals  = allDeals.filter(d => d.lead_id === lead.id && d.stage === 'won');
       const pipeVal   = openDeals.reduce((s, d) => s + (d.value_ils || 0), 0);
-      return { ...lead, openDeals, pipeVal };
+      const wonValue  = wonDeals.reduce((s, d) => s + (d.value_ils || 0), 0);
+      return { ...lead, openDeals, pipeVal, wonValue };
     });
 
     // Compute widgets
@@ -173,7 +175,8 @@ const ClientsPanel = (() => {
               ? `<span class="cc-badge">📋 ${c.openDeals.length} עסקאות</span>`
               : '<span style="font-size:10px;color:var(--muted)">אין עסקאות פתוחות</span>'}
           </div>
-          ${c.pipeVal > 0 ? `<div style="font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:8px">${ils(c.pipeVal)} pipeline</div>` : ''}
+          ${c.wonValue > 0 ? `<div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-top:6px">✓ ${ils(c.wonValue)} נסגר</div>` : ''}
+          ${c.pipeVal  > 0 ? `<div style="font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:4px">${ils(c.pipeVal)} pipeline</div>` : ''}
           <div style="font-size:10px;color:${recColor};margin-top:6px">קשר אחרון: ${recLabel}</div>
         </div>
       `;

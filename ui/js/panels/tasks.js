@@ -118,15 +118,15 @@ const TasksPanel = (() => {
     }
 
     const tbody = tasks.length ? tasks.map(t => {
-      const leadRoute = t.lead_id ? `App.switchTo('briefing')` : `App.switchTo('leads')`;
+      const relCreated = t.created_at ? UI.relTime(t.created_at) : '—';
       return `
-      <tr style="cursor:pointer" onclick="${leadRoute}" title="פתח הקשר">
+      <tr style="cursor:pointer" onclick="TasksPanel.openTask('${t.id}','${t.lead_id||''}')" title="פתח הקשר">
         <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${(t.id || '').slice(0, 8)}</td>
         <td>${t.type || '—'}</td>
         <td>${t.action || '—'}</td>
         <td>${statusPill(t.status)}</td>
         <td style="font-family:var(--mono);font-size:11px;color:${priorityColor(t.priority || 5)}">${t.priority || 5}</td>
-        <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${(t.created_at || '').slice(0, 16).replace('T', ' ') || '—'}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--muted)" title="${(t.created_at||'').slice(0,16).replace('T',' ')}">${relCreated}</td>
       </tr>`;}).join('')
       : `<tr><td colspan="6">${UI.empty('אין משימות פעילות', '◫')}</td></tr>`;
 
@@ -148,7 +148,18 @@ const TasksPanel = (() => {
       </div>`;
   }
 
+  function openTask(id, leadId) {
+    if (leadId) {
+      App.switchTo('briefing');
+      setTimeout(() => {
+        if (typeof BriefingPanel !== 'undefined') BriefingPanel.prefillLead(leadId);
+      }, 200);
+    } else {
+      App.switchTo('leads');
+    }
+  }
+
   function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
-  return { render, init };
+  return { render, init, openTask };
 })();

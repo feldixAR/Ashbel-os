@@ -70,6 +70,15 @@ const RevenuePanel = (() => {
             </div>
           </div>
 
+          <!-- Revenue scoring queue -->
+          <div class="ap-block">
+            <div class="ap-lbl">תור ציון הכנסה <span class="live-dot" style="display:inline-block"></span></div>
+            <div id="revScoreQueue">
+              <span class="skel skel-h12 skel-w80" style="display:block;margin-bottom:5px"></span>
+              <span class="skel skel-h12 skel-w60" style="display:block;margin-bottom:5px"></span>
+            </div>
+          </div>
+
           <div class="ap-block">
             <div class="ap-lbl">Pipeline לפי שלב</div>
             <div id="revPipeRight">
@@ -83,7 +92,7 @@ const RevenuePanel = (() => {
             <div class="ap-lbl">פעולות מהירות</div>
             <div class="ap-btn-col">
               <button class="ap-btn" onclick="App.switchTo('crm')">📋 פתח עסקאות</button>
-              <button class="ap-btn" onclick="App.switchTo('workspace')">👥 לידים חמים</button>
+              <button class="ap-btn" onclick="App.switchTo('leads')">👥 לידים חמים</button>
               <button class="ap-btn" onclick="App.switchTo('calendar')">📅 יומן שבועי</button>
             </div>
           </div>
@@ -99,19 +108,22 @@ const RevenuePanel = (() => {
   }
 
   async function load() {
-    const [planRes, dealsRes] = await Promise.all([
+    const [planRes, dealsRes, revRes] = await Promise.all([
       API.dailyPlan(240),
       API.deals(),
+      API.dailyRevenue().catch(() => ({ success: false })),
     ]);
 
-    const plan  = planRes.success  ? (planRes.data  || {}) : {};
-    const deals = dealsRes.success ? (dealsRes.data?.deals || []) : [];
+    const plan     = planRes.success  ? (planRes.data  || {}) : {};
+    const deals    = dealsRes.success ? (dealsRes.data?.deals || []) : [];
+    const revQueue = revRes.success   ? (revRes.data?.queue || []) : [];
 
     renderHeader(plan);
     renderPriority(plan.priority_items || []);
     renderBlocks(plan.time_blocks || []);
     renderEvents(plan.todays_events || []);
     renderTopAction(plan.top_action || '');
+    renderScoreQueue(revQueue);
     renderRightPipe(deals);
   }
 
@@ -189,6 +201,32 @@ const RevenuePanel = (() => {
     document.getElementById('revTopAction').innerHTML = action
       ? `<div class="next-action-box">${action}</div>`
       : `<div style="font-size:11px;color:var(--muted)">אין פעולה מרכזית</div>`;
+  }
+
+  function renderScoreQueue(queue) {
+    const el = document.getElementById('revScoreQueue');
+    if (!el) return;
+    if (!queue.length) {
+      el.innerHTML = '<div style="font-size:11px;color:var(--muted)">אין לידים בתור הכנסה</div>';
+      return;
+    }
+    el.innerHTML = queue.slice(0, 5).map((item, i) => {
+      const score  = Math.round(item.score || item.priority_score || 0);
+      const name   = item.lead_name || item.name || '—';
+      const reason = item.reason    || item.next_action || '';
+      const bar    = Math.min(score, 100);
+      return `
+        <div style="padding:6px 0;border-bottom:1px solid rgba(34,39,49,.35)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span style="font-size:11px;font-weight:600">${i+1}. ${name}</span>
+            <span class="score ${score>=70?'score-hot':score>=40?'score-warm':'score-cold'}">${score}</span>
+          </div>
+          ${reason ? `<div style="font-size:9px;color:var(--muted);margin-bottom:3px">${reason.slice(0,45)}</div>` : ''}
+          <div style="height:3px;background:rgba(255,255,255,.07);border-radius:2px">
+            <div style="height:3px;background:var(--accent);border-radius:2px;width:${bar}%"></div>
+          </div>
+        </div>`;
+    }).join('');
   }
 
   function renderRightPipe(deals) {

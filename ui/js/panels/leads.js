@@ -178,12 +178,19 @@ const LeadsPanel = (() => {
       body.innerHTML = `<tr><td colspan="7">${UI.empty('אין לידים התואמים את הסינון', '○')}</td></tr>`;
       return;
     }
+    const now = new Date();
     body.innerHTML = list.map(l => {
-      const score = l.priority_score || l.score || 0;
-      const isOverdue = l.next_action_due && new Date(l.next_action_due) < new Date();
+      const score      = l.priority_score || l.score || 0;
+      const isOverdue  = l.next_action_due && new Date(l.next_action_due) < now;
+      const lastAct    = l.last_activity_at || l.updated_at;
+      const daysSince  = lastAct ? Math.floor((now - new Date(lastAct)) / 86400000) : null;
+      const staleCls   = daysSince !== null && daysSince > 14 ? 'color:var(--amber)' : 'color:var(--muted)';
       return `
-        <tr style="cursor:pointer" onclick="App.switchTo('briefing')">
-          <td style="font-weight:600;">${l.name || '—'}</td>
+        <tr style="cursor:pointer" onclick="LeadsPanel.openBriefing('${l.id}')">
+          <td style="font-weight:600;">
+            ${l.name || '—'}
+            ${daysSince !== null ? `<div style="font-size:9px;${staleCls}">${daysSince}י' ללא קשר</div>` : ''}
+          </td>
           <td>${l.city || '—'}</td>
           <td><span style="font-family:var(--mono);font-size:11px;direction:ltr;display:inline-block">${l.phone || '—'}</span></td>
           <td>${l.source || '—'}</td>
@@ -191,7 +198,8 @@ const LeadsPanel = (() => {
           <td><span class="score ${scoreClass(score)}">${Math.round(score) || '—'}</span></td>
           <td style="font-size:11px;color:${isOverdue ? 'var(--red)' : 'var(--muted)'}">
             ${l.next_action
-              ? `${l.next_action.slice(0, 30)}${l.next_action.length > 30 ? '…' : ''}`
+              ? `${l.next_action.slice(0, 30)}${l.next_action.length > 30 ? '…' : ''}
+                 ${isOverdue ? `<div style="font-size:9px;color:var(--red)">⚠ ${l.next_action_due?.slice(0,10)}</div>` : ''}`
               : '<span style="color:var(--red);font-size:10px">⚠ חסרה</span>'}
           </td>
         </tr>
@@ -252,5 +260,12 @@ const LeadsPanel = (() => {
     load();
   }
 
-  return { render, init, reload: () => load() };
+  function openBriefing(leadId) {
+    App.switchTo('briefing');
+    setTimeout(() => {
+      if (typeof BriefingPanel !== 'undefined') BriefingPanel.prefillLead(leadId);
+    }, 200);
+  }
+
+  return { render, init, reload: () => load(), openBriefing };
 })();

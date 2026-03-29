@@ -216,10 +216,26 @@ const CrmPanel = (() => {
         <div class="ap-row"><span class="ap-key">שווי</span><span class="ap-val" style="color:var(--ils);font-family:var(--mono)">${ils(deal.value_ils)}</span></div>
         <div class="ap-row"><span class="ap-key">הסתברות</span><span class="ap-val">${pct(deal.probability)}</span></div>
         <div class="ap-row"><span class="ap-key">משוקלל</span><span class="ap-val" style="font-family:var(--mono)">${ils((deal.value_ils||0)*(deal.probability||0))}</span></div>
-        <div class="ap-row"><span class="ap-key">צפי סגירה</span><span class="ap-val">${deal.expected_close_date?.slice(0,10)||'—'}</span></div>
-        <div class="ap-row"><span class="ap-key">פעולה הבאה</span><span class="ap-val">${deal.next_action||'—'}</span></div>
+        ${(() => {
+          const closeStr = deal.expected_close_date?.slice(0,10);
+          if (!closeStr) return `<div class="ap-row"><span class="ap-key">צפי סגירה</span><span class="ap-val" style="color:var(--muted)">—</span></div>`;
+          const daysLeft = Math.ceil((new Date(closeStr) - new Date()) / 86400000);
+          const closeCls = daysLeft < 0 ? 'color:var(--red)' : daysLeft < 7 ? 'color:var(--amber)' : '';
+          const closeNote = daysLeft < 0 ? ` ⚠ ${Math.abs(daysLeft)}י' עבר` : daysLeft < 7 ? ` · ${daysLeft}י' נותרו` : '';
+          return `<div class="ap-row"><span class="ap-key">צפי סגירה</span><span class="ap-val" style="${closeCls};font-family:var(--mono)">${closeStr}${closeNote}</span></div>`;
+        })()}
+        <div class="ap-row">
+          <span class="ap-key">פעולה הבאה</span>
+          <span class="ap-val" style="${!deal.next_action ? 'color:var(--red)' : ''}">
+            ${deal.next_action || '⚠ לא הוגדרה'}
+          </span>
+        </div>
         <div class="ap-row"><span class="ap-key">מקור</span><span class="ap-val">${deal.source||'—'}</span></div>
       </div>
+
+      ${!deal.next_action && !['won','lost'].includes(deal.stage) ? `
+        <div style="margin-bottom:8px">${UI.nextAction('הגדר פעולה הבאה לעסקה זו כדי למנוע עצירה')}</div>
+      ` : ''}
 
       <!-- Stage transition -->
       ${!['won','lost'].includes(deal.stage)?`
@@ -242,6 +258,12 @@ const CrmPanel = (() => {
         <button class="ap-btn" onclick="CrmPanel.updateFields('${deal.id}')">💾 עדכן</button>
         <span id="crmUpdateResult" style="font-size:10px;color:var(--muted);display:block;margin-top:4px"></span>
       </div>
+
+      <!-- Briefing link -->
+      ${deal.lead_id ? `
+        <div class="ap-block">
+          <button class="ap-btn ap-primary" onclick="CrmPanel.openBriefing('${deal.lead_id}')">📋 פתח Briefing ללקוח</button>
+        </div>` : ''}
 
       <!-- Stage history -->
       ${history.length?`
@@ -334,5 +356,12 @@ const CrmPanel = (() => {
     }
   }
 
-  return { render, init, selectDeal, transition, updateFields };
+  function openBriefing(leadId) {
+    App.switchTo('briefing');
+    setTimeout(() => {
+      if (typeof BriefingPanel !== 'undefined') BriefingPanel.prefillLead(leadId);
+    }, 200);
+  }
+
+  return { render, init, selectDeal, transition, updateFields, openBriefing };
 })();
