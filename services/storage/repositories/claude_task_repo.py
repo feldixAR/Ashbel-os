@@ -4,6 +4,7 @@ ClaudeTaskRepository — CRUD for ClaudeTaskModel.
 import logging
 from typing import Optional
 
+from sqlalchemy import desc
 from services.storage.db import get_session
 from services.storage.models.claude_task import ClaudeTaskModel
 
@@ -31,3 +32,11 @@ class ClaudeTaskRepository:
             for k, v in fields.items():
                 setattr(task, k, v)
         return task
+
+    def get_latest(self) -> Optional[ClaudeTaskModel]:
+        with get_session() as s:
+            return (
+                s.query(ClaudeTaskModel)
+                .order_by(desc(ClaudeTaskModel.updated_at), desc(ClaudeTaskModel.created_at))
+                .first()
+            )

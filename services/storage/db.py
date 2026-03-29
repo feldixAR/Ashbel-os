@@ -167,6 +167,8 @@ def _run_column_migrations() -> None:
         # Claude bridge — sensitive action flow
         "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS sensitive     BOOLEAN DEFAULT FALSE",
         "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS preview_plan  TEXT",
+        # GPT connector — review layer
+        "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS review_notes  TEXT",
     ]
     try:
         with engine.begin() as conn:

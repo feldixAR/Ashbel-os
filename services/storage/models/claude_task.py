@@ -41,6 +41,9 @@ class ClaudeTaskModel(Base, TimestampMixin):
     diff_available = Column(Boolean,      nullable=False, default=False)
     error          = Column(Text,         nullable=True)
 
+    # GPT connector — review layer
+    review_notes   = Column(Text,         nullable=True)
+
     def to_response(self) -> dict:
         """Minimal public shape returned to callers."""
         return {
@@ -52,6 +55,20 @@ class ClaudeTaskModel(Base, TimestampMixin):
             "changed_files":  self.changed_files or [],
             "diff_available": self.diff_available,
             "error":          self.error,
+            "review_notes":   self.review_notes,
+        }
+
+    def to_gpt_view(self) -> dict:
+        """Compact stable shape for GPT connector read tools."""
+        updated = self.updated_at or self.created_at
+        return {
+            "task_id":      self.id,
+            "intent":       self.instruction,
+            "preview":      self.preview_plan,
+            "status":       self.status,
+            "claude_result": self.summary,
+            "review_notes": self.review_notes,
+            "updated_at":   updated.isoformat() if updated else None,
         }
 
     def __repr__(self) -> str:

@@ -64,6 +64,9 @@ def create_app() -> Flask:
     from api.routes.claude_dispatch import bp as claude_dispatch_bp
     app.register_blueprint(claude_dispatch_bp, url_prefix='/api')
 
+    from api.routes.gpt_connector import bp as gpt_connector_bp
+    app.register_blueprint(gpt_connector_bp, url_prefix='/api')
+
     # Auth key — OS_API_KEY only (Batch 7: API_KEY fallback removed)
     _active_key = os.getenv("OS_API_KEY", "")
     print(f"Auth: OS_API_KEY Check: {_active_key[:3] if _active_key else 'MISSING'}...")
