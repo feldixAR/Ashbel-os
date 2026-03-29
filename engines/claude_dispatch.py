@@ -1,21 +1,11 @@
 """
 claude_dispatch.py — Detachable adapter: AshbelOS → Anthropic Messages API.
 
-Fully implemented:
-  - approval gate
-  - task persistence + audit timestamps
-  - task lifecycle: queued → dispatched → completed | failed
-  - real Anthropic API call (_call_claude_api)
-  - structured JSON response parsing with plaintext fallback
-  - changed_files extracted from model response when returned
+Sensitive action flow (governance-enforced):
+  Intent → Preview (/api/claude/preview) → Approval → Execute (/api/claude/dispatch) → Audit Log
 
-One remaining boundary (isolatable):
-  - _call_claude_api() calls Anthropic Messages API (real).
-    Actual file-system writes require Claude Code remote execution,
-    which is not available via Messages API — changed_files are
-    model-reported intent, not confirmed filesystem changes.
-    When Claude Code SDK remote execution is available, replace
-    only _call_claude_api() body. Contract is unchanged.
+Non-sensitive actions may dispatch directly with approved=true.
+Sensitive actions (sensitive=true) MUST pass through preview first.
 """
 import json
 import logging
@@ -35,7 +25,7 @@ Respond with a JSON object only — no markdown, no explanation outside the obje
 Schema:
 {
   "summary":       "<one-paragraph description of what was done or what should be done>",
-  "changed_files": ["<relative/path/file.py>", ...],  // files modified or that should be modified
+  "changed_files": ["<relative/path/file.py>", ...],
   "diff_available": false
 }
 
@@ -45,6 +35,23 @@ Rules:
 - Respect allowed_paths if provided: only reference files within those paths.
 """
 
+_PREVIEW_SYSTEM_PROMPT = """\
+You are a planning assistant for AshbelOS (Ashbal Aluminum).
+You receive an instruction and optional context. Do NOT execute anything.
+Describe only what you would do if asked to execute.
+Respond with a JSON object only — no markdown, no explanation outside the object.
+
+Schema:
+{
+  "preview_plan": "<step-by-step description of what would be done, what files would change, and why>"
+}
+
+Rules:
+- Be specific: list file paths, functions, and logic changes you would make.
+- Never include keys outside the schema.
+- Respect allowed_paths if provided.
+"""
+
 
 def _now() -> str:
     return datetime.datetime.utcnow().isoformat() + "Z"
@@ -52,12 +59,63 @@ def _now() -> str:
 
 # ── Public entry points ───────────────────────────────────────────────────────
 
+def preview(payload: dict) -> dict:
+    """
+    Called by POST /api/claude/preview.
+    Creates a task at status=preview_pending and returns the plan.
+    No execution occurs.
+    """
+    instruction   = payload.get("instruction", "").strip()
+    repo          = payload.get("repo")
+    branch        = payload.get("branch")
+    allowed_paths = payload.get("allowed_paths")
+    return_format = payload.get("return_format")
+    task_id       = payload.get("task_id")
+
+    id_kwarg = {"id": task_id} if task_id else {}
+
+    if not instruction:
+        task = _repo.create(
+            **id_kwarg,
+            instruction="(empty)",
+            repo=repo, branch=branch,
+            allowed_paths=allowed_paths, return_format=return_format,
+            sensitive=True, approved=False,
+            status="failed", error="instruction is required",
+        )
+        return task.to_response()
+
+    task = _repo.create(
+        **id_kwarg,
+        instruction=instruction,
+        repo=repo, branch=branch,
+        allowed_paths=allowed_paths, return_format=return_format,
+        sensitive=True, approved=False,
+        status="preview_pending",
+    )
+
+    try:
+        result = _call_claude_preview(task)
+        _repo.update(task.id, preview_plan=result.get("preview_plan"))
+    except Exception as exc:
+        log.exception(f"[Preview] provider error for {task.id}")
+        _repo.update(task.id, status="failed", error=str(exc))
+
+    return _repo.get(task.id).to_response()
+
+
 def dispatch(payload: dict) -> dict:
     """
     Called by POST /api/claude/dispatch.
-    Returns dict matching ClaudeTaskModel.to_response().
-    Never raises — all errors captured into the task record.
+
+    Sensitive path  (sensitive=true):
+      Requires task_id pointing to an existing preview_pending task.
+      Advances that task to execution. No direct execute without prior preview.
+
+    Non-sensitive path (sensitive absent or False):
+      Existing behaviour unchanged — approved=true required, direct dispatch.
     """
+    sensitive     = payload.get("sensitive") is True
     instruction   = payload.get("instruction", "").strip()
     repo          = payload.get("repo")
     branch        = payload.get("branch")
@@ -66,17 +124,42 @@ def dispatch(payload: dict) -> dict:
     return_format = payload.get("return_format")
     task_id       = payload.get("task_id")
 
+    # ── Sensitive path ────────────────────────────────────────────────────────
+    if sensitive:
+        if not task_id:
+            return {"task_id": None, "status": "rejected", "sensitive": True,
+                    "preview_plan": None, "summary": None, "changed_files": [],
+                    "diff_available": False,
+                    "error": "sensitive actions require a preview task_id"}
+
+        task = _repo.get(task_id)
+        if task is None:
+            return {"task_id": task_id, "status": "rejected", "sensitive": True,
+                    "preview_plan": None, "summary": None, "changed_files": [],
+                    "diff_available": False,
+                    "error": "preview task not found"}
+
+        if task.status != "preview_pending":
+            return {"task_id": task_id, "status": "rejected", "sensitive": True,
+                    "preview_plan": task.preview_plan, "summary": None,
+                    "changed_files": [], "diff_available": False,
+                    "error": f"sensitive dispatch requires preview_pending task; current status: {task.status}"}
+
+        # Approved — advance existing preview task to execution
+        _repo.update(task.id, approved=True, approved_at=_now(), status="queued")
+        return _execute(task.id)
+
+    # ── Non-sensitive path (unchanged) ────────────────────────────────────────
     id_kwarg = {"id": task_id} if task_id else {}
 
-    # ── Approval gate ─────────────────────────────────────────────────────────
     if approved is not True:
         task = _repo.create(
             **id_kwarg,
             instruction=instruction or "(none)",
             repo=repo, branch=branch,
             allowed_paths=allowed_paths, return_format=return_format,
-            approved=False, status="rejected",
-            error="approved must be true to dispatch",
+            approved=False, sensitive=False,
+            status="rejected", error="approved must be true to dispatch",
         )
         log.warning(f"[Dispatch] rejected {task.id}")
         return task.to_response()
@@ -87,41 +170,20 @@ def dispatch(payload: dict) -> dict:
             instruction="(empty)",
             repo=repo, branch=branch,
             allowed_paths=allowed_paths, return_format=return_format,
-            approved=True, approved_at=_now(),
+            approved=True, approved_at=_now(), sensitive=False,
             status="failed", error="instruction is required",
         )
         return task.to_response()
 
-    # ── Create audit record at queued ─────────────────────────────────────────
     task = _repo.create(
         **id_kwarg,
         instruction=instruction,
         repo=repo, branch=branch,
         allowed_paths=allowed_paths, return_format=return_format,
-        approved=True, approved_at=_now(),
+        approved=True, approved_at=_now(), sensitive=False,
         status="queued",
     )
-
-    # ── Advance to dispatched before provider call ────────────────────────────
-    _repo.update(task.id, status="dispatched", dispatched_at=_now())
-
-    # ── Provider call ─────────────────────────────────────────────────────────
-    try:
-        result = _call_claude_api(task)
-        _repo.update(
-            task.id,
-            status="completed",
-            completed_at=_now(),
-            summary=result.get("summary"),
-            changed_files=result.get("changed_files", []),
-            diff_available=result.get("diff_available", False),
-            error=None,
-        )
-    except Exception as exc:
-        log.exception(f"[Dispatch] provider error for {task.id}")
-        _repo.update(task.id, status="failed", completed_at=_now(), error=str(exc))
-
-    return _repo.get(task.id).to_response()
+    return _execute(task.id)
 
 
 def get_task(task_id: str) -> dict | None:
@@ -129,41 +191,79 @@ def get_task(task_id: str) -> dict | None:
     return task.to_response() if task else None
 
 
-# ── Provider call — isolated boundary ────────────────────────────────────────
+# ── Shared execution (used by both sensitive and non-sensitive paths) ─────────
+
+def _execute(task_id: str) -> dict:
+    _repo.update(task_id, status="dispatched", dispatched_at=_now())
+    task = _repo.get(task_id)
+    try:
+        result = _call_claude_api(task)
+        _repo.update(
+            task_id,
+            status="completed", completed_at=_now(),
+            summary=result.get("summary"),
+            changed_files=result.get("changed_files", []),
+            diff_available=result.get("diff_available", False),
+            error=None,
+        )
+    except Exception as exc:
+        log.exception(f"[Dispatch] provider error for {task_id}")
+        _repo.update(task_id, status="failed", completed_at=_now(), error=str(exc))
+    return _repo.get(task_id).to_response()
+
+
+# ── Provider calls — isolated boundaries ─────────────────────────────────────
 
 def _call_claude_api(task) -> dict:
-    """
-    Real Anthropic Messages API call.
-
-    Returns:
-        summary       : str        — what was done / should be done
-        changed_files : list[str]  — model-reported file paths
-        diff_available: bool       — always False (Messages API, no filesystem)
-
-    To wire actual filesystem execution: replace this function body only.
-    When Claude Code remote SDK becomes available, swap body here — contract
-    and all upstream/downstream code remain unchanged.
-    """
+    """Real Anthropic call for execution. Swap body only for filesystem SDK."""
     import anthropic
 
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY env var is not set")
 
-    user_content = _build_user_message(task)
     client = anthropic.Anthropic(api_key=api_key)
-
     log.info(f"[Dispatch] calling Anthropic API for task {task.id[:8]}")
     message = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=2048,
         system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_content}],
+        messages=[{"role": "user", "content": _build_user_message(task)}],
     )
+    return _parse_response(message.content[0].text.strip())
 
+
+def _call_claude_preview(task) -> dict:
+    """Real Anthropic call for preview planning only — no execution."""
+    import anthropic
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY env var is not set")
+
+    client = anthropic.Anthropic(api_key=api_key)
+    log.info(f"[Preview] calling Anthropic API for task {task.id[:8]}")
+    message = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        system=_PREVIEW_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": _build_user_message(task)}],
+    )
     raw = message.content[0].text.strip()
-    return _parse_response(raw)
+    try:
+        text = raw
+        if text.startswith("```"):
+            text = text.split("```", 2)[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.rsplit("```", 1)[0].strip()
+        data = json.loads(text)
+        return {"preview_plan": str(data.get("preview_plan", raw))}
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return {"preview_plan": raw}
 
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _build_user_message(task) -> str:
     parts = [f"Instruction: {task.instruction}"]
@@ -177,9 +277,7 @@ def _build_user_message(task) -> str:
 
 
 def _parse_response(raw: str) -> dict:
-    """Parse model JSON response; fall back to plaintext summary on failure."""
     try:
-        # Strip accidental markdown fences
         text = raw
         if text.startswith("```"):
             text = text.split("```", 2)[1]

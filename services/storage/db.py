@@ -164,6 +164,9 @@ def _run_column_migrations() -> None:
         "ALTER TABLE deals ADD COLUMN IF NOT EXISTS expected_profit  INTEGER DEFAULT 0",
         "ALTER TABLE deals ADD COLUMN IF NOT EXISTS commercial_stage VARCHAR(60)",
         "ALTER TABLE deals ADD COLUMN IF NOT EXISTS lost_reason      TEXT",
+        # Claude bridge — sensitive action flow
+        "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS sensitive     BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS preview_plan  TEXT",
     ]
     try:
         with engine.begin() as conn:

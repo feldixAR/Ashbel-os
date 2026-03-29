@@ -23,13 +23,19 @@ class ClaudeTaskModel(Base, TimestampMixin):
     approved       = Column(Boolean,      nullable=False, default=False)
     approved_at    = Column(String(40),   nullable=True)   # ISO-8601
 
+    # Sensitive action flag (audited)
+    sensitive      = Column(Boolean,      nullable=False, default=False)
+
     # Lifecycle
     status         = Column(String(30),   nullable=False, default="queued", index=True)
-    # queued | rejected | dispatched | completed | failed
+    # preview_pending | queued | rejected | dispatched | completed | failed
     dispatched_at  = Column(String(40),   nullable=True)   # ISO-8601
     completed_at   = Column(String(40),   nullable=True)   # ISO-8601
 
-    # Result fields (populated by adapter or stub)
+    # Preview plan (populated by /preview before execution)
+    preview_plan   = Column(Text,         nullable=True)
+
+    # Result fields (populated by adapter)
     summary        = Column(Text,         nullable=True)
     changed_files  = Column(JSON,         nullable=True)   # list[str]
     diff_available = Column(Boolean,      nullable=False, default=False)
@@ -40,6 +46,8 @@ class ClaudeTaskModel(Base, TimestampMixin):
         return {
             "task_id":        self.id,
             "status":         self.status,
+            "sensitive":      self.sensitive,
+            "preview_plan":   self.preview_plan,
             "summary":        self.summary,
             "changed_files":  self.changed_files or [],
             "diff_available": self.diff_available,

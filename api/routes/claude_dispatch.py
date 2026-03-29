@@ -1,8 +1,9 @@
 """
 claude_dispatch.py — Execution bridge: AshbelOS → Claude
 
-POST /api/claude/dispatch
-GET  /api/claude/tasks/<task_id>
+POST /api/claude/preview           — sensitive actions: get plan before execution
+POST /api/claude/dispatch          — execute (sensitive: requires prior preview_pending task)
+GET  /api/claude/tasks/<task_id>   — poll any task
 """
 import logging
 from flask import Blueprint, request, jsonify
@@ -20,20 +21,43 @@ def _err(message: str, status: int = 400):
     return jsonify({"success": False, "error": message}), status
 
 
+# ── POST /api/claude/preview ─────────────────────────────────────────────────
+
+@bp.route("/claude/preview", methods=["POST"])
+@require_auth
+def preview():
+    body = request.get_json(silent=True) or {}
+
+    instruction = (body.get("instruction") or "").strip()
+    if not instruction:
+        return _err("instruction is required", 400)
+
+    from engines.claude_dispatch import preview as _preview
+    result = _preview(body)
+
+    http_status = 200 if result["status"] == "preview_pending" else 400
+    return _ok(result, http_status)
+
+
 # ── POST /api/claude/dispatch ─────────────────────────────────────────────────
 
 @bp.route("/claude/dispatch", methods=["POST"])
 @require_auth
 def dispatch():
     body = request.get_json(silent=True) or {}
+    sensitive = body.get("sensitive") is True
 
-    approved = body.get("approved")
-    if approved is not True:
-        return _err("approved must be true to dispatch", 400)
-
-    instruction = (body.get("instruction") or "").strip()
-    if not instruction:
-        return _err("instruction is required", 400)
+    if sensitive:
+        # Sensitive path: engine enforces preview_pending gate; no approved check here
+        if not body.get("task_id"):
+            return _err("sensitive actions require a preview task_id", 400)
+    else:
+        # Non-sensitive path: approved=true required
+        if body.get("approved") is not True:
+            return _err("approved must be true to dispatch", 400)
+        instruction = (body.get("instruction") or "").strip()
+        if not instruction:
+            return _err("instruction is required", 400)
 
     from engines.claude_dispatch import dispatch as _dispatch
     result = _dispatch(body)
