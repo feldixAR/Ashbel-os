@@ -10,10 +10,11 @@ const BriefingPanel = (() => {
   const STAGE_HE = { new:'חדש', qualified:'כשיר', proposal:'הצעה', negotiation:'משא ומתן', won:'זכה', lost:'הפסיד' };
   const EV_ICON  = { message:'💬', whatsapp:'📱', email:'📧', call:'📞', meeting:'🤝', note:'📝', stage_change:'🔄', calendar:'📅' };
 
-  let _identity = null;
-  let _summary  = null;
-  let _callId   = null;
-  let _callActive = false;
+  let _identity    = null;
+  let _summary     = null;
+  let _callId      = null;
+  let _callActive  = false;
+  let _ctxLimit    = 8;
 
   const ils     = n => UI.ils(n);
   function relTime(s) {
@@ -133,6 +134,7 @@ const BriefingPanel = (() => {
     _summary    = null;
     _callId     = null;
     _callActive = false;
+    _ctxLimit   = 8;
 
     document.getElementById('bfIdentify')?.addEventListener('click', identify);
     document.getElementById('bfClear')?.addEventListener('click',    clearAll);
@@ -149,12 +151,12 @@ const BriefingPanel = (() => {
   async function prefillLead(leadId) {
     const [summaryRes, contextRes] = await Promise.all([
       API.customerSummary(leadId),
-      API.briefingContext(leadId, 5),
+      API.briefingContext(leadId, _ctxLimit),
     ]);
     _identity = { identified: true, lead_id: leadId, name: summaryRes.data?.name || leadId };
     showIdentified(_identity);
     if (summaryRes.success) showSummary(summaryRes.data);
-    if (contextRes.success) showContext(contextRes.data?.events || []);
+    if (contextRes.success) showContext(contextRes.data?.events || [], contextRes.data?.total || 0);
     showCallSection(_identity.lead_id);
     showNextAction(summaryRes.data);
   }
@@ -177,10 +179,10 @@ const BriefingPanel = (() => {
     if (_identity.identified) {
       const [summaryRes, contextRes] = await Promise.all([
         API.customerSummary(_identity.lead_id),
-        API.briefingContext(_identity.lead_id, 5),
+        API.briefingContext(_identity.lead_id, _ctxLimit),
       ]);
       if (summaryRes.success) { _summary = summaryRes.data; showSummary(_summary); }
-      if (contextRes.success) showContext(contextRes.data?.events || []);
+      if (contextRes.success) showContext(contextRes.data?.events || [], contextRes.data?.total || 0);
       showNextAction(_summary);
       showCallSection(_identity.lead_id);
     }
@@ -195,7 +197,7 @@ const BriefingPanel = (() => {
           <div style="font-size:13px;font-weight:600;margin-bottom:3px">לא מזוהה</div>
           <div style="font-size:11px">${identity.phone} — לא נמצא במאגר</div>
           <div style="margin-top:10px">
-            <button class="btn btn-ghost" style="font-size:11px" onclick="App.switchTo('workspace')">+ צור ליד חדש</button>
+            <button class="btn btn-ghost" style="font-size:11px" onclick="App.switchTo('leads')">+ צור ליד חדש</button>
           </div>
         </div>`;
       return;
@@ -247,10 +249,13 @@ const BriefingPanel = (() => {
     `;
   }
 
-  function showContext(events) {
+  function showContext(events, total = 0) {
     const sec = document.getElementById('bfContextSection');
     const el  = document.getElementById('bfContextFeed');
     sec.style.display = 'block';
+
+    const hasMore = total > events.length || events.length === _ctxLimit;
+
     el.innerHTML = events.length
       ? events.map(ev=>`
           <div class="tl-item">
@@ -261,7 +266,18 @@ const BriefingPanel = (() => {
             </div>
             <span class="tl-when">${relTime(ev.occurred_at)}</span>
           </div>`).join('')
+        + (hasMore ? `<div style="text-align:center;padding:8px 0">
+            <button class="btn btn-ghost" style="font-size:11px"
+                    onclick="BriefingPanel.loadMoreContext()">טען עוד ↓ (${events.length}/${total||'?'})</button>
+          </div>` : '')
       : '<div style="color:var(--muted);font-size:11px;padding:8px 0">אין היסטוריית קשר</div>';
+  }
+
+  async function loadMoreContext() {
+    if (!_identity?.lead_id) return;
+    _ctxLimit += 10;
+    const res = await API.briefingContext(_identity.lead_id, _ctxLimit);
+    if (res.success) showContext(res.data?.events || [], res.data?.total || 0);
   }
 
   function showNextAction(summary) {
@@ -368,5 +384,5 @@ const BriefingPanel = (() => {
     document.getElementById('bfCallSection').style.display    = 'none';
   }
 
-  return { render, init, prefillLead };
+  return { render, init, prefillLead, loadMoreContext };
 })();
