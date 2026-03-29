@@ -1,9 +1,26 @@
 /**
  * communications.js — Communications Panel
- * Sources: GET /api/outreach/queue, GET /api/outreach/followups
- * Shows pending outreach, due today, overdue items with send actions.
+ * Sources: GET /api/outreach/queue, /api/outreach/followups,
+ *          GET /api/outreach/summary, GET /api/outreach/pipeline
  */
 const CommunicationsPanel = (() => {
+
+  const LIFECYCLE_HE = {
+    sent:               'נשלח',
+    awaiting_response:  'ממתין לתגובה',
+    followup_due:       'Follow-up נדרש',
+    followup_sent:      'Follow-up נשלח',
+    closed_won:         'נסגר — עסקה',
+    closed_lost:        'נסגר — ללא עסקה',
+  };
+  const LIFECYCLE_CLS = {
+    sent:              '',
+    awaiting_response: 'pv-amber',
+    followup_due:      'pv-red',
+    followup_sent:     'pv-accent',
+    closed_won:        'pv-green',
+    closed_lost:       'pv-red',
+  };
 
   function render() {
     return `
@@ -42,6 +59,7 @@ const CommunicationsPanel = (() => {
       <div class="leads-filter" id="comTabs">
         <button class="filter-pill active" data-tab="queue">תור שליחה</button>
         <button class="filter-pill" data-tab="followups">Follow-up</button>
+        <button class="filter-pill" data-tab="pipeline">מצב שוטף</button>
       </div>
 
       <div id="comInsight"></div>
@@ -52,10 +70,14 @@ const CommunicationsPanel = (() => {
 
       <!-- Followup list (hidden) -->
       <div id="comFollowupView" style="display:none">${UI.loading('טוען follow-ups...')}</div>
+
+      <!-- Pipeline list (hidden) -->
+      <div id="comPipelineView" style="display:none">${UI.loading('טוען pipeline...')}</div>
     `;
   }
 
   let _activeTab = 'queue';
+  let _pipeline  = [];
 
   async function init() {
     _activeTab = 'queue';
@@ -69,48 +91,61 @@ const CommunicationsPanel = (() => {
         document.querySelectorAll('#comTabs .filter-pill').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         _activeTab = btn.dataset.tab;
-        document.getElementById('comQueueView').style.display    = _activeTab === 'queue'     ? '' : 'none';
-        document.getElementById('comFollowupView').style.display = _activeTab === 'followups' ? '' : 'none';
+        document.getElementById('comQueueView').style.display    = _activeTab === 'queue'    ? '' : 'none';
+        document.getElementById('comFollowupView').style.display = _activeTab === 'followups'? '' : 'none';
+        document.getElementById('comPipelineView').style.display = _activeTab === 'pipeline' ? '' : 'none';
       });
     });
   }
 
   async function loadAll() {
-    const [qRes, fRes] = await Promise.all([
+    const [qRes, fRes, sumRes, pipeRes] = await Promise.all([
       API.outreachQueue(),
       API.outreachFollowups(),
+      API.outreachSummary().catch(() => ({ success: false })),
+      API.outreachPipeline().catch(() => ({ success: false })),
     ]);
 
-    const tasks     = qRes.success ? (qRes.data?.daily_tasks || qRes.data?.tasks || []) : [];
-    const followups = fRes.success ? (fRes.data?.records || fRes.data?.followups || []) : [];
+    const tasks     = qRes.success  ? (qRes.data?.daily_tasks || qRes.data?.tasks || []) : [];
+    const followups = fRes.success  ? (fRes.data?.records || fRes.data?.followups || [])  : [];
+    _pipeline       = pipeRes.success ? (pipeRes.data?.pipeline || []) : [];
 
-    const today     = new Date().toISOString().slice(0, 10);
+    // Prefer server-side aggregate counts from /summary if available
+    const sum = sumRes.success ? sumRes.data : null;
+    const today = new Date().toISOString().slice(0, 10);
     const todayTasks   = tasks.filter(t => (t.due_date || t.scheduled_at || '').slice(0, 10) <= today);
     const overdueTasks = tasks.filter(t => {
       const d = (t.due_date || t.scheduled_at || '').slice(0, 10);
       return d && d < today;
     });
 
-    _setText('comwTotal',     tasks.length);
-    _setText('comwToday',     todayTasks.length);
-    _setText('comwOverdue',   overdueTasks.length);
+    _setText('comwTotal',     sum ? sum.total_due : tasks.length);
+    _setText('comwToday',     sum ? sum.pending   : todayTasks.length);
+    _setText('comwOverdue',   sum ? sum.overdue   : overdueTasks.length);
     _setText('comwFollowups', followups.length);
     document.getElementById('comSub').textContent =
-      `${tasks.length} פניות · ${followups.length} follow-ups`;
+      `${sum ? sum.total_due : tasks.length} פניות · ${followups.length} follow-ups · ${_pipeline.length} ב-pipeline`;
 
     // Insight strip
+    const overdueCount = sum ? sum.overdue : overdueTasks.length;
+    const todayCount   = sum ? sum.pending : todayTasks.length;
     const iChips = [];
-    if (overdueTasks.length)  iChips.push({ icon: '⚠',  text: `${overdueTasks.length} פניות באיחור`,      cls: 'insight-alert' });
-    if (todayTasks.length)    iChips.push({ icon: '⏰', text: `${todayTasks.length} לביצוע היום`,          cls: 'insight-warn'  });
-    if (followups.length)     iChips.push({ icon: '↩',  text: `${followups.length} follow-ups ממתינים`,   cls: 'insight-good'  });
-    if (!iChips.length)       iChips.push({ icon: '✓',  text: 'אין פניות פעילות',                         cls: 'insight-good'  });
+    if (overdueCount)      iChips.push({ icon: '⚠',  text: `${overdueCount} פניות באיחור`,    cls: 'insight-alert' });
+    if (todayCount)        iChips.push({ icon: '⏰', text: `${todayCount} לביצוע היום`,        cls: 'insight-warn'  });
+    if (followups.length)  iChips.push({ icon: '↩',  text: `${followups.length} follow-ups`,  cls: 'insight-good'  });
+    if (!iChips.length)    iChips.push({ icon: '✓',  text: 'אין פניות פעילות',                cls: 'insight-good'  });
     const iEl = document.getElementById('comInsight');
     if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
 
-    // Next-action
-    const firstOverdue = overdueTasks[0] || todayTasks[0];
+    // Next-action — prefer top_priorities from summary, else fall back to queue
     const naEl = document.getElementById('comNextAction');
-    if (naEl && firstOverdue) {
+    const topPriority = sum?.top_priorities?.[0];
+    const firstOverdue = overdueTasks[0] || todayTasks[0];
+    if (naEl && topPriority) {
+      naEl.innerHTML = UI.nextAction(
+        `שלח פנייה ל‑${topPriority.lead_name || '—'} — ${topPriority.reason || topPriority.urgency || ''}`
+      );
+    } else if (naEl && firstOverdue) {
       naEl.innerHTML = UI.nextAction(
         `שלח פנייה ל‑${firstOverdue.lead_name || firstOverdue.contact_name || '—'} — ${firstOverdue.channel || 'whatsapp'}`
       );
@@ -118,12 +153,12 @@ const CommunicationsPanel = (() => {
 
     renderQueue(tasks);
     renderFollowups(followups);
+    renderPipeline(_pipeline);
   }
 
   function renderQueue(tasks) {
     const el  = document.getElementById('comQueueView');
     const now = new Date().toISOString().slice(0, 10);
-
     if (!tasks.length) { el.innerHTML = UI.empty('אין פניות ממתינות', '📭'); return; }
 
     el.innerHTML = tasks.map(t => {
@@ -153,7 +188,6 @@ const CommunicationsPanel = (() => {
   function renderFollowups(followups) {
     const el  = document.getElementById('comFollowupView');
     const now = new Date().toISOString().slice(0, 10);
-
     if (!followups.length) { el.innerHTML = UI.empty('אין follow-ups ממתינים', '✓'); return; }
 
     el.innerHTML = followups.map(f => {
@@ -176,6 +210,55 @@ const CommunicationsPanel = (() => {
         </div>
       `;
     }).join('');
+  }
+
+  function renderPipeline(records, filterStatus = '') {
+    const el  = document.getElementById('comPipelineView');
+    const now = new Date().toISOString().slice(0, 10);
+    const list = filterStatus ? records.filter(r => (r.status || r.lifecycle_status) === filterStatus) : records;
+
+    // Build lifecycle filter pills
+    const allStatuses = [...new Set(records.map(r => r.status || r.lifecycle_status).filter(Boolean))];
+    const pillsHtml = allStatuses.length > 1 ? `
+      <div class="leads-filter" style="margin-bottom:10px">
+        <button class="filter-pill ${!filterStatus ? 'active' : ''}"
+                onclick="CommunicationsPanel.filterPipeline('')">הכל</button>
+        ${allStatuses.map(s => `
+          <button class="filter-pill ${filterStatus === s ? 'active' : ''}"
+                  onclick="CommunicationsPanel.filterPipeline('${s}')">
+            ${LIFECYCLE_HE[s] || s}
+          </button>`).join('')}
+      </div>` : '';
+
+    if (!list.length) {
+      el.innerHTML = pillsHtml + UI.empty('אין רשומות pipeline', '○');
+      return;
+    }
+
+    el.innerHTML = pillsHtml + list.map(r => {
+      const status   = r.status || r.lifecycle_status || 'sent';
+      const nextDate = (r.next_followup || '').slice(0, 10);
+      const isOverdue = nextDate && nextDate < now;
+      const cls      = LIFECYCLE_CLS[status] || '';
+
+      return `
+        <div class="comm-item">
+          <div style="font-size:16px;flex-shrink:0">📋</div>
+          <div class="comm-info">
+            <div class="comm-name">${r.lead_name || '—'}</div>
+            <div class="comm-action">ניסיון ${r.attempt || 1} · ${nextDate ? `follow-up: ${nextDate}` : 'ללא תאריך'}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+            <span style="font-family:var(--mono);font-size:10px" class="${cls}">${LIFECYCLE_HE[status] || status}</span>
+            ${nextDate && isOverdue ? `<div class="comm-due overdue">${nextDate}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function filterPipeline(status) {
+    renderPipeline(_pipeline, status);
   }
 
   async function executeOutreach(leadId) {
@@ -205,5 +288,5 @@ const CommunicationsPanel = (() => {
 
   function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
-  return { render, init, executeOutreach };
+  return { render, init, executeOutreach, filterPipeline };
 })();

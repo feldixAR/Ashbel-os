@@ -143,6 +143,8 @@ const API = (() => {
     // ── Batch 8: Outreach & Execution ────────────────────────────────────────
     outreachQueue:     ()       => request('GET',  '/outreach/queue'),
     outreachFollowups: ()       => request('GET',  '/outreach/followups'),
+    outreachSummary:   ()       => request('GET',  '/outreach/summary'),
+    outreachPipeline:  ()       => request('GET',  '/outreach/pipeline'),
     executeOutreach:   (data)   => request('POST', '/outreach/execute', data),
     sendToLead:        (data)   => request('POST', '/outreach/send',    data),
     outreachLifecycle: (status) => request('GET',  `/outreach/lifecycle/${status}`),
