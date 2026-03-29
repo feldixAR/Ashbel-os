@@ -24,8 +24,8 @@ class ClaudeTaskModel(Base, TimestampMixin):
     approved_at    = Column(String(40),   nullable=True)   # ISO-8601
 
     # Lifecycle
-    status         = Column(String(30),   nullable=False, default="pending", index=True)
-    # pending | rejected | dispatched | completed | failed
+    status         = Column(String(30),   nullable=False, default="queued", index=True)
+    # queued | rejected | dispatched | completed | failed
     dispatched_at  = Column(String(40),   nullable=True)   # ISO-8601
     completed_at   = Column(String(40),   nullable=True)   # ISO-8601
 
