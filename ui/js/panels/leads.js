@@ -3,26 +3,9 @@
  */
 const LeadsPanel = (() => {
 
-  function scoreClass(s) {
-    if (s >= 70) return 'score-hot';
-    if (s >= 40) return 'score-warm';
-    return 'score-cold';
-  }
-
-  function statusPill(status) {
-    const map = {
-      'חדש': 'pill-steel',
-      'מתעניין': 'pill-green',
-      'ניסיון קשר': 'pill-amber',
-      'חם': 'pill-red',
-      'בטיפול': 'pill-amber',
-      'קר': 'pill-steel',
-      'סגור_זכה': 'pill-green',
-      'סגור_הפסיד': 'pill-red',
-    };
-    const cls = map[status] || '';
-    return `<span class="pill ${cls}">${status || '—'}</span>`;
-  }
+  // Delegates to shared UI primitives
+  const scoreClass  = s => s >= 70 ? 'score-hot' : s >= 40 ? 'score-warm' : 'score-cold';
+  const statusPill  = status => UI.leadPill(status);
 
   function render() {
     return `

@@ -1734,3 +1734,29 @@ tr:hover td { background: var(--surface); }
 
 /* ── KPI skeleton animation ─────────────────────────────────────────────── */
 @keyframes pulse-kpi { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* ── Shared UI primitives (ui.js) ───────────────────────────────────────── */
+.pill-accent { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: var(--accent); }
+
+.insight-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.insight-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.insight-chip.insight-good  { border-color: rgba(16,185,129,0.3);  color: var(--green); background: rgba(16,185,129,0.06); }
+.insight-chip.insight-warn  { border-color: rgba(245,158,11,0.3);  color: var(--amber); background: rgba(245,158,11,0.06); }
+.insight-chip.insight-alert { border-color: rgba(239,68,68,0.3);   color: var(--red);   background: rgba(239,68,68,0.06); }
+.insight-icon { font-size: 12px; }
