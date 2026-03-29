@@ -29,6 +29,9 @@ const LeadsPanel = (() => {
         </div>
       </div>
 
+      <div id="leadsInsight"></div>
+      <div id="leadsNextAction" style="margin-bottom:16px"></div>
+
       <div class="section-head">
         <div>
           <div class="section-title">לידים / בינה מכירתית</div>
@@ -130,6 +133,30 @@ const LeadsPanel = (() => {
     _setText('lwHot',   hot);
     _setText('lwNew',   nw);
     _setText('lwWon',   won);
+
+    // Insight strip
+    const now       = new Date();
+    const overdue   = _allLeads.filter(l => l.next_action_due && new Date(l.next_action_due) < now).length;
+    const noAction  = _allLeads.filter(l => !l.next_action && !['סגור_זכה','סגור_הפסיד'].includes(l.status)).length;
+    const iChips    = [];
+    if (hot > 0)      iChips.push({ icon: '🔥', text: `${hot} לידים חמים דורשים מגע`,   cls: 'insight-alert' });
+    if (overdue > 0)  iChips.push({ icon: '⚠',  text: `${overdue} פעולות באיחור`,        cls: 'insight-warn'  });
+    if (noAction > 0) iChips.push({ icon: '○',  text: `${noAction} ללא פעולה הבאה`,      cls: 'insight-warn'  });
+    if (!iChips.length) iChips.push({ icon: '✓', text: 'כל הלידים תקינים',               cls: 'insight-good'  });
+    const insightEl = document.getElementById('leadsInsight');
+    if (insightEl) insightEl.innerHTML = UI.insightStrip(iChips);
+
+    // Next best action
+    const topLead = _allLeads
+      .filter(l => !['סגור_זכה','סגור_הפסיד'].includes(l.status))
+      .sort((a, b) => (b.priority_score || b.score || 0) - (a.priority_score || a.score || 0))[0];
+    const naEl = document.getElementById('leadsNextAction');
+    if (naEl && topLead) {
+      naEl.innerHTML = UI.nextAction(
+        `פנה ל‑${topLead.name} — ציון ${Math.round(topLead.priority_score || topLead.score || 0)}`,
+        'פתח Briefing', `App.switchTo('briefing')`
+      );
+    }
 
     renderTable();
   }

@@ -5,22 +5,11 @@
  */
 const DashboardPanel = (() => {
 
-  // ── Helpers ────────────────────────────────────────────────────────────
-  function ils(n) {
-    n = Number(n) || 0;
-    if (n >= 1_000_000) return `₪${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000)     return `₪${Math.round(n / 1_000)}K`;
-    return `₪${n.toLocaleString('he-IL')}`;
-  }
+  // ── Helpers — delegate to shared UI primitives ────────────────────────
+  const ils = n => UI.ils(n);
   function stageLabel(s) {
     return ({ new: 'חדש', qualified: 'כשיר', proposal: 'בשלב הצעה',
               negotiation: 'לקראת סגירה', won: 'זכה', lost: 'הפסיד' })[s] || s || '—';
-  }
-  function riskLabel(deal) {
-    const s = (deal.stage || '').toLowerCase();
-    if (['negotiation','closing'].some(x => s.includes(x))) return 'גבוה';
-    if (['proposal','quote'].some(x => s.includes(x)))     return 'בינוני';
-    return 'נמוך';
   }
 
   // ── Skeleton helpers ───────────────────────────────────────────────────
@@ -87,6 +76,9 @@ const DashboardPanel = (() => {
           </div>`).join('')}
         </div>
       </header>
+
+      <!-- ── Insight strip ── -->
+      <div id="cc2Insight" style="padding:0 24px 4px"></div>
 
       <!-- ── Main ── -->
       <main class="cc2-main">
@@ -254,6 +246,14 @@ const DashboardPanel = (() => {
     const weighted = snap.weighted    || 0;
     const topRec   = recs[0]          || {};
     const topStuck = stuck[0]         || null;
+
+    // ── Insight strip ─────────────────────────────────────────────────────
+    const insights = [];
+    if (snap.hot_leads_count > 0) insights.push({ icon: '🔥', text: `${snap.hot_leads_count} לידים חמים דורשים מגע`, cls: 'insight-alert' });
+    if (stuck.length > 0)         insights.push({ icon: '⚠',  text: `${stuck.length} עסקאות תקועות ללא פעילות`, cls: 'insight-warn' });
+    if (bott.length > 0)          insights.push({ icon: '○',  text: `${bott.length} לידים חסרי פעולה הבאה`, cls: 'insight-warn' });
+    if (!insights.length)         insights.push({ icon: '✓',  text: 'כל המדדים תקינים', cls: 'insight-good' });
+    _html('cc2Insight', UI.insightStrip(insights));
 
     // ── Top strip ──────────────────────────────────────────────────────────
     [

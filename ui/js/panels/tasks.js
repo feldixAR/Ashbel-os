@@ -3,12 +3,12 @@
  */
 const TasksPanel = (() => {
 
+  // Delegate to shared UI primitives
   function statusPill(s) {
     const map   = { created: 'pill-steel', running: 'pill-amber', completed: 'pill-green', failed: 'pill-red' };
     const label = { created: 'נוצר', running: 'רץ', completed: 'הושלם', failed: 'נכשל' };
-    return `<span class="pill ${map[s] || ''}">${label[s] || s}</span>`;
+    return UI.pill(label[s] || s, map[s] || '');
   }
-
   function priorityColor(p) {
     if (p <= 2) return 'var(--red)';
     if (p <= 4) return 'var(--amber)';
@@ -36,6 +36,9 @@ const TasksPanel = (() => {
           <div class="pw-label">נכשלו</div>
         </div>
       </div>
+
+      <div id="taskInsight"></div>
+      <div id="taskNextAction" style="margin-bottom:16px"></div>
 
       <div class="section-head">
         <div>
@@ -91,6 +94,26 @@ const TasksPanel = (() => {
     _setText('twDone',    done);
     _setText('twFailed',  failed);
     document.getElementById('taskCount').textContent = `${total} משימות`;
+
+    // Insight strip
+    const iChips = [];
+    if (running > 0) iChips.push({ icon: '◌', text: `${running} משימות בריצה`,  cls: 'insight-good' });
+    if (failed > 0)  iChips.push({ icon: '⚠', text: `${failed} משימות נכשלו`,  cls: 'insight-alert' });
+    if (!iChips.length) iChips.push({ icon: '✓', text: 'אין משימות פעילות',    cls: 'insight-good' });
+    const iEl = document.getElementById('taskInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    // Next-action: highest priority open task
+    const nextTask = tasks.filter(t => t.status === 'created' || t.status === 'running')
+      .sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9))[0];
+    const naEl = document.getElementById('taskNextAction');
+    if (naEl && nextTask) {
+      naEl.innerHTML = UI.nextAction(
+        `${nextTask.type || 'משימה'}: ${nextTask.action || nextTask.id?.slice(0,8)} — עדיפות ${nextTask.priority ?? '—'}`
+      );
+    } else if (naEl) {
+      naEl.innerHTML = '';
+    }
 
     const tbody = tasks.length ? tasks.map(t => `
       <tr>

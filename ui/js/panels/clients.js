@@ -5,24 +5,10 @@
  */
 const ClientsPanel = (() => {
 
-  function ils(n) {
-    n = Number(n) || 0;
-    if (n >= 1_000_000) return `₪${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000)     return `₪${Math.round(n / 1_000)}K`;
-    return `₪${n.toLocaleString('he-IL')}`;
-  }
-
+  const ils     = n => UI.ils(n);
+  const relTime = s => UI.relTime(s);
   function initials(name) {
     return (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  }
-
-  function relTime(s) {
-    if (!s) return '—';
-    const diff = Math.floor((Date.now() - new Date(s)) / 60000);
-    if (diff < 2)    return 'כעת';
-    if (diff < 60)   return `לפני ${diff} דק'`;
-    if (diff < 1440) return `לפני ${Math.floor(diff/60)} שע'`;
-    return `לפני ${Math.floor(diff/1440)} ימ'`;
   }
 
   function render() {
@@ -46,6 +32,9 @@ const ClientsPanel = (() => {
           <div class="pw-label">קשר אחרון (ימים)</div>
         </div>
       </div>
+
+      <div id="clInsight" style="margin-bottom:12px"></div>
+      <div id="clNextAction" style="margin-bottom:16px"></div>
 
       <div class="section-head">
         <div>
@@ -114,6 +103,34 @@ const ClientsPanel = (() => {
     _setText('clwPipeline', ils(totalPipe));
     _setText('clwDeals',    totalDeals);
     _setText('clwRecent',   minDays);
+
+    // Insight strip
+    const dormant  = _clients.filter(c => {
+      const d = c.last_activity_at || c.updated_at;
+      return d && Math.floor((Date.now() - new Date(d)) / 86400000) > 30;
+    });
+    const noDeals  = _clients.filter(c => c.openDeals.length === 0);
+    const iChips   = [];
+    if (dormant.length)  iChips.push({ icon: '⏰', text: `${dormant.length} לקוחות ללא קשר מעל 30 יום`, cls: 'insight-warn' });
+    if (noDeals.length)  iChips.push({ icon: '○',  text: `${noDeals.length} לקוחות ללא עסקאות פתוחות`, cls: 'insight-warn' });
+    if (!iChips.length)  iChips.push({ icon: '✓',  text: 'כל הלקוחות מטופלים', cls: 'insight-good' });
+    const iEl = document.getElementById('clInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    // Next-action: dormant client with highest pipeline
+    const nextClient = (dormant.length ? dormant : _clients)
+      .sort((a, b) => b.pipeVal - a.pipeVal)[0];
+    const naEl = document.getElementById('clNextAction');
+    if (naEl && nextClient) {
+      const daysSince = nextClient.last_activity_at
+        ? Math.floor((Date.now() - new Date(nextClient.last_activity_at)) / 86400000)
+        : null;
+      const label = daysSince !== null ? `ללא קשר ${daysSince} ימים` : 'לא נוצר קשר';
+      naEl.innerHTML = UI.nextAction(
+        `יצור קשר עם ${nextClient.name} — ${label}`,
+        'פתח Briefing', `ClientsPanel.openBriefing('${nextClient.id}')`
+      );
+    }
 
     renderGrid();
   }

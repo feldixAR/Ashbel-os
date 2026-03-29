@@ -12,16 +12,9 @@ const CrmPanel = (() => {
   let _selected = null;
   let _detail   = null;
 
-  function ils(n)    { return '₪' + (Number(n)||0).toLocaleString('he-IL'); }
-  function pct(p)    { return Math.round((Number(p)||0)*100)+'%'; }
-  function relTime(s) {
-    if (!s) return '';
-    const diff = Math.floor((Date.now() - new Date(s)) / 60000);
-    if (diff < 2)    return 'כעת';
-    if (diff < 60)   return `${diff} דק'`;
-    if (diff < 1440) return `${Math.floor(diff/60)} שע'`;
-    return `${Math.floor(diff/1440)} ימ'`;
-  }
+  const ils     = n => UI.ils(n);
+  const relTime = s => UI.relTime(s);
+  function pct(p) { return Math.round((Number(p)||0)*100)+'%'; }
 
   function render() {
     return `
@@ -29,6 +22,9 @@ const CrmPanel = (() => {
 
         <!-- LEFT: Deals list + timeline -->
         <div class="ws-main" style="padding:20px">
+
+          <div id="crmWidgets"></div>
+          <div id="crmInsight" style="margin-bottom:16px"></div>
 
           <div class="section-head">
             <div>
@@ -115,6 +111,29 @@ const CrmPanel = (() => {
     const res = await API.deals();
     _deals = res.success ? (res.data?.deals || []) : [];
     document.getElementById('crmSub').textContent = `${_deals.length} עסקאות`;
+
+    // Widget bar
+    const active   = _deals.filter(d => !['won','lost'].includes(d.stage));
+    const pipeline = active.reduce((s, d) => s + (d.value_ils || 0), 0);
+    const weighted = active.reduce((s, d) => s + (d.value_ils || 0) * (d.probability || 0), 0);
+    const stuck    = _deals.filter(d => !d.next_action && !['won','lost'].includes(d.stage));
+    const wEl = document.getElementById('crmWidgets');
+    if (wEl) wEl.innerHTML = UI.widgetBar([
+      { val: active.length,    label: 'עסקאות פעילות',  cls: 'pv-accent' },
+      { val: UI.ils(pipeline), label: 'Pipeline',        cls: 'pv-amber'  },
+      { val: UI.ils(weighted), label: 'משוקלל',          cls: 'pv-green'  },
+      { val: stuck.length,     label: 'ללא פעולה הבאה', cls: stuck.length ? 'pv-red' : '' },
+    ]);
+
+    // Insight strip
+    const closing = _deals.filter(d => d.stage === 'negotiation');
+    const iChips  = [];
+    if (closing.length)   iChips.push({ icon: '🎯', text: `${closing.length} עסקאות בשלב סגירה`, cls: 'insight-alert' });
+    if (stuck.length)     iChips.push({ icon: '⚠',  text: `${stuck.length} עסקאות חסרות פעולה הבאה`, cls: 'insight-warn' });
+    if (!iChips.length)   iChips.push({ icon: '✓',  text: 'כל העסקאות עם פעולות הבאות', cls: 'insight-good' });
+    const iEl = document.getElementById('crmInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
     renderDealList('');
   }
 
