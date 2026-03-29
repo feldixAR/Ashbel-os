@@ -141,3 +141,46 @@ WhatsApp / Dashboard UI
 5. **Health check must return HTTP 200** with real proof, not assumption.
 6. **Secrets never committed** — use `.env.example` as reference only.
 7. **Axis 1 and Axis 2 are closed.** Do not reopen unless a new regression is proven with HTTP evidence.
+8. **Work in small steps only.** Edit existing modules in place; prefer extension over parallel systems.
+9. **Before sensitive implementation:** preview must be clear and approval explicit.
+
+---
+
+## Governance Policy
+
+> Source of truth: governance document. This section is its adapter. If conflict exists, governance doc wins until this section is corrected.
+
+### Product Layers
+- **AshbelOS** is the independent business core. Its autonomy must not be weakened.
+- **OpenClaw** is a detachable orchestration/control layer. It orchestrates AshbelOS; it does not replace it.
+- The Claude bridge (`engines/claude_dispatch.py`, `api/routes/claude_dispatch.py`) is an orchestration interface only — not business core.
+
+### Sensitive Action Flow (mandatory)
+```
+Intent → Preview → Approval → Execute → Audit Log
+```
+No sensitive action may skip Preview or Approval.
+
+### Business Logic Residency (must stay native to AshbelOS)
+- Business memory
+- Lead scoring
+- Revenue logic
+- Israeli business adaptation
+- Critical execution fallback paths
+
+These may be orchestrated externally but must not be relocated as source of truth.
+
+### Fallback Policy
+Critical execution paths must support AshbelOS-native fallback. If any external bridge or orchestration layer fails, core business execution must remain possible through AshbelOS directly.
+
+### Wave One External Channels
+**Approved:** Telegram only.
+
+### Excluded from Active Approved Scope
+Do not introduce the following unless explicitly approved:
+- WhatsApp execution (route exists; do not expand)
+- Email execution
+- Calendar execution
+- Remote file writes
+- Additional external connectors
+- New infrastructure not required by the current approved phase
