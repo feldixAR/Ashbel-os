@@ -10,7 +10,6 @@ Auth: X-API-Key header or Authorization: Bearer <key>
 """
 import json
 import logging
-import os
 
 from flask import Blueprint, request, jsonify
 
@@ -32,15 +31,6 @@ _TOOLS = [
         },
     }
 ]
-
-
-def _auth_ok() -> bool:
-    raw_env = os.getenv("OS_API_KEY", "").strip().strip('"').strip("'")
-    client = (
-        request.headers.get("X-API-Key", "")
-        or request.headers.get("Authorization", "").removeprefix("Bearer ")
-    ).strip()
-    return bool(raw_env) and client == raw_env
 
 
 def _rpc(req_id, result=None, error=None):

@@ -206,6 +206,7 @@ def _execute(task_id: str) -> dict:
             diff_available=result.get("diff_available", False),
             error=None,
         )
+        _notify_telegram(task_id, result.get("summary", ""))
     except Exception as exc:
         log.exception(f"[Dispatch] provider error for {task_id}")
         _repo.update(task_id, status="failed", completed_at=_now(), error=str(exc))
@@ -213,6 +214,23 @@ def _execute(task_id: str) -> dict:
 
 
 # ── Provider calls — isolated boundaries ─────────────────────────────────────
+
+def _notify_telegram(task_id: str, summary: str) -> None:
+    """Send Wave One Telegram notification on task completion. Fails silently."""
+    try:
+        from services.telegram_service import telegram_service
+        task = _repo.get(task_id)
+        source = getattr(task, "orchestration_source", None) or "direct"
+        text = (
+            f"✅ *AshbelOS Task Complete*\n"
+            f"Source: `{source}`\n"
+            f"Task: `{task_id[:8]}`\n"
+            f"Summary: {summary[:300] if summary else '—'}"
+        )
+        telegram_service.send(text)
+    except Exception:
+        log.debug("[Dispatch] Telegram notification skipped (not configured or failed)")
+
 
 def _call_claude_api(task) -> dict:
     """Real Anthropic call for execution. Swap body only for filesystem SDK."""

@@ -44,6 +44,9 @@ class ClaudeTaskModel(Base, TimestampMixin):
     # GPT connector — review layer
     review_notes   = Column(Text,         nullable=True)
 
+    # Orchestration source — audit tagging (openclaw / direct / gpt / mcp)
+    orchestration_source = Column(String(60), nullable=True, index=True)
+
     def to_response(self) -> dict:
         """Minimal public shape returned to callers."""
         return {
@@ -55,7 +58,8 @@ class ClaudeTaskModel(Base, TimestampMixin):
             "changed_files":  self.changed_files or [],
             "diff_available": self.diff_available,
             "error":          self.error,
-            "review_notes":   self.review_notes,
+            "review_notes":          self.review_notes,
+            "orchestration_source":  self.orchestration_source,
         }
 
     def to_gpt_view(self) -> dict:
@@ -67,8 +71,9 @@ class ClaudeTaskModel(Base, TimestampMixin):
             "preview":      self.preview_plan,
             "status":       self.status,
             "claude_result": self.summary,
-            "review_notes": self.review_notes,
-            "updated_at":   updated.isoformat() if updated else None,
+            "review_notes":         self.review_notes,
+            "orchestration_source": self.orchestration_source,
+            "updated_at":           updated.isoformat() if updated else None,
         }
 
     def __repr__(self) -> str:
