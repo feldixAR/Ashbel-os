@@ -1,5 +1,6 @@
 /**
  * approvals.js — Approvals and Audit Panel
+ * Tabs: pending approvals | audit history
  */
 const ApprovalsPanel = (() => {
 
@@ -19,6 +20,10 @@ const ApprovalsPanel = (() => {
           <div class="pw-val pv-green" id="apwLowRisk">—</div>
           <div class="pw-label">סיכון נמוך</div>
         </div>
+        <div class="pw-chip">
+          <div class="pw-val" id="apwResolved">—</div>
+          <div class="pw-label">הוחלט</div>
+        </div>
       </div>
 
       <div id="apInsight"></div>
@@ -31,53 +36,87 @@ const ApprovalsPanel = (() => {
         </div>
         <button class="btn btn-ghost" onclick="ApprovalsPanel.reload()">↻ רענן</button>
       </div>
-      <div id="approvalsList">${UI.loading('טוען אישורים...')}</div>
+
+      <!-- Tab bar -->
+      <div class="leads-filter" id="apTabs">
+        <button class="filter-pill active" data-tab="pending">ממתינים</button>
+        <button class="filter-pill" data-tab="history">היסטוריה</button>
+      </div>
+
+      <div id="approvalsList" style="margin-top:12px">${UI.loading('טוען אישורים...')}</div>
+      <div id="approvalsHistory" style="display:none;margin-top:12px">${UI.loading('טוען היסטוריה...')}</div>
     `;
   }
 
+  let _activeTab = 'pending';
+
   async function load() {
-    const res  = await API.approvals();
+    _activeTab = _activeTab || 'pending';
+    const [pendRes, histRes] = await Promise.all([
+      API.approvals(),
+      API.approvalHistory(50),
+    ]);
+
     const list = document.getElementById('approvalsList');
+    const hist = document.getElementById('approvalsHistory');
     const cnt  = document.getElementById('approvalCount');
-    if (!res.success) {
+
+    // ── Pending ───────────────────────────────────────────────────────────────
+    if (!pendRes.success) {
       list.innerHTML = UI.error('שגיאה בטעינת אישורים');
-      return;
-    }
-    const items    = res.data.approvals || [];
-    const highRisk = items.filter(a => (a.risk_level || 0) >= 3).length;
-    const lowRisk  = items.filter(a => (a.risk_level || 0) < 3).length;
+    } else {
+      const items    = pendRes.data.approvals || [];
+      const highRisk = items.filter(a => (a.risk_level || 0) >= 3).length;
+      const lowRisk  = items.filter(a => (a.risk_level || 0) < 3).length;
 
-    _setText('apwPending',  items.length);
-    _setText('apwHighRisk', highRisk);
-    _setText('apwLowRisk',  lowRisk);
-    cnt.textContent = `${items.length} ממתינים לאישור`;
+      _setText('apwPending',  items.length);
+      _setText('apwHighRisk', highRisk);
+      _setText('apwLowRisk',  lowRisk);
+      cnt.textContent = `${items.length} ממתינים לאישור`;
 
-    // Insight strip
-    const iChips = [];
-    if (highRisk)        iChips.push({ icon: '⚠', text: `${highRisk} פעולות סיכון גבוה`, cls: 'insight-alert' });
-    if (lowRisk)         iChips.push({ icon: '○', text: `${lowRisk} פעולות סיכון נמוך`,   cls: 'insight-warn'  });
-    if (!items.length)   iChips.push({ icon: '✓', text: 'אין אישורים ממתינים',            cls: 'insight-good'  });
-    const iEl = document.getElementById('apInsight');
-    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+      // Insight strip
+      const iChips = [];
+      if (highRisk)      iChips.push({ icon: '⚠', text: `${highRisk} פעולות סיכון גבוה`, cls: 'insight-alert' });
+      if (lowRisk)       iChips.push({ icon: '○', text: `${lowRisk} פעולות סיכון נמוך`,   cls: 'insight-warn'  });
+      if (!items.length) iChips.push({ icon: '✓', text: 'אין אישורים ממתינים',            cls: 'insight-good'  });
+      const iEl = document.getElementById('apInsight');
+      if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
 
-    // Next-action
-    const topApproval = items.sort((a,b) => (b.risk_level||0) - (a.risk_level||0))[0];
-    const naEl = document.getElementById('apNextAction');
-    if (naEl && topApproval) {
-      naEl.innerHTML = UI.nextAction(`בדוק ואשר: "${topApproval.action}" — סיכון רמה ${topApproval.risk_level}`);
-    } else if (naEl) { naEl.innerHTML = ''; }
+      // Next-action
+      const top = items.sort((a,b) => (b.risk_level||0) - (a.risk_level||0))[0];
+      const naEl = document.getElementById('apNextAction');
+      if (naEl && top) {
+        naEl.innerHTML = UI.nextAction(`בדוק ואשר: "${top.action}" — סיכון רמה ${top.risk_level}`);
+      } else if (naEl) { naEl.innerHTML = ''; }
 
-    if (!items.length) {
-      list.innerHTML = UI.empty('אין אישורים ממתינים — כל הפעולות עובדו', '✓');
+      if (!items.length) {
+        list.innerHTML = UI.empty('אין אישורים ממתינים — כל הפעולות עובדו', '✓');
+      } else {
+        list.innerHTML = items.map(a => _pendingCard(a)).join('');
+      }
       App.refreshBadge();
-      return;
     }
-    list.innerHTML = items.map(a => `
+
+    // ── History ───────────────────────────────────────────────────────────────
+    if (!histRes.success) {
+      hist.innerHTML = UI.error('שגיאה בטעינת היסטוריה');
+    } else {
+      const resolved = histRes.data.history || [];
+      _setText('apwResolved', resolved.length);
+      hist.innerHTML = resolved.length
+        ? resolved.map(a => _historyCard(a)).join('')
+        : UI.empty('אין אישורים שהוחלטו עדיין', '○');
+    }
+  }
+
+  function _pendingCard(a) {
+    return `
       <div class="approval-card" id="appr-${a.id}">
         <div class="approval-info">
           <div class="approval-action">${a.action}</div>
           <div class="approval-detail">
-            סיכון: ${a.risk_level} | task: ${a.task_id?.slice(0,8) || '—'}
+            סיכון: ${a.risk_level} | task: ${(a.task_id||'—').slice(0,8)}
+            ${a.created_at ? `| נוצר: ${a.created_at.slice(0,16).replace('T',' ')}` : ''}
           </div>
         </div>
         <span class="approval-risk">רמה ${a.risk_level}</span>
@@ -86,8 +125,42 @@ const ApprovalsPanel = (() => {
         <button class="btn btn-danger"
                 onclick="ApprovalsPanel.resolve('${a.id}', 'deny')">דחה</button>
       </div>
-    `).join('');
-    App.refreshBadge();
+    `;
+  }
+
+  function _historyCard(a) {
+    const approved = a.status === 'approved';
+    const statusCls = approved ? 'pv-green' : 'pv-red';
+    const statusLabel = approved ? 'אושר ✓' : 'נדחה ✗';
+    const hasOutreach = a.details?.outreach_task;
+
+    return `
+      <div class="approval-card" style="opacity:0.85">
+        <div class="approval-info">
+          <div class="approval-action">${a.action}</div>
+          <div class="approval-detail">
+            סיכון: ${a.risk_level} | task: ${(a.task_id||'—').slice(0,8)}
+            ${a.resolved_at ? `| ${a.resolved_at.slice(0,16).replace('T',' ')}` : ''}
+            ${a.resolved_by ? `| ע"י: ${a.resolved_by}` : ''}
+            ${hasOutreach ? `| 📱 outreach: ${a.details.outreach_task.lead_name || '—'}` : ''}
+          </div>
+        </div>
+        <span class="approval-risk ${statusCls}" style="font-size:11px;padding:4px 8px">${statusLabel}</span>
+      </div>
+    `;
+  }
+
+  async function init() {
+    await load();
+    document.querySelectorAll('#apTabs .filter-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#apTabs .filter-pill').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _activeTab = btn.dataset.tab;
+        document.getElementById('approvalsList').style.display    = _activeTab === 'pending' ? '' : 'none';
+        document.getElementById('approvalsHistory').style.display = _activeTab === 'history' ? '' : 'none';
+      });
+    });
   }
 
   async function resolve(id, action) {
@@ -95,10 +168,18 @@ const ApprovalsPanel = (() => {
     if (res.success) {
       document.getElementById('appr-' + id)?.remove();
       Toast.success(action === 'approve' ? 'פעולה אושרה' : 'פעולה נדחתה');
-      App.refreshBadge();
-      // Refresh widget counts
+      // Refresh history to show newly resolved item
+      const histRes = await API.approvalHistory(50);
+      if (histRes.success) {
+        const resolved = histRes.data.history || [];
+        _setText('apwResolved', resolved.length);
+        document.getElementById('approvalsHistory').innerHTML = resolved.length
+          ? resolved.map(a => _historyCard(a)).join('')
+          : UI.empty('אין אישורים שהוחלטו עדיין', '○');
+      }
       const remaining = document.querySelectorAll('[id^="appr-"]').length;
       _setText('apwPending', remaining);
+      App.refreshBadge();
     } else {
       Toast.error(res.error || 'שגיאה');
     }
@@ -106,5 +187,5 @@ const ApprovalsPanel = (() => {
 
   function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
-  return { render, init: load, reload: load, resolve };
+  return { render, init, reload: load, resolve };
 })();

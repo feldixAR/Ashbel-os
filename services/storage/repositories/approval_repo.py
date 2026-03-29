@@ -38,3 +38,11 @@ class ApprovalRepository(BaseRepository[ApprovalModel]):
                     .filter_by(status="pending")
                     .order_by(ApprovalModel.created_at)
                     .all())
+
+    def get_resolved(self, limit: int = 50) -> List[ApprovalModel]:
+        with get_session() as s:
+            return (s.query(ApprovalModel)
+                    .filter(ApprovalModel.status.in_(["approved", "denied"]))
+                    .order_by(ApprovalModel.resolved_at.desc())
+                    .limit(limit)
+                    .all())

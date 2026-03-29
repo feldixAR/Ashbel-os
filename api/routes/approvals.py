@@ -21,6 +21,19 @@ def list_approvals():
     })
 
 
+@bp.route("/approvals/history", methods=["GET"])
+@require_auth
+@log_request
+def approval_history():
+    limit = min(int(request.args.get("limit", 50)), 200)
+    from services.storage.repositories.approval_repo import ApprovalRepository
+    resolved = ApprovalRepository().get_resolved(limit=limit)
+    return ok({
+        "history": [_serialize(a) for a in resolved],
+        "total":   len(resolved),
+    })
+
+
 @bp.route("/approvals/<approval_id>", methods=["POST"])
 @require_auth
 @log_request

@@ -100,12 +100,17 @@ const API = (() => {
     task:    (id) => request('GET', `/tasks/${id}`),
 
     // Approvals
-    approvals: ()           => request('GET', '/approvals'),
-    approve:   (id, note)   => request('POST', `/approvals/${id}`, { action: 'approve', note }),
-    deny:      (id, note)   => request('POST', `/approvals/${id}`, { action: 'deny',    note }),
+    approvals:       ()          => request('GET', '/approvals'),
+    approvalHistory: (limit=50)  => request('GET', `/approvals/history?limit=${limit}`),
+    approve:         (id, note)  => request('POST', `/approvals/${id}`, { action: 'approve', note }),
+    deny:            (id, note)  => request('POST', `/approvals/${id}`, { action: 'deny',    note }),
 
     // Reports
-    dailyReport: () => request('GET', '/reports/daily'),
+    dailyReport:      ()          => request('GET', '/reports/daily'),
+    analyticsLearning:()          => request('GET', '/analytics/daily-learning'),
+    analyticsMetrics: (dimType)   => dimType
+      ? request('GET', `/analytics/metrics/${dimType}`)
+      : request('GET', '/analytics/metrics'),
 
     // ── CRM — Deals ──────────────────────────────────────────────────────────
     deals: (params = {}) => {
