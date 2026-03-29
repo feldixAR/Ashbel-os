@@ -44,15 +44,14 @@ const CommunicationsPanel = (() => {
         <button class="filter-pill" data-tab="followups">Follow-up</button>
       </div>
 
+      <div id="comInsight"></div>
+      <div id="comNextAction" style="margin-bottom:16px"></div>
+
       <!-- Queue list -->
-      <div id="comQueueView">
-        <div style="color:var(--muted);padding:16px;text-align:center"><span class="spinner"></span> טוען...</div>
-      </div>
+      <div id="comQueueView">${UI.loading('טוען תור שליחה...')}</div>
 
       <!-- Followup list (hidden) -->
-      <div id="comFollowupView" style="display:none">
-        <div style="color:var(--muted);padding:16px;text-align:center"><span class="spinner"></span> טוען...</div>
-      </div>
+      <div id="comFollowupView" style="display:none">${UI.loading('טוען follow-ups...')}</div>
     `;
   }
 
@@ -99,6 +98,24 @@ const CommunicationsPanel = (() => {
     document.getElementById('comSub').textContent =
       `${tasks.length} פניות · ${followups.length} follow-ups`;
 
+    // Insight strip
+    const iChips = [];
+    if (overdueTasks.length)  iChips.push({ icon: '⚠',  text: `${overdueTasks.length} פניות באיחור`,      cls: 'insight-alert' });
+    if (todayTasks.length)    iChips.push({ icon: '⏰', text: `${todayTasks.length} לביצוע היום`,          cls: 'insight-warn'  });
+    if (followups.length)     iChips.push({ icon: '↩',  text: `${followups.length} follow-ups ממתינים`,   cls: 'insight-good'  });
+    if (!iChips.length)       iChips.push({ icon: '✓',  text: 'אין פניות פעילות',                         cls: 'insight-good'  });
+    const iEl = document.getElementById('comInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    // Next-action
+    const firstOverdue = overdueTasks[0] || todayTasks[0];
+    const naEl = document.getElementById('comNextAction');
+    if (naEl && firstOverdue) {
+      naEl.innerHTML = UI.nextAction(
+        `שלח פנייה ל‑${firstOverdue.lead_name || firstOverdue.contact_name || '—'} — ${firstOverdue.channel || 'whatsapp'}`
+      );
+    } else if (naEl) { naEl.innerHTML = ''; }
+
     renderQueue(tasks);
     renderFollowups(followups);
   }
@@ -107,14 +124,7 @@ const CommunicationsPanel = (() => {
     const el  = document.getElementById('comQueueView');
     const now = new Date().toISOString().slice(0, 10);
 
-    if (!tasks.length) {
-      el.innerHTML = `
-        <div style="text-align:center;padding:40px 16px;color:var(--muted)">
-          <div style="font-size:28px;margin-bottom:8px">📭</div>
-          <div>אין פניות ממתינות</div>
-        </div>`;
-      return;
-    }
+    if (!tasks.length) { el.innerHTML = UI.empty('אין פניות ממתינות', '📭'); return; }
 
     el.innerHTML = tasks.map(t => {
       const dueDate   = (t.due_date || t.scheduled_at || '').slice(0, 10);
@@ -144,14 +154,7 @@ const CommunicationsPanel = (() => {
     const el  = document.getElementById('comFollowupView');
     const now = new Date().toISOString().slice(0, 10);
 
-    if (!followups.length) {
-      el.innerHTML = `
-        <div style="text-align:center;padding:40px 16px;color:var(--muted)">
-          <div style="font-size:28px;margin-bottom:8px">✅</div>
-          <div>אין follow-ups ממתינים</div>
-        </div>`;
-      return;
-    }
+    if (!followups.length) { el.innerHTML = UI.empty('אין follow-ups ממתינים', '✓'); return; }
 
     el.innerHTML = followups.map(f => {
       const nextDate  = (f.next_action_at || f.next_followup || '').slice(0, 10);

@@ -7,7 +7,7 @@ const CalendarPanel = (() => {
   const DAY_HE = { 0:'ראשון', 1:'שני', 2:'שלישי', 3:'רביעי', 4:'חמישי', 5:'שישי', 6:'שבת' };
   const todayStr = new Date().toISOString().slice(0,10);
 
-  function ils(n) { return '₪' + (Number(n)||0).toLocaleString('he-IL'); }
+  const ils = n => UI.ils(n);
 
   function render() {
     return `
@@ -112,7 +112,7 @@ const CalendarPanel = (() => {
   async function load() {
     const res = await API.weeklyCalendar();
     if (!res.success) {
-      document.getElementById('weekGrid').innerHTML = `<div style="grid-column:1/-1;color:var(--red);font-size:12px;padding:16px">שגיאה: ${res.error||'לא ניתן לטעון יומן'}</div>`;
+      document.getElementById('weekGrid').innerHTML = `<div style="grid-column:1/-1">${UI.error(res.error||'לא ניתן לטעון יומן')}</div>`;
       return;
     }
     const cal = res.data;

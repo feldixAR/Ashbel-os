@@ -55,7 +55,7 @@ const SettingsPanel = (() => {
       <div class="cmd-box" style="margin-top:16px">
         <div class="cmd-label">פרופיל עסקי פעיל</div>
         <div id="settingsBizProfile">
-          <div style="color:var(--muted);font-size:12px"><span class="spinner"></span> טוען...</div>
+          ${UI.loading('טוען פרופיל...')}
         </div>
       </div>
 

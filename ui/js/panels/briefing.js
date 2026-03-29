@@ -15,7 +15,7 @@ const BriefingPanel = (() => {
   let _callId   = null;
   let _callActive = false;
 
-  function ils(n) { return '₪' + (Number(n)||0).toLocaleString('he-IL'); }
+  const ils     = n => UI.ils(n);
   function relTime(s) {
     if (!s) return '';
     const diff = Math.floor((Date.now() - new Date(s)) / 60000);
@@ -163,15 +163,11 @@ const BriefingPanel = (() => {
     const phone = document.getElementById('bfPhone')?.value.trim();
     if (!phone) return;
 
-    document.getElementById('bfCallerCard').innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;padding:6px 0">
-        <span class="spinner"></span> מזהה...
-      </div>`;
+    document.getElementById('bfCallerCard').innerHTML = UI.loading('מזהה...');
 
     const res = await API.identifyCaller(phone);
     if (!res.success) {
-      document.getElementById('bfCallerCard').innerHTML =
-        `<div style="color:var(--red);font-size:12px">שגיאה: ${res.error||'לא ניתן לזהות'}</div>`;
+      document.getElementById('bfCallerCard').innerHTML = UI.error(res.error || 'לא ניתן לזהות');
       return;
     }
 

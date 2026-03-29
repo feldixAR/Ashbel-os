@@ -43,8 +43,9 @@ const ReportsPanel = (() => {
       </div>
 
       <div class="cmd-label" style="margin-bottom:8px;">דוח מפורט</div>
+      <div id="rpInsight" style="margin-bottom:12px"></div>
       <div class="output-box" id="reportText" style="font-family:var(--mono);font-size:12px;direction:rtl;min-height:180px;">
-        <span class="spinner"></span> טוען...
+        ${UI.loading('טוען דוח...')}
       </div>
     `;
   }
@@ -60,7 +61,7 @@ const ReportsPanel = (() => {
     const row = document.getElementById('statsRow');
 
     if (!reportRes.success) {
-      txt.textContent = 'שגיאה בטעינת הדוח';
+      txt.innerHTML = UI.error('שגיאה בטעינת הדוח');
       return;
     }
     const { summary, report_text } = reportRes.data;
@@ -75,6 +76,14 @@ const ReportsPanel = (() => {
     _setText('rpwHot',   leads.hot   || 0);
     _setText('rpwScore', leads.avg_score || 0);
     _setText('rpwDone',  tasks.done  || 0);
+
+    // Insight strip
+    const iChips = [];
+    if (leads.hot > 0)      iChips.push({ icon: '🔥', text: `${leads.hot} לידים חמים`,     cls: 'insight-alert' });
+    if (tasks.failed > 0)   iChips.push({ icon: '⚠',  text: `${tasks.failed} משימות נכשלו`, cls: 'insight-warn'  });
+    if (!iChips.length)     iChips.push({ icon: '✓',  text: 'מצב מערכת תקין',               cls: 'insight-good'  });
+    const iEl = document.getElementById('rpInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
 
     row.innerHTML = [
       { num: leads.total  || 0,  label: 'סה"כ לידים',       cls: '' },

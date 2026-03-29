@@ -21,6 +21,9 @@ const ApprovalsPanel = (() => {
         </div>
       </div>
 
+      <div id="apInsight"></div>
+      <div id="apNextAction" style="margin-bottom:16px"></div>
+
       <div class="section-head">
         <div>
           <div class="section-title">אישורים ומסלול ביקורת</div>
@@ -28,7 +31,7 @@ const ApprovalsPanel = (() => {
         </div>
         <button class="btn btn-ghost" onclick="ApprovalsPanel.reload()">↻ רענן</button>
       </div>
-      <div id="approvalsList"></div>
+      <div id="approvalsList">${UI.loading('טוען אישורים...')}</div>
     `;
   }
 
@@ -37,7 +40,7 @@ const ApprovalsPanel = (() => {
     const list = document.getElementById('approvalsList');
     const cnt  = document.getElementById('approvalCount');
     if (!res.success) {
-      list.innerHTML = `<div style="color:var(--red);padding:16px;">שגיאה בטעינת אישורים</div>`;
+      list.innerHTML = UI.error('שגיאה בטעינת אישורים');
       return;
     }
     const items    = res.data.approvals || [];
@@ -49,13 +52,23 @@ const ApprovalsPanel = (() => {
     _setText('apwLowRisk',  lowRisk);
     cnt.textContent = `${items.length} ממתינים לאישור`;
 
+    // Insight strip
+    const iChips = [];
+    if (highRisk)        iChips.push({ icon: '⚠', text: `${highRisk} פעולות סיכון גבוה`, cls: 'insight-alert' });
+    if (lowRisk)         iChips.push({ icon: '○', text: `${lowRisk} פעולות סיכון נמוך`,   cls: 'insight-warn'  });
+    if (!items.length)   iChips.push({ icon: '✓', text: 'אין אישורים ממתינים',            cls: 'insight-good'  });
+    const iEl = document.getElementById('apInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    // Next-action
+    const topApproval = items.sort((a,b) => (b.risk_level||0) - (a.risk_level||0))[0];
+    const naEl = document.getElementById('apNextAction');
+    if (naEl && topApproval) {
+      naEl.innerHTML = UI.nextAction(`בדוק ואשר: "${topApproval.action}" — סיכון רמה ${topApproval.risk_level}`);
+    } else if (naEl) { naEl.innerHTML = ''; }
+
     if (!items.length) {
-      list.innerHTML = `
-        <div style="text-align:center;padding:48px 16px">
-          <div style="font-size:32px;margin-bottom:10px">✓</div>
-          <div style="color:var(--green);font-weight:600;margin-bottom:4px">אין אישורים ממתינים</div>
-          <div style="color:var(--muted);font-size:12px">כל הפעולות עובדו</div>
-        </div>`;
+      list.innerHTML = UI.empty('אין אישורים ממתינים — כל הפעולות עובדו', '✓');
       App.refreshBadge();
       return;
     }

@@ -34,9 +34,8 @@ const AgentsPanel = (() => {
           <option value="">כל המחלקות</option>
         </select>
       </div>
-      <div class="agents-grid" id="agentsGrid">
-        <div style="color:var(--muted);"><span class="spinner"></span> טוען...</div>
-      </div>
+      <div id="agInsight" style="margin-bottom:12px"></div>
+      <div class="agents-grid" id="agentsGrid">${UI.loading('טוען סוכנים...')}</div>
     `;
   }
 
@@ -48,7 +47,7 @@ const AgentsPanel = (() => {
     const cnt  = document.getElementById('agentCount');
 
     if (!res.success) {
-      grid.innerHTML = `<div style="color:var(--red);">שגיאה בטעינת סוכנים</div>`;
+      grid.innerHTML = UI.error('שגיאה בטעינת סוכנים');
       return;
     }
     _agents = res.data.agents || [];
@@ -61,6 +60,14 @@ const AgentsPanel = (() => {
     _setText('agwActive', _agents.length);
     _setText('agwTasks',  totalTasks);
     _setText('agwDepts',  depts.length);
+
+    // Insight strip
+    const iChips = [];
+    if (_agents.length)       iChips.push({ icon: '⊙', text: `${_agents.length} סוכנים פעילים`, cls: 'insight-good' });
+    if (totalTasks > 0)       iChips.push({ icon: '✓', text: `${totalTasks} משימות בוצעו`,      cls: 'insight-good' });
+    if (!_agents.length)      iChips.push({ icon: '○', text: 'אין סוכנים מוגדרים',              cls: 'insight-warn' });
+    const iEl = document.getElementById('agInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
 
     // Populate dept filter
     const select = document.getElementById('agentDeptFilter');
@@ -79,10 +86,7 @@ const AgentsPanel = (() => {
     const grid = document.getElementById('agentsGrid');
     const list = deptFilter ? _agents.filter(a => a.department === deptFilter) : _agents;
 
-    if (!list.length) {
-      grid.innerHTML = `<div style="color:var(--muted);">אין סוכנים פעילים עדיין</div>`;
-      return;
-    }
+    if (!list.length) { grid.innerHTML = UI.empty('אין סוכנים פעילים עדיין', '⊙'); return; }
     grid.innerHTML = list.map(a => `
       <div class="agent-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
