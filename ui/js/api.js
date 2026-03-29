@@ -137,6 +137,9 @@ const API = (() => {
     // ── Dashboard Command Center (Batch 7) ───────────────────────────────────
     dashboardSummary: () => request('GET', '/dashboard/summary'),
 
+    // ── Revenue Queue (Phase 11) ─────────────────────────────────────────────
+    dailyRevenue: () => request('GET', '/daily_revenue_queue'),
+
     // ── Batch 8: Outreach & Execution ────────────────────────────────────────
     outreachQueue:     ()       => request('GET',  '/outreach/queue'),
     outreachFollowups: ()       => request('GET',  '/outreach/followups'),

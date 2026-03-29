@@ -169,11 +169,11 @@ const DashboardPanel = (() => {
                 <div class="cc2-cmd-title">תן הוראה טבעית למערכת</div>
                 <div class="cc2-cmd-text">"נתח את ההזדמנויות הקרובות והצע מהלך שמגדיל את סיכויי הסגירה היום"</div>
                 <div class="cc2-primary-acts">
-                  <button class="cc2-btn cc2-btn-primary" onclick="App.switchTo('workspace')">
-                    <span>הפעל ניתוח חכם</span><span class="cc2-btn-tag">AI</span>
+                  <button class="cc2-btn cc2-btn-primary" onclick="App.switchTo('revenue')">
+                    <span>תוכנית הכנסה יומית</span><span class="cc2-btn-tag">AI</span>
                   </button>
-                  <button class="cc2-btn cc2-btn-sec" onclick="App.switchTo('workspace')">
-                    <span>פתח פעולות חמות</span><span class="cc2-btn-tag">Live</span>
+                  <button class="cc2-btn cc2-btn-sec" onclick="App.switchTo('leads')">
+                    <span>פתח לידים חמים</span><span class="cc2-btn-tag">Live</span>
                   </button>
                   <button class="cc2-btn cc2-btn-sec" onclick="App.switchTo('briefing')">
                     <span>הצג המלצות מיידיות</span><span class="cc2-btn-tag">Next</span>
@@ -183,7 +183,10 @@ const DashboardPanel = (() => {
                   </button>
                 </div>
                 <div class="cc2-chips">
-                  ${chips.map(c => `<button class="cc2-chip-btn" onclick="App.switchTo('workspace')">${c}</button>`).join('')}
+                  <button class="cc2-chip-btn" onclick="App.switchTo('leads')">זהה את מוקד ההכנסה הבא</button>
+                  <button class="cc2-chip-btn" onclick="App.switchTo('crm')">הצג מעקבים הדורשים תשומת לב</button>
+                  <button class="cc2-chip-btn" onclick="App.switchTo('crm')">הכן מהלך מומלץ לסגירה</button>
+                  <button class="cc2-chip-btn" onclick="App.switchTo('crm')">הצג עסקאות עם סיכון עולה</button>
                 </div>
               </div>
             </aside>
@@ -226,12 +229,17 @@ const DashboardPanel = (() => {
       console.warn('[Dashboard] load() aborted — no API key in sessionStorage');
       return;
     }
-    // ── Single source of truth: /api/dashboard/summary (Batch 7) ──────────
-    const res = await API.dashboardSummary();
+    // ── Parallel: dashboard summary + revenue queue ────────────────────────
+    const [res, revRes] = await Promise.all([
+      API.dashboardSummary(),
+      API.dailyRevenue(),
+    ]);
+    const revQueue = revRes.success ? (revRes.data?.queue || []) : [];
     if (!res.success) {
-      _setText('cc2FocusScore', 'ERR');
-      _setText('cc2RecTitle', 'שגיאה בטעינת נתונים — נסה שוב');
-      _setText('cc2RecText', res.error || 'לא ניתן לטעון את מרכז השליטה');
+      _setText('cc2FocusScore', '—');
+      _setText('cc2RecTitle', 'שגיאה בטעינת נתונים');
+      _setText('cc2RecText', res.error || 'לא ניתן לטעון את מרכז השליטה — נסה שוב');
+      _html('cc2Insight', UI.error('שגיאה בטעינת נתוני מרכז השליטה'));
       return;
     }
 
@@ -302,25 +310,28 @@ const DashboardPanel = (() => {
     ].map(([k, v]) => `
     <div class="cc2-asst-stat"><span>${k}</span><span class="cc2-asst-stat-val">${v}</span></div>`).join(''));
 
-    // ── Decision priorities: today_queue / hot_leads / bottlenecks ─────────
+    // ── Decision priorities: today_queue / hot_leads / revenue_queue ──────
     _html('cc2DecCards', [
       {
-        title: 'פעולות היום לפי עדיפות',
-        value: `${queue.length} לידים בתור`,
-        note:  queue[0] ? `${queue[0].lead_name} — ציון ${Math.round(queue[0].score||0)}` : 'אין לידים פעילים',
+        title:   'תור הכנסה יומי',
+        value:   revQueue.length ? `${revQueue.length} לידים בתור` : `${queue.length} לידים`,
+        note:    revQueue[0] ? `${revQueue[0].lead_name || revQueue[0].name} — ציון ${Math.round(revQueue[0].score||revQueue[0].priority_score||0)}` : (queue[0] ? `${queue[0].lead_name} — ציון ${Math.round(queue[0].score||0)}` : 'אין לידים פעילים'),
+        onclick: `App.switchTo('revenue')`,
       },
       {
-        title: 'לידים חמים לפעולה מיידית',
-        value: `${hot.length} לידים חמים`,
-        note:  hot[0] ? `${hot[0].name} — ${ils(hot[0].potential_value||0)}` : 'אין לידים חמים',
+        title:   'לידים חמים לפעולה מיידית',
+        value:   `${hot.length} לידים חמים`,
+        note:    hot[0] ? `${hot[0].name} — ${ils(hot[0].potential_value||0)}` : 'אין לידים חמים',
+        onclick: `App.switchTo('leads')`,
       },
       {
-        title: 'צווארי בקבוק לטיפול',
-        value: `${bott.length} חסרי מהלך`,
-        note:  bott[0] ? `${bott[0].name} — הגדר פעולה הבאה` : 'אין צווארי בקבוק',
+        title:   'צווארי בקבוק לטיפול',
+        value:   `${bott.length} חסרי מהלך`,
+        note:    bott[0] ? `${bott[0].name} — הגדר פעולה הבאה` : 'אין צווארי בקבוק',
+        onclick: `App.switchTo('crm')`,
       },
     ].map(c => `
-    <div class="cc2-decision-card">
+    <div class="cc2-decision-card" style="cursor:pointer" onclick="${c.onclick||''}">
       <div class="cc2-dc-title">${c.title}</div>
       <div class="cc2-dc-val">${c.value}</div>
       <div class="cc2-dc-note">${c.note}</div>

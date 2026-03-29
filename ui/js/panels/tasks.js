@@ -57,9 +57,7 @@ const TasksPanel = (() => {
         </div>
       </div>
 
-      <div id="tasksTable">
-        <div class="empty-state"><span class="spinner"></span><p style="margin-top:8px">טוען...</p></div>
-      </div>
+      <div id="tasksTable">${UI.loading('טוען משימות...')}</div>
     `;
   }
 
@@ -72,7 +70,11 @@ const TasksPanel = (() => {
   async function loadTasks() {
     const statusFilter = document.getElementById('taskStatusFilter')?.value || '';
     const res   = await API.get('/tasks');
-    let tasks   = res.success ? (res.data.tasks || []) : [];
+    if (!res.success) {
+      document.getElementById('tasksTable').innerHTML = UI.error('שגיאה בטעינת משימות');
+      return;
+    }
+    let tasks   = res.data.tasks || [];
 
     if (statusFilter) tasks = tasks.filter(t => t.status === statusFilter);
 
@@ -115,16 +117,18 @@ const TasksPanel = (() => {
       naEl.innerHTML = '';
     }
 
-    const tbody = tasks.length ? tasks.map(t => `
-      <tr>
+    const tbody = tasks.length ? tasks.map(t => {
+      const leadRoute = t.lead_id ? `App.switchTo('briefing')` : `App.switchTo('leads')`;
+      return `
+      <tr style="cursor:pointer" onclick="${leadRoute}" title="פתח הקשר">
         <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${(t.id || '').slice(0, 8)}</td>
         <td>${t.type || '—'}</td>
         <td>${t.action || '—'}</td>
         <td>${statusPill(t.status)}</td>
         <td style="font-family:var(--mono);font-size:11px;color:${priorityColor(t.priority || 5)}">${t.priority || 5}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${(t.created_at || '').slice(0, 16).replace('T', ' ') || '—'}</td>
-      </tr>`).join('')
-      : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">אין משימות</td></tr>';
+      </tr>`;}).join('')
+      : `<tr><td colspan="6">${UI.empty('אין משימות פעילות', '◫')}</td></tr>`;
 
     document.getElementById('tasksTable').innerHTML = `
       <div class="table-wrap" style="margin-top:0">

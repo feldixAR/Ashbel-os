@@ -68,8 +68,7 @@ const ClientsPanel = (() => {
     // Fetch won leads
     const leadsRes = await API.leads({ limit: 300 });
     if (!leadsRes.success) {
-      document.getElementById('clientsGrid').innerHTML =
-        '<div style="color:var(--red);padding:16px">שגיאה בטעינת לקוחות</div>';
+      document.getElementById('clientsGrid').innerHTML = UI.error('שגיאה בטעינת לקוחות');
       return;
     }
 
@@ -150,11 +149,7 @@ const ClientsPanel = (() => {
     }
 
     if (!list.length) {
-      grid.innerHTML = `
-        <div style="grid-column:1/-1;text-align:center;padding:48px 16px;color:var(--muted)">
-          <div style="font-size:28px;margin-bottom:8px">👥</div>
-          <div>אין לקוחות עדיין — לידים עם סטטוס "סגור זכה" יופיעו כאן</div>
-        </div>`;
+      grid.innerHTML = `<div style="grid-column:1/-1">${UI.empty('אין לקוחות — לידים עם סטטוס "סגור זכה" יופיעו כאן', '◉')}</div>`;
       return;
     }
 

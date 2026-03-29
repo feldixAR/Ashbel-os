@@ -67,9 +67,7 @@ const CrmPanel = (() => {
           <!-- Deal timeline (below selected deal) -->
           <div id="crmTimeline" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:16px">
             <div class="cell-title">ציר זמן מאוחד <span class="live-dot"></span></div>
-            <div class="tl-feed" id="crmTlFeed">
-              <div style="color:var(--muted);font-size:12px;padding:8px">טוען ציר זמן...</div>
-            </div>
+            <div class="tl-feed" id="crmTlFeed">${UI.loading('טוען ציר זמן...')}</div>
           </div>
 
         </div>
@@ -109,7 +107,13 @@ const CrmPanel = (() => {
 
   async function loadDeals() {
     const res = await API.deals();
-    _deals = res.success ? (res.data?.deals || []) : [];
+    if (!res.success) {
+      const iEl = document.getElementById('crmInsight');
+      if (iEl) iEl.innerHTML = UI.error('שגיאה בטעינת עסקאות');
+      document.getElementById('crmDealList').innerHTML = UI.error('לא ניתן לטעון עסקאות');
+      return;
+    }
+    _deals = res.data?.deals || [];
     document.getElementById('crmSub').textContent = `${_deals.length} עסקאות`;
 
     // Widget bar
@@ -142,7 +146,7 @@ const CrmPanel = (() => {
     const el   = document.getElementById('crmDealList');
 
     if (!list.length) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-msg">אין עסקאות</div></div>';
+      el.innerHTML = UI.empty('אין עסקאות — הוסף עסקה חדשה', '◇');
       return;
     }
 
@@ -265,7 +269,7 @@ const CrmPanel = (() => {
             </div>
             <span class="tl-when">${relTime(ev.ts)}</span>
           </div>`).join('')
-      : '<div class="empty-state"><div class="empty-state-msg">אין פעילות רשומה</div></div>';
+      : UI.empty('אין פעילות רשומה');
   }
 
   async function transition(dealId) {

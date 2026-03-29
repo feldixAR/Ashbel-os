@@ -102,9 +102,7 @@ const LeadsPanel = (() => {
             </tr>
           </thead>
           <tbody id="leadsBody">
-            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">
-              <span class="spinner"></span> טוען...
-            </td></tr>
+            <tr><td colspan="7">${UI.loading('טוען לידים...')}</td></tr>
           </tbody>
         </table>
       </div>
@@ -119,7 +117,7 @@ const LeadsPanel = (() => {
     const cnt  = document.getElementById('leadCount');
     if (!res.success) {
       document.getElementById('leadsBody').innerHTML =
-        `<tr><td colspan="7" style="color:var(--red);padding:16px;">שגיאה בטעינת לידים</td></tr>`;
+        `<tr><td colspan="7">${UI.error('שגיאה בטעינת לידים')}</td></tr>`;
       return;
     }
     _allLeads = res.data.leads || [];
@@ -177,7 +175,7 @@ const LeadsPanel = (() => {
     list = [...list].sort((a, b) => (b.priority_score || b.score || 0) - (a.priority_score || a.score || 0));
 
     if (!list.length) {
-      body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">אין לידים</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7">${UI.empty('אין לידים התואמים את הסינון', '○')}</td></tr>`;
       return;
     }
     body.innerHTML = list.map(l => {
