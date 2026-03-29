@@ -1,20 +1,46 @@
 /**
- * agents.js — agents panel
+ * agents.js — Automations and Agents Panel
  */
 const AgentsPanel = (() => {
+
   function render() {
     return `
+      <!-- Widget bar -->
+      <div class="panel-widgets">
+        <div class="pw-chip">
+          <div class="pw-val pv-accent" id="agwTotal">—</div>
+          <div class="pw-label">סה"כ סוכנים</div>
+        </div>
+        <div class="pw-chip">
+          <div class="pw-val pv-green" id="agwActive">—</div>
+          <div class="pw-label">פעילים</div>
+        </div>
+        <div class="pw-chip">
+          <div class="pw-val" id="agwTasks">—</div>
+          <div class="pw-label">משימות בוצעו</div>
+        </div>
+        <div class="pw-chip">
+          <div class="pw-val" id="agwDepts">—</div>
+          <div class="pw-label">מחלקות</div>
+        </div>
+      </div>
+
       <div class="section-head">
         <div>
-          <div class="section-title">סוכנים</div>
+          <div class="section-title">סוכנים ואוטומציות</div>
           <div class="section-sub" id="agentCount">טוען...</div>
         </div>
+        <select class="form-select" id="agentDeptFilter" style="font-size:11px;padding:5px 10px;width:auto">
+          <option value="">כל המחלקות</option>
+        </select>
       </div>
       <div class="agents-grid" id="agentsGrid">
         <div style="color:var(--muted);"><span class="spinner"></span> טוען...</div>
       </div>
     `;
   }
+
+  let _agents = [];
 
   async function init() {
     const res  = await API.agents();
@@ -25,22 +51,55 @@ const AgentsPanel = (() => {
       grid.innerHTML = `<div style="color:var(--red);">שגיאה בטעינת סוכנים</div>`;
       return;
     }
-    const agents = res.data.agents || [];
-    cnt.textContent = `${agents.length} סוכנים פעילים`;
+    _agents = res.data.agents || [];
+    cnt.textContent = `${_agents.length} סוכנים`;
 
-    if (!agents.length) {
+    // Compute widgets
+    const totalTasks = _agents.reduce((s, a) => s + (a.tasks_done || 0), 0);
+    const depts      = [...new Set(_agents.map(a => a.department).filter(Boolean))];
+    _setText('agwTotal',  _agents.length);
+    _setText('agwActive', _agents.length);
+    _setText('agwTasks',  totalTasks);
+    _setText('agwDepts',  depts.length);
+
+    // Populate dept filter
+    const select = document.getElementById('agentDeptFilter');
+    depts.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d; opt.textContent = d;
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', renderGrid);
+
+    renderGrid();
+  }
+
+  function renderGrid() {
+    const deptFilter = document.getElementById('agentDeptFilter')?.value || '';
+    const grid = document.getElementById('agentsGrid');
+    const list = deptFilter ? _agents.filter(a => a.department === deptFilter) : _agents;
+
+    if (!list.length) {
       grid.innerHTML = `<div style="color:var(--muted);">אין סוכנים פעילים עדיין</div>`;
       return;
     }
-    grid.innerHTML = agents.map(a => `
+    grid.innerHTML = list.map(a => `
       <div class="agent-card">
-        <div class="agent-dept">${a.department || '—'}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div class="agent-dept">${a.department || '—'}</div>
+          <span class="live-dot" title="פעיל"></span>
+        </div>
         <div class="agent-name">${a.name}</div>
         <div class="agent-role">${a.role || a.model_preference || ''}</div>
-        <div class="agent-tasks">משימות: ${a.tasks_done ?? 0}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <div class="agent-tasks">משימות: ${a.tasks_done ?? 0}</div>
+          ${a.model_preference ? `<span style="font-family:var(--mono);font-size:8px;color:var(--muted)">${a.model_preference.slice(0,20)}</span>` : ''}
+        </div>
       </div>
     `).join('');
   }
+
+  function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
   return { render, init };
 })();

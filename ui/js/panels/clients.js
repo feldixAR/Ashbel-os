@@ -1,0 +1,183 @@
+/**
+ * clients.js — Clients and Accounts Panel
+ * Sources won leads from GET /api/leads?status=סגור_זכה
+ * Shows client card grid with last interaction and open deal count.
+ */
+const ClientsPanel = (() => {
+
+  function ils(n) {
+    n = Number(n) || 0;
+    if (n >= 1_000_000) return `₪${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `₪${Math.round(n / 1_000)}K`;
+    return `₪${n.toLocaleString('he-IL')}`;
+  }
+
+  function initials(name) {
+    return (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  }
+
+  function relTime(s) {
+    if (!s) return '—';
+    const diff = Math.floor((Date.now() - new Date(s)) / 60000);
+    if (diff < 2)    return 'כעת';
+    if (diff < 60)   return `לפני ${diff} דק'`;
+    if (diff < 1440) return `לפני ${Math.floor(diff/60)} שע'`;
+    return `לפני ${Math.floor(diff/1440)} ימ'`;
+  }
+
+  function render() {
+    return `
+      <!-- Widget bar -->
+      <div class="panel-widgets">
+        <div class="pw-chip">
+          <div class="pw-val pv-green" id="clwTotal">—</div>
+          <div class="pw-label">לקוחות פעילים</div>
+        </div>
+        <div class="pw-chip">
+          <div class="pw-val pv-amber" id="clwPipeline">—</div>
+          <div class="pw-label">Pipeline ללקוחות</div>
+        </div>
+        <div class="pw-chip">
+          <div class="pw-val pv-accent" id="clwDeals">—</div>
+          <div class="pw-label">עסקאות פתוחות</div>
+        </div>
+        <div class="pw-chip">
+          <div class="pw-val" id="clwRecent">—</div>
+          <div class="pw-label">קשר אחרון (ימים)</div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div>
+          <div class="section-title">לקוחות וחשבונות</div>
+          <div class="section-sub" id="clientCount">טוען...</div>
+        </div>
+        <input class="cmd-input" id="clientSearch" placeholder="חיפוש לקוח..."
+               style="width:200px;font-size:12px;padding:7px 10px" />
+      </div>
+
+      <div class="clients-grid" id="clientsGrid">
+        ${Array(6).fill(`
+          <div class="client-card">
+            <div class="skel" style="width:40px;height:40px;border-radius:50%;margin-bottom:10px"></div>
+            <div class="skel skel-h12 skel-w80"></div>
+            <div class="skel skel-h12 skel-w60"></div>
+          </div>`).join('')}
+      </div>
+    `;
+  }
+
+  let _clients = [];
+
+  async function init() {
+    _clients = [];
+    await load();
+    document.getElementById('clientSearch')?.addEventListener('input', renderGrid);
+  }
+
+  async function load() {
+    // Fetch won leads
+    const leadsRes = await API.leads({ limit: 300 });
+    if (!leadsRes.success) {
+      document.getElementById('clientsGrid').innerHTML =
+        '<div style="color:var(--red);padding:16px">שגיאה בטעינת לקוחות</div>';
+      return;
+    }
+
+    const allLeads = leadsRes.data?.leads || [];
+    const wonLeads = allLeads.filter(l => l.status === 'סגור_זכה');
+    document.getElementById('clientCount').textContent = `${wonLeads.length} לקוחות`;
+
+    // Fetch deals for pipeline calculation
+    const dealsRes = await API.deals();
+    const allDeals = dealsRes.success ? (dealsRes.data?.deals || []) : [];
+
+    // Build enriched client list
+    _clients = wonLeads.map(lead => {
+      const openDeals = allDeals.filter(d => d.lead_id === lead.id && !['won','lost'].includes(d.stage));
+      const pipeVal   = openDeals.reduce((s, d) => s + (d.value_ils || 0), 0);
+      return { ...lead, openDeals, pipeVal };
+    });
+
+    // Compute widgets
+    const totalPipe  = _clients.reduce((s, c) => s + c.pipeVal, 0);
+    const totalDeals = _clients.reduce((s, c) => s + c.openDeals.length, 0);
+
+    // Most recent interaction in days
+    const recDates = _clients
+      .map(c => c.last_activity_at || c.updated_at)
+      .filter(Boolean)
+      .map(d => Math.floor((Date.now() - new Date(d)) / 86400000));
+    const minDays = recDates.length ? Math.min(...recDates) : 0;
+
+    _setText('clwTotal',    _clients.length);
+    _setText('clwPipeline', ils(totalPipe));
+    _setText('clwDeals',    totalDeals);
+    _setText('clwRecent',   minDays);
+
+    renderGrid();
+  }
+
+  function renderGrid() {
+    const q    = (document.getElementById('clientSearch')?.value || '').toLowerCase();
+    const grid = document.getElementById('clientsGrid');
+
+    let list = _clients;
+    if (q) {
+      list = list.filter(c =>
+        (c.name    || '').toLowerCase().includes(q) ||
+        (c.company || '').toLowerCase().includes(q) ||
+        (c.city    || '').toLowerCase().includes(q) ||
+        (c.phone   || '').includes(q)
+      );
+    }
+
+    if (!list.length) {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:48px 16px;color:var(--muted)">
+          <div style="font-size:28px;margin-bottom:8px">👥</div>
+          <div>אין לקוחות עדיין — לידים עם סטטוס "סגור זכה" יופיעו כאן</div>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = list.map(c => {
+      const daysSince = c.last_activity_at
+        ? Math.floor((Date.now() - new Date(c.last_activity_at)) / 86400000)
+        : null;
+      const recLabel = daysSince !== null
+        ? (daysSince === 0 ? 'היום' : `${daysSince} ימים`)
+        : '—';
+      const recColor = daysSince !== null && daysSince > 30 ? 'var(--amber)' : 'var(--muted)';
+
+      return `
+        <div class="client-card" onclick="ClientsPanel.openBriefing('${c.id}')">
+          <div class="cc-av">${initials(c.name)}</div>
+          <div class="cc-name">${c.name}</div>
+          <div class="cc-company">${c.company || c.city || '—'}</div>
+          <div class="cc-meta">
+            ${c.phone ? `<span style="font-family:var(--mono);font-size:10px;color:var(--muted);direction:ltr">${c.phone}</span>` : ''}
+            ${c.openDeals.length > 0
+              ? `<span class="cc-badge">📋 ${c.openDeals.length} עסקאות</span>`
+              : '<span style="font-size:10px;color:var(--muted)">אין עסקאות פתוחות</span>'}
+          </div>
+          ${c.pipeVal > 0 ? `<div style="font-family:var(--mono);font-size:11px;color:var(--amber);margin-top:8px">${ils(c.pipeVal)} pipeline</div>` : ''}
+          <div style="font-size:10px;color:${recColor};margin-top:6px">קשר אחרון: ${recLabel}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function openBriefing(leadId) {
+    App.switchTo('briefing');
+    setTimeout(() => {
+      if (typeof BriefingPanel !== 'undefined') {
+        BriefingPanel.prefillLead(leadId);
+      }
+    }, 200);
+  }
+
+  function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+  return { render, init, openBriefing };
+})();

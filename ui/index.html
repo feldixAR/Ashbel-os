@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>AshbalOS — אשבל אלומיניום</title>
-  <link rel="stylesheet" href="/ui/css/app.css?v=b11r9" />
+  <link rel="stylesheet" href="/ui/css/app.css?v=b12r1" />
 </head>
 <body>
 
@@ -80,50 +80,64 @@
 
   <!-- Main content area -->
   <main class="main">
-    <!-- Batch 11 — Revenue CRM screens -->
-    <div id="panel-dashboard"  class="panel"></div>
-    <div id="panel-workspace"  class="panel"></div>
-    <div id="panel-crm"        class="panel"></div>
-    <div id="panel-revenue"    class="panel"></div>
-    <div id="panel-calendar"   class="panel"></div>
-    <div id="panel-briefing"   class="panel"></div>
+    <!-- CRM & Revenue screens -->
+    <div id="panel-dashboard"       class="panel"></div>
+    <div id="panel-leads"           class="panel"></div>
+    <div id="panel-crm"             class="panel"></div>
+    <div id="panel-clients"         class="panel"></div>
+    <div id="panel-revenue"         class="panel"></div>
+    <div id="panel-calendar"        class="panel"></div>
+    <div id="panel-briefing"        class="panel"></div>
 
-    <!-- Existing operational screens -->
-    <div id="panel-cmd"        class="panel"></div>
-    <div id="panel-leads"      class="panel"></div>
-    <div id="panel-pipeline"   class="panel"></div>
-    <div id="panel-goals"      class="panel"></div>
-    <div id="panel-tasks"      class="panel"></div>
-    <div id="panel-agents"     class="panel"></div>
-    <div id="panel-approvals"  class="panel"></div>
-    <div id="panel-reports"    class="panel"></div>
+    <!-- Operations screens -->
+    <div id="panel-tasks"           class="panel"></div>
+    <div id="panel-communications"  class="panel"></div>
+    <div id="panel-approvals"       class="panel"></div>
+    <div id="panel-pipeline"        class="panel"></div>
+
+    <!-- System screens -->
+    <div id="panel-agents"          class="panel"></div>
+    <div id="panel-goals"           class="panel"></div>
+    <div id="panel-reports"         class="panel"></div>
+    <div id="panel-settings"        class="panel"></div>
+
+    <!-- Legacy screens kept for compatibility -->
+    <div id="panel-workspace"       class="panel"></div>
+    <div id="panel-cmd"             class="panel"></div>
   </main>
 
 </div>
 
-<!-- ── Scripts — version-stamped to bust all browser caches ──────────── -->
-<script src="/ui/js/api.js?v=b11r9"></script>
-<script src="/ui/js/components/toast.js?v=b11r9"></script>
+<!-- ── Scripts ────────────────────────────────────────────────────────── -->
+<script src="/ui/js/api.js?v=b12r1"></script>
+<script src="/ui/js/components/toast.js?v=b12r1"></script>
 
-<!-- Batch 11 — Revenue CRM panels -->
-<script src="/ui/js/panels/dashboard.js?v=b11r9"></script>
-<script src="/ui/js/panels/workspace.js?v=b11r9"></script>
-<script src="/ui/js/panels/crm.js?v=b11r9"></script>
-<script src="/ui/js/panels/revenue.js?v=b11r9"></script>
-<script src="/ui/js/panels/calendar.js?v=b11r9"></script>
-<script src="/ui/js/panels/briefing.js?v=b11r9"></script>
+<!-- CRM & Revenue panels -->
+<script src="/ui/js/panels/dashboard.js?v=b12r1"></script>
+<script src="/ui/js/panels/leads.js?v=b12r1"></script>
+<script src="/ui/js/panels/crm.js?v=b12r1"></script>
+<script src="/ui/js/panels/clients.js?v=b12r1"></script>
+<script src="/ui/js/panels/revenue.js?v=b12r1"></script>
+<script src="/ui/js/panels/calendar.js?v=b12r1"></script>
+<script src="/ui/js/panels/briefing.js?v=b12r1"></script>
 
-<!-- Existing panels -->
-<script src="/ui/js/panels/command.js?v=b11r9"></script>
-<script src="/ui/js/panels/leads.js?v=b11r9"></script>
-<script src="/ui/js/panels/pipeline.js?v=b11r9"></script>
-<script src="/ui/js/panels/goals.js?v=b11r9"></script>
-<script src="/ui/js/panels/tasks.js?v=b11r9"></script>
-<script src="/ui/js/panels/agents.js?v=b11r9"></script>
-<script src="/ui/js/panels/approvals.js?v=b11r9"></script>
-<script src="/ui/js/panels/reports.js?v=b11r9"></script>
+<!-- Operations panels -->
+<script src="/ui/js/panels/tasks.js?v=b12r1"></script>
+<script src="/ui/js/panels/communications.js?v=b12r1"></script>
+<script src="/ui/js/panels/approvals.js?v=b12r1"></script>
+<script src="/ui/js/panels/pipeline.js?v=b12r1"></script>
 
-<script src="/ui/js/app.js?v=b11r9"></script>
+<!-- System panels -->
+<script src="/ui/js/panels/agents.js?v=b12r1"></script>
+<script src="/ui/js/panels/goals.js?v=b12r1"></script>
+<script src="/ui/js/panels/reports.js?v=b12r1"></script>
+<script src="/ui/js/panels/settings.js?v=b12r1"></script>
+
+<!-- Legacy panels -->
+<script src="/ui/js/panels/workspace.js?v=b12r1"></script>
+<script src="/ui/js/panels/command.js?v=b12r1"></script>
+
+<script src="/ui/js/app.js?v=b12r1"></script>
 
 </body>
 </html>
