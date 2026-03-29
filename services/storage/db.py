@@ -103,6 +103,8 @@ def create_all_tables() -> None:
     import services.storage.models.message       # noqa
     import services.storage.models.stage_history # noqa
     import services.storage.models.calendar_event # noqa
+    # Execution bridge
+    import services.storage.models.claude_task    # noqa
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")
