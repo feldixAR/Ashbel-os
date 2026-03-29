@@ -277,9 +277,9 @@ body {
   border-radius: var(--radius);
   padding: 10px 16px;
   min-width: 120px;
-  transition: border-color .15s;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
 }
-.pw-chip:hover { border-color: var(--border2); }
+.pw-chip:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .pw-val {
   font-family: var(--mono);
   font-size: 20px;
@@ -415,7 +415,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   margin-top: 16px;
 }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -1760,3 +1761,68 @@ tr:hover td { background: var(--surface); }
 .insight-chip.insight-warn  { border-color: rgba(245,158,11,0.3);  color: var(--amber); background: rgba(245,158,11,0.06); }
 .insight-chip.insight-alert { border-color: rgba(239,68,68,0.3);   color: var(--red);   background: rgba(239,68,68,0.06); }
 .insight-icon { font-size: 12px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Phase 5 — Consistency and Polish
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Motion polish ──────────────────────────────────────────────────────── */
+.insight-chip { transition: border-color .15s, opacity .15s; }
+.insight-strip { animation: fadeIn .2s ease; }
+
+/* next-action-box: accent left border + hover lift */
+.next-action-box {
+  border-left: 3px solid rgba(59,130,246,0.5);
+  transition: border-color .2s, box-shadow .2s, transform .15s;
+}
+.next-action-box:hover {
+  border-color: rgba(59,130,246,0.5);
+  box-shadow: 0 4px 16px rgba(59,130,246,0.1);
+  transform: translateY(-1px);
+}
+
+/* ── CTA consistency ────────────────────────────────────────────────────── */
+/* Buttons inside next-action-box inherit btn sizing */
+.next-action-box .btn { font-size: 11px; padding: 5px 12px; }
+
+/* ── Spacing hierarchy ──────────────────────────────────────────────────── */
+/* Slight gap reduction when insight + next-action appear together */
+#leadsNextAction:not(:empty),
+#clNextAction:not(:empty),
+#taskNextAction:not(:empty),
+#crmInsight + * { margin-top: 0; }
+
+/* ── Responsive: tablets (≤ 900px) ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ws-split { grid-template-columns: 1fr; }
+  .ws-right { border-left: none; border-top: 1px solid var(--border); max-height: 320px; }
+  .panel-widgets { gap: 8px; }
+  .pw-chip { min-width: 100px; }
+}
+
+/* ── Responsive: mobile (≤ 640px) ──────────────────────────────────────── */
+@media (max-width: 640px) {
+  .panel-widgets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .pw-chip { min-width: unset; padding: 8px 12px; }
+  .pw-val  { font-size: 16px; }
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .section-head > div:last-child { width: 100%; justify-content: flex-start !important; }
+  .insight-strip { gap: 6px; }
+  .insight-chip  { font-size: 10px; padding: 3px 8px; }
+  .next-action-box { font-size: 11px; }
+  .table-wrap { font-size: 11.5px; }
+  th, td { padding: 7px 8px; }
+  .clients-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px; }
+  .ws-right { display: none; }
+  .ws-main  { padding: 12px !important; }
+}
+
+/* ── Responsive: small mobile (≤ 400px) ────────────────────────────────── */
+@media (max-width: 400px) {
+  .clients-grid { grid-template-columns: 1fr !important; }
+  .panel-widgets { grid-template-columns: repeat(2, 1fr); }
+}

@@ -113,8 +113,7 @@ const UI = (() => {
 
   function nextAction(text, btnLabel = '', onclickJs = '') {
     const btn = btnLabel
-      ? `<button class="btn btn-primary" style="margin-top:8px;font-size:11px;padding:6px 12px"
-                onclick="${onclickJs}">${btnLabel}</button>`
+      ? `<button class="btn btn-primary" onclick="${onclickJs}">${btnLabel}</button>`
       : '';
     return `<div class="next-action-box">▶ ${text}${btn ? `<br>${btn}` : ''}</div>`;
   }

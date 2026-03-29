@@ -135,7 +135,7 @@ const TasksPanel = (() => {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
+              <th>#</th>
               <th>סוג</th>
               <th>פעולה</th>
               <th>סטטוס</th>
