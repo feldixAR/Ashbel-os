@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _src(rel: str) -> str:
-    with open(os.path.join(ROOT, rel)) as f:
+    with open(os.path.join(ROOT, rel), encoding='utf-8') as f:
         return f.read()
 
 
