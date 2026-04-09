@@ -81,6 +81,9 @@ class Intent(str, Enum):
     LEARNING_CYCLE            = "learning_cycle"
     PERFORMANCE_REPORT        = "performance_report"
 
+    # Chief of Staff (Phase 3)
+    CHIEF_OF_STAFF            = "chief_of_staff"
+
 
 @dataclass
 class IntentResult:
@@ -210,6 +213,12 @@ class IntentParser:
         if any(w in tl for w in ["דוח ביצועים", "performance report", "שיעור מענה",
                                    "מה היה הכי טוב", "ניתוח קמפיין"]):
             return Intent.PERFORMANCE_REPORT, 0.9
+
+        # Chief of Staff (Phase 3)
+        if any(w in tl for w in ["מה לעשות", "תכנן", "הצע", "מה הצעד הבא",
+                                   "תעזור לי להחליט", "מה כדאי", "chief of staff",
+                                   "תכנן אסטרטגיה", "תכנן פעולות"]):
+            return Intent.CHIEF_OF_STAFF, 0.9
 
         # Sales
         if any(w in tl for w in ["לקוח", "מכירה", "sale", "עסקה"]):

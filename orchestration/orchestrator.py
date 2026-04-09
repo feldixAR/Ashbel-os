@@ -115,6 +115,9 @@ _INTENT_TASK_MAP = {
     # Revenue Learning (Batch 9)
     Intent.LEARNING_CYCLE:           ("learning",     "learning_cycle"),
     Intent.PERFORMANCE_REPORT:       ("learning",     "performance_report"),
+
+    # Chief of Staff (Phase 3)
+    Intent.CHIEF_OF_STAFF:           ("executive",    "plan_action"),
 }
 
 

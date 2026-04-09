@@ -61,6 +61,7 @@ class AgentRegistry:
         from agents.departments.executive.code_builder_agent import CodeBuilderAgent
         from agents.departments.executive.executive_assistant_agent import ExecutiveAssistantAgent
         from agents.departments.executive.github_writer_agent import GitHubWriterAgent
+        from agents.departments.executive.chief_of_staff_agent import ChiefOfStaffAgent
         from agents.departments.generic.task_agent import GenericTaskAgent
 
         for agent in [
@@ -71,6 +72,7 @@ class AgentRegistry:
             CodeBuilderAgent(),
             ExecutiveAssistantAgent(),
             GitHubWriterAgent(),
+            ChiefOfStaffAgent(),
         ]:
             self.register(agent)
 
