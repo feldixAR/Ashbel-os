@@ -23,7 +23,7 @@ MODEL_REGISTRY: dict[str, ModelConfig] = {
     "claude_opus": ModelConfig(
         key="claude_opus",
         provider="anthropic",
-        model_id="claude-opus-4-5",
+        model_id="claude-opus-4-6",
         cost_per_1k_input=0.015,
         cost_per_1k_output=0.075,
         quality_score=10,
@@ -35,7 +35,7 @@ MODEL_REGISTRY: dict[str, ModelConfig] = {
     "claude_sonnet": ModelConfig(
         key="claude_sonnet",
         provider="anthropic",
-        model_id="claude-sonnet-4-5",
+        model_id="claude-sonnet-4-6",
         cost_per_1k_input=0.003,
         cost_per_1k_output=0.015,
         quality_score=8,

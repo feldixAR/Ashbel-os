@@ -98,6 +98,39 @@ class CostTracker:
             "by_model":     models,
         }
 
+    def flush_to_session_log(self, agent_name: str = "system") -> None:
+        """
+        Append token usage for this agent to memory/sessions/YYYY-MM-DD.md.
+        Called by agents after execution so maintenance agent can audit weekly.
+        """
+        import pathlib
+        summary = self.summary()
+        if summary["total_calls"] == 0:
+            return
+        sessions_dir = pathlib.Path(__file__).parent.parent / "memory" / "sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        log_path = sessions_dir / f"{summary['day']}.md"
+        entry = (
+            f"\n## {datetime.datetime.now(datetime.timezone.utc).strftime('%H:%M:%S')} UTC"
+            f" — agent={agent_name}\n"
+            f"- calls={summary['total_calls']}"
+            f"  tokens_in={summary['tokens_in']}"
+            f"  tokens_out={summary['tokens_out']}"
+            f"  cost_usd={summary['total_usd']}\n"
+        )
+        for model_key, data in summary["by_model"].items():
+            entry += (
+                f"  - {model_key}: calls={data['calls']}"
+                f" in={data['tokens_in']} out={data['tokens_out']}"
+                f" ${data['cost_usd']}\n"
+            )
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(entry)
+            log.debug(f"[CostTracker] flushed session log → {log_path}")
+        except Exception as e:
+            log.warning(f"[CostTracker] could not write session log: {e}")
+
     def reset(self) -> None:
         """Clear all accumulated data. Called by scheduler at day boundary."""
         with self._lock:

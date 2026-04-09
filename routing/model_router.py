@@ -107,22 +107,61 @@ class ModelRouter:
 
     # ── Direct model call (used by fallback_policy) ───────────────────────────
 
+    def call_batch(
+        self,
+        task_type:     str,
+        system_prompt: str,
+        user_prompts:  list,
+        priority:      str = "balanced",
+        max_tokens:    int = 800,
+    ) -> list:
+        """
+        Process up to 10 prompts per batch. Returns list of text responses.
+        Uses the same model selection as call(). Reduces per-lead AI calls.
+        """
+        results = []
+        for i in range(0, len(user_prompts), 10):
+            batch = user_prompts[i:i + 10]
+            for prompt in batch:
+                results.append(self.call(
+                    task_type=task_type,
+                    system_prompt=system_prompt,
+                    user_prompt=prompt,
+                    priority=priority,
+                    max_tokens=max_tokens,
+                ))
+        return results
+
     @staticmethod
     def call_model(model: ModelConfig, system_prompt: str,
-                   user_prompt: str, max_tokens: int = 800) -> str:
+                   user_prompt: str, max_tokens: int = 800,
+                   use_cache: bool = False) -> str:
         """
         Direct call to a specific model. No routing, no fallback.
         Raises on failure — caller (fallback_policy) handles exceptions.
+        use_cache=True adds cache_control to system prompt (prompt caching).
         """
         if not ANTHROPIC_API_KEY:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
         import anthropic
-        client   = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        if use_cache:
+            system_block = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        else:
+            system_block = system_prompt
+
         response = client.messages.create(
             model=model.model_id,
             max_tokens=max_tokens,
-            system=system_prompt,
+            system=system_block,
             messages=[{"role": "user", "content": user_prompt}],
         )
         return response.content[0].text

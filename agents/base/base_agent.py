@@ -44,6 +44,36 @@ class BaseAgent(ABC):
             return default
         return str(value).strip() or default
 
+    def _local_compute(self, task: TaskModel):
+        """
+        Override in subclass to return a result computed locally (no AI call).
+        Return None to proceed to AI. Local-first rule: check here before
+        calling model_router.
+        """
+        return None
+
+    def _ai_call(self, task_type: str, system_prompt: str,
+                 user_prompt: str, priority: str = "balanced",
+                 max_tokens: int = 800, use_cache: bool = False) -> str:
+        """
+        Wrapper around model_router.call() that:
+        1. Checks _local_compute first (local-first rule)
+        2. Routes to correct model tier
+        3. Flushes token usage to memory/sessions/ after call
+        """
+        from routing.model_router import model_router
+        from routing.cost_tracker import cost_tracker
+
+        result = model_router.call(
+            task_type=task_type,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            priority=priority,
+            max_tokens=max_tokens,
+        )
+        cost_tracker.flush_to_session_log(agent_name=self.agent_id or self.name)
+        return result
+
     def __repr__(self) -> str:
         return (f"<{self.__class__.__name__} "
                 f"id={self.agent_id!r} dept={self.department!r} v={self.version}>")
