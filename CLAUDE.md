@@ -85,6 +85,7 @@ WhatsApp / Dashboard UI
 | Bridge | Claude Dispatch (`POST /api/claude/preview`, `/dispatch`, `/tasks/<id>`) — sensitive flow enforced | ✅ Implemented |
 | Bridge | GPT Connector (`/api/gpt/*`) — review, redispatch, OpenAPI schema | ✅ Implemented |
 | Bridge | MCP Endpoint (`POST /api/mcp`) — ChatGPT-compatible, no-auth, `get_latest_claude_task` | ✅ Implemented |
+| Channel | Telegram Inbound Webhook (`POST /api/telegram/webhook`) — Wave One approved, orchestrator dispatch | ✅ Implemented |
 
 ---
 
