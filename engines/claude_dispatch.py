@@ -54,7 +54,7 @@ Rules:
 
 
 def _now() -> str:
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"
 
 
 # ── Public entry points ───────────────────────────────────────────────────────

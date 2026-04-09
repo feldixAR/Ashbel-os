@@ -127,7 +127,7 @@ def _send_email(task: OutreachTask) -> OutreachResult:
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
 
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     host = os.environ.get("SMTP_HOST", "")
     user = os.environ.get("SMTP_USER", "")
     pwd  = os.environ.get("SMTP_PASS", "")
@@ -167,7 +167,7 @@ def _send_email(task: OutreachTask) -> OutreachResult:
 
 def execute_outreach(task: OutreachTask) -> OutreachResult:
     import os
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     # ── Email channel ──────────────────────────────────────────────────────────
     if task.channel == "email":
@@ -240,14 +240,14 @@ def record_outreach_sent(task: OutreachTask, mode: str = "deeplink") -> bool:
         )
 
         # Advance lifecycle: awaiting_response + next follow-up date
-        next_action = (_dt.datetime.utcnow() + _dt.timedelta(days=3)).isoformat()
+        next_action = (_dt.datetime.now(datetime.timezone.utc) + _dt.timedelta(days=3)).isoformat()
         with get_session() as s:
             rec = s.get(OutreachModel, created.id)
             if rec:
                 rec.lifecycle_status = "awaiting_response"
                 rec.next_action_at   = next_action
                 rec.status           = "sent"
-                rec.sent_at          = _dt.datetime.utcnow().isoformat()
+                rec.sent_at          = _dt.datetime.now(datetime.timezone.utc).isoformat()
 
         # Lead counters
         LeadRepository().increment_attempts(task.lead_id)
@@ -311,18 +311,18 @@ def update_pipeline_status(outreach_id: str, status: str, notes: str = "") -> bo
             r = s.get(OutreachModel, outreach_id)
             if not r: return False
             r.status = status
-            if status == "sent": r.sent_at = dt.datetime.utcnow().isoformat()
-            if status == "replied": r.replied_at = dt.datetime.utcnow().isoformat()
+            if status == "sent": r.sent_at = dt.datetime.now(datetime.timezone.utc).isoformat()
+            if status == "replied": r.replied_at = dt.datetime.now(datetime.timezone.utc).isoformat()
             if notes: r.notes = notes
             if status == "sent":
                 days = 3 if r.attempt == 1 else 5
-                r.next_followup = (dt.datetime.utcnow() + dt.timedelta(days=days)).isoformat()
+                r.next_followup = (dt.datetime.now(datetime.timezone.utc) + dt.timedelta(days=days)).isoformat()
         return True
     except Exception as e:
         log.error(f"[Outreach] update failed: {e}"); return False
 
 def daily_outreach_summary() -> DailySummary:
-    today = datetime.date.today().isoformat(); now = datetime.datetime.utcnow().isoformat()
+    today = datetime.date.today().isoformat(); now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
         from services.storage.repositories.outreach_repo import OutreachRepository
         from services.storage.repositories.lead_repo import LeadRepository
@@ -374,7 +374,7 @@ class OutreachEngineService:
             from services.storage.repositories.outreach_repo import OutreachRepository
             import datetime as dt
 
-            now   = dt.datetime.utcnow().isoformat()
+            now   = dt.datetime.now(datetime.timezone.utc).isoformat()
             due   = OutreachRepository().list_due_followup()
             leads = LeadRepository().list_all()
             lead_map = {l.id: l for l in leads}

@@ -214,7 +214,7 @@ def promote_overdue_records() -> int:
     from services.storage.models.outreach import OutreachModel
     from services.growth.policy import is_followup_overdue
 
-    now_iso = datetime.datetime.utcnow().isoformat()
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     promoted = 0
     try:
         with get_session() as session:

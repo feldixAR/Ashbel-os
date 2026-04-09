@@ -275,7 +275,7 @@ class TaskManager:
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _now() -> str:
-    return datetime.datetime.utcnow().isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────

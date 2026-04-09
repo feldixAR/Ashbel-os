@@ -36,7 +36,7 @@ def daily_summary() -> dict:
     agent_kpi = compute_agent_summary(agents)
 
     return {
-        "generated_at":   datetime.datetime.utcnow().isoformat(),
+        "generated_at":   datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "leads":          lead_kpi,
         "agents":         agent_kpi,
         "tasks": {

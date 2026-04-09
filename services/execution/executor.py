@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _now_ms() -> int:
-    return int(datetime.datetime.utcnow().timestamp() * 1000)
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
 
 def _elapsed_ms(started: int) -> int:
     return _now_ms() - started

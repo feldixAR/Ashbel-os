@@ -79,9 +79,9 @@ def log_request(fn):
     """Decorator — logs method, path, and duration for every request."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        start = datetime.datetime.utcnow()
+        start = datetime.datetime.now(datetime.timezone.utc)
         result = fn(*args, **kwargs)
-        ms = int((datetime.datetime.utcnow() - start).total_seconds() * 1000)
+        ms = int((datetime.datetime.now(datetime.timezone.utc) - start).total_seconds() * 1000)
         log.info(f"[API] {request.method} {request.path} → {ms}ms")
         return result
     return wrapper
@@ -108,4 +108,4 @@ def _error(message: str, status: int = 400):
 
 
 def _now() -> str:
-    return datetime.datetime.utcnow().isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()

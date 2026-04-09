@@ -89,7 +89,7 @@ class ResearchPackage:
     generated_at: str = ""
     def __post_init__(self):
         if not self.generated_at:
-            self.generated_at = datetime.datetime.utcnow().isoformat()
+            self.generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 PROFILES = {
     "default": {"title":"General Client","description":"Potential client in construction","pain_points":["High costs","Unreliable contractors","Delays"],"motivations":["Dream home","Property value","Quality of life"],"objections":["Too expensive","Unknown company","Have contractor"],"best_channels":["WhatsApp","Email","Referrals"],"best_times":["Morning 9-11","Evening 19-21"],"message_tone":"Professional and warm","decision_maker":"Homeowner","avg_deal_size":"15000-80000 NIS","buying_cycle":"2-8 weeks"},
@@ -145,6 +145,6 @@ def build_niche_portfolio(audience: str) -> NichePortfolio:
 
 def full_research_package(goal_id: str, domain: str, audience: str, channel: str) -> ResearchPackage:
     try:
-        return ResearchPackage(goal_id=goal_id, domain=domain, audience=audience, channel=channel, profile=build_client_profile(audience, domain), market=build_market_map(domain), proposal=build_collaboration_proposal(audience), script=build_sales_script(audience), generated_at=datetime.datetime.utcnow().isoformat())
+        return ResearchPackage(goal_id=goal_id, domain=domain, audience=audience, channel=channel, profile=build_client_profile(audience, domain), market=build_market_map(domain), proposal=build_collaboration_proposal(audience), script=build_sales_script(audience), generated_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
     except Exception as e:
         log.error(f"full_research_package error: {e}"); raise

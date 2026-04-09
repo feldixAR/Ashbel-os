@@ -263,7 +263,7 @@ def build_research_summary(goal_id: str, domain: str, top_audience: str) -> dict
         "channels":       profile["channels"],
         "message_tone":   profile["message_tone"],
         "insights":       insights,
-        "created_at":     datetime.datetime.utcnow().isoformat(),
+        "created_at":     datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
 
 
@@ -285,7 +285,7 @@ def build_asset_draft(goal_id: str, top_audience: str, channel: str) -> dict:
             "description": port_tmpl["description"],
             "highlights":  port_tmpl["highlights"],
         },
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
 
 
@@ -308,5 +308,5 @@ def build_outreach_plan(goal_id: str, top_opp: dict) -> dict:
             }
             for s in steps
         ],
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

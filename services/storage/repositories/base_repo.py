@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 
 def utcnow_iso() -> str:
-    return datetime.datetime.utcnow().isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 class BaseRepository(Generic[T]):

@@ -94,7 +94,32 @@
       "Bash(grep \"\\\\.py$\")",
       "Bash(echo \"=== Approve it ===\" curl -s -X POST \"https://ashbel-os-production.up.railway.app/api/approvals/83709307-916a-403b-ad4f-b43929fdbf0c\" -H \"X-API-Key: Ashbel2026\" -H \"Content-Type: application/json\" -d \"{\"\"action\"\":\"\"approve\"\"}\")",
       "Bash(xargs basename:*)",
-      "Bash(venv/Scripts/python.exe -m pytest tests/test_phase11_engine.py -v 2>&1)"
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_phase11_engine.py -v 2>&1)",
+      "Bash(findstr:*)",
+      "Bash(venv/Scripts/python.exe -c \"from api.app import create_app; app=create_app\\(\\); print\\(sorted\\([str\\(r\\) for r in app.url_map.iter_rules\\(\\) if 'revenue' in str\\(r\\) or 'daily' in str\\(r\\)]\\)\\)\")",
+      "Bash(venv/Scripts/python.exe -c \"from api.app import create_app; app=create_app\\(\\); print\\([str\\(r\\) for r in app.url_map.iter_rules\\(\\) if 'claude' in str\\(r\\)]\\)\" 2>&1)",
+      "Bash(venv/Scripts/python.exe -c \"import anthropic; print\\(anthropic.__version__\\)\")",
+      "Bash(PROD=\"https://ashbel-os-production.up.railway.app\" KEY=\"Ashbel2026\" __NEW_LINE_700208df72ae183d__ echo \"=== 1. /api/claude/preview live ===\" curl -s -i -X POST \"$PROD/api/claude/preview\" -H \"X-API-Key: $KEY\" -H \"Content-Type: application/json\" -d '{\"\"\"\"instruction\"\"\"\":\"\"\"\"describe what you would do to list all leads\"\"\"\",\"\"\"\"repo\"\"\"\":\"\"\"\"feldixAR/Ashbel-os\"\"\"\",\"\"\"\"branch\"\"\"\":\"\"\"\"master\"\"\"\"}')",
+      "Bash(grep -n \"preview\\\\|approval\\\\|draft\\\\|audit\\\\|approve\" api/routes/*.py)",
+      "Bash(grep -n \"def.*draft\\\\|draft_before\\\\|preview\" engines/*.py)",
+      "Bash(venv/Scripts/python.exe -c \"from services.storage.models.claude_task import ClaudeTaskModel; print\\([c.name for c in ClaudeTaskModel.__table__.columns]\\)\")",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_openclaw_bridge.py -v)",
+      "Bash(wc -l ui/js/panels/*.js)",
+      "Bash(sed -n '268,340p' ui/css/app.css)",
+      "Bash(sed -n '1193,1240p' ui/css/app.css)",
+      "Bash(sed -n '1304,1350p' ui/css/app.css)",
+      "Bash(sed -n '983,1010p' ui/css/app.css)",
+      "Bash(sed -n '1193,1210p' ui/css/app.css)",
+      "Bash(sed -n '1735,1770p' ui/css/app.css)",
+      "Bash(grep -n workspace ui/js/panels/*.js ui/js/app.js)",
+      "Bash(grep -v \"^.*//.*API\\\\.\")",
+      "Bash(grep -rn \"def approval_history\\\\|GET.*approvals/history\\\\|GET.*outreach/summary\\\\|GET.*outreach/pipeline\\\\|GET.*daily_revenue_queue\\\\|GET.*admin/usage\\\\|GET.*analytics/daily-learning\\\\|GET.*analytics/metrics\" api/routes/*.py)",
+      "Bash(grep:*)",
+      "Bash(node --check ui/js/panels/briefing.js)",
+      "Bash(node --check ui/js/panels/command.js)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_openclaw_bridge.py::test_openclaw_intent_requires_auth -q)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_core_flow.py::TestOrchestratorMapping::test_all_mapped_actions_have_handlers -q)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/ -q)"
     ]
   }
 }

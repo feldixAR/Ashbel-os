@@ -12,7 +12,7 @@ class OutreachRepository(BaseRepository[OutreachModel]):
 
     def create(self, goal_id: str, opp_id: str, contact_name: str,
                contact_phone: str, channel: str, message_body: str) -> OutreachModel:
-        next_followup = (datetime.datetime.utcnow() + datetime.timedelta(days=3)).isoformat()
+        next_followup = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)).isoformat()
         record = OutreachModel(
             id=new_uuid(),
             goal_id=goal_id, opp_id=opp_id,
@@ -37,7 +37,7 @@ class OutreachRepository(BaseRepository[OutreachModel]):
 
     def list_due_followup(self) -> List[OutreachModel]:
         """Legacy: records with next_followup <= now (status-based)."""
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with get_session() as s:
             return (s.query(OutreachModel)
                     .filter(OutreachModel.status.in_(["pending", "sent"]),

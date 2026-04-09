@@ -115,7 +115,7 @@ def _append_audit_log(
         "action":      action,
         "resolved_by": resolved_by,
         "reason":      reason,
-        "ts":          datetime.datetime.utcnow().isoformat(),
+        "ts":          datetime.datetime.now(datetime.timezone.utc).isoformat(),
     })
     # Keep last 500 audit entries
     if len(audit) > 500:

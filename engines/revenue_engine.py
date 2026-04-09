@@ -83,7 +83,7 @@ def revenue_snapshot() -> RevenueSnapshot:
 
 def build_snapshot(leads: list) -> RevenueSnapshot:
     """Build RevenueSnapshot from lead list. Pure after DB read."""
-    now    = datetime.datetime.utcnow().isoformat()
+    now    = datetime.datetime.now(datetime.timezone.utc).isoformat()
     total  = len(leads)
 
     if not leads:

@@ -37,7 +37,7 @@ def on_pattern_detected(event_type: str, payload: dict, meta: dict) -> None:
         "value":      pattern_value,
         "confidence": confidence,
         "source":     source,
-        "detected_at": datetime.datetime.utcnow().isoformat(),
+        "detected_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     })
 
     # Append to learning changelog
@@ -68,7 +68,7 @@ def on_prompt_optimized(event_type: str, payload: dict, meta: dict) -> None:
         MemoryStore.set_agent(agent_id, "pending_prompt_upgrade", {
             "new_prompt":   new_prompt,
             "improvement":  improvement,
-            "created_at":   datetime.datetime.utcnow().isoformat(),
+            "created_at":   datetime.datetime.now(datetime.timezone.utc).isoformat(),
         })
 
     _append_changelog("prompt_optimized", {
@@ -112,7 +112,7 @@ def _append_changelog(event: str, details: dict) -> None:
     changelog.append({
         "event":   event,
         "details": details,
-        "ts":      datetime.datetime.utcnow().isoformat(),
+        "ts":      datetime.datetime.now(datetime.timezone.utc).isoformat(),
     })
     # Keep only last 200 entries
     if len(changelog) > 200:

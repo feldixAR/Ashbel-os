@@ -78,7 +78,7 @@ class TestOrchestratorMapping(unittest.TestCase):
         """Extract (intent, action) pairs from orchestrator source via AST."""
         import ast, os
         src  = open(os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                 "orchestration", "orchestrator.py")).read()
+                                 "orchestration", "orchestrator.py"), encoding="utf-8").read()
         tree = ast.parse(src)
         pairs = {}
         for node in ast.walk(tree):
@@ -97,7 +97,7 @@ class TestOrchestratorMapping(unittest.TestCase):
         """Extract _HANDLERS keys from executor source via AST."""
         import ast, os
         src  = open(os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                 "services", "execution", "executor.py")).read()
+                                 "services", "execution", "executor.py"), encoding="utf-8").read()
         tree = ast.parse(src)
         keys = set()
         for node in ast.walk(tree):

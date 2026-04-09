@@ -474,8 +474,8 @@ def inbox():
 
     limit = min(int(request.args.get("limit", 50)), 200)
     days  = min(int(request.args.get("days",  30)), 90)
-    cutoff = (_dt.datetime.utcnow() - _dt.timedelta(days=days)).isoformat()
-    now    = _dt.datetime.utcnow()
+    cutoff = (_dt.datetime.now(datetime.timezone.utc) - _dt.timedelta(days=days)).isoformat()
+    now    = _dt.datetime.now(datetime.timezone.utc)
 
     try:
         with get_session() as s:
@@ -495,7 +495,7 @@ def inbox():
             lead_ids = list({m.lead_id for m in inbound if m.lead_id})
             outbound_lead_ids = set()
             if lead_ids:
-                cutoff_24h = (_dt.datetime.utcnow() - _dt.timedelta(hours=24)).isoformat()
+                cutoff_24h = (_dt.datetime.now(datetime.timezone.utc) - _dt.timedelta(hours=24)).isoformat()
                 recent_out = (
                     s.query(MessageModel.lead_id)
                     .filter(

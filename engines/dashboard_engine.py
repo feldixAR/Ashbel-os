@@ -41,7 +41,7 @@ class DashboardData:
     system_health:   dict
 
 def build_kpis(leads: list, outreach_records: list, goals: list) -> List[KPI]:
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     total = len(leads)
     hot   = len([l for l in leads if (l.score or 0) >= 70])
     closed = len([l for l in leads if l.status == "סגור_זכה"])
@@ -65,7 +65,7 @@ def build_kpis(leads: list, outreach_records: list, goals: list) -> List[KPI]:
 
 def build_alerts(kpis: List[KPI], leads: list, outreach_records: list) -> List[Alert]:
     import uuid
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     alerts = []
 
     for kpi in kpis:
@@ -89,7 +89,7 @@ def build_alerts(kpis: List[KPI], leads: list, outreach_records: list) -> List[A
             ))
 
     # Check overdue follow-ups
-    now_str = datetime.datetime.utcnow().isoformat()
+    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
     overdue = [r for r in outreach_records if (r.next_followup or "") < now_str and r.status == "pending"]
     if overdue:
         alerts.append(Alert(
@@ -105,7 +105,7 @@ def build_alerts(kpis: List[KPI], leads: list, outreach_records: list) -> List[A
     return alerts
 
 def build_dashboard() -> DashboardData:
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
         from config.business_registry import get_active_business
         biz = get_active_business()

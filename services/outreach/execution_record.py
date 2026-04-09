@@ -61,7 +61,7 @@ def mark_sent(record_id: str) -> bool:
             log.warning(f"[ExecutionRecord] mark_sent: record {record_id} not found")
             return False
         record.status  = "sent"
-        record.sent_at = datetime.datetime.utcnow().isoformat()
+        record.sent_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     log.info(f"[ExecutionRecord] Marked sent: id={record_id}")
     return True
@@ -81,7 +81,7 @@ def mark_replied(record_id: str, notes: str = "") -> bool:
             log.warning(f"[ExecutionRecord] mark_replied: record {record_id} not found")
             return False
         record.status     = "replied"
-        record.replied_at = datetime.datetime.utcnow().isoformat()
+        record.replied_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         if notes:
             record.notes = notes
 

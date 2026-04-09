@@ -72,7 +72,7 @@ def admin_status():
         },
         "runtime": {
             "uptime_seconds": uptime,
-            "timestamp_utc":  datetime.datetime.utcnow().isoformat(),
+            "timestamp_utc":  datetime.datetime.now(datetime.timezone.utc).isoformat(),
         },
     })
 

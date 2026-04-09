@@ -94,7 +94,7 @@ def _detect_top_audience(leads: list) -> str:
     except Exception: return "architects"
 
 def measure_outreach_performance(period_days: int = 30) -> PerformanceReport:
-    now = datetime.datetime.utcnow().isoformat()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
         from services.storage.repositories.outreach_repo import OutreachRepository
         from services.storage.repositories.lead_repo import LeadRepository
@@ -182,7 +182,7 @@ def allocate_resources(leads: list = None) -> List[ResourceAllocation]:
     return allocs
 
 def auto_improve_agents() -> ImprovementReport:
-    now=datetime.datetime.utcnow().isoformat(); improvements=[]; routing_updates={}; template_updates={}
+    now=datetime.datetime.now(datetime.timezone.utc).isoformat(); improvements=[]; routing_updates={}; template_updates={}
     try:
         from memory.memory_store import MemoryStore
         from agents.base.agent_registry import agent_registry
@@ -218,7 +218,7 @@ def detect_bottlenecks_deep() -> List[dict]:
         if total_sent>10:
             rate=total_replied/total_sent
             if rate<0.1: bottlenecks.append({"category":"שיעור מענה נמוך","count":total_sent,"severity":"high","description":f"שיעור מענה {round(rate*100,1)}%","suggestion":"שנה את תבנית הפנייה"})
-        now=datetime.datetime.utcnow().isoformat()
+        now=datetime.datetime.now(datetime.timezone.utc).isoformat()
         overdue=[r for r in records if (r.next_followup or "")<now and r.status=="pending"]
         if len(overdue)>5: bottlenecks.append({"category":"follow-up פגי תוקף","count":len(overdue),"severity":"medium","description":f"{len(overdue)} פניות שלא טופלו","suggestion":"הפעל מחזור outreach יומי"})
         cold=[l for l in leads if (l.score or 0)<30]
@@ -244,7 +244,7 @@ def record_reply(outreach_id: str, reply_text: str = "", positive: bool = True) 
     except Exception as e: log.error(f"[Learning] record_reply failed: {e}"); return False
 
 def full_learning_cycle() -> LearningCycleResult:
-    now=datetime.datetime.utcnow().isoformat()
+    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
     performance=measure_outreach_performance(); ab_reports=run_ab_analysis()
     resource_plan=allocate_resources(); improvements=auto_improve_agents(); bottlenecks=detect_bottlenecks_deep()
     next_actions=[]
