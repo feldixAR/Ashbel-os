@@ -73,6 +73,26 @@ def version():
     })
 
 
+@bp.route("/system/metrics", methods=["GET"])
+@require_auth
+@log_request
+def system_metrics():
+    from observability.metrics import snapshot
+    return ok({"metrics": snapshot()})
+
+
+@bp.route("/system/traces/<trace_id>", methods=["GET"])
+@require_auth
+@log_request
+def system_trace(trace_id: str):
+    from observability.tracing import get
+    events = get(trace_id)
+    if not events:
+        from api.middleware import _error
+        return _error(f"trace '{trace_id}' not found", 404)
+    return ok({"trace_id": trace_id, "events": events})
+
+
 def _scheduler_status() -> dict:
     try:
         from scheduler.revenue_scheduler import status
