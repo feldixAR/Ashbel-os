@@ -110,20 +110,28 @@ const ApprovalsPanel = (() => {
   }
 
   function _pendingCard(a) {
+    const ot       = a.details?.outreach_task || {};
+    const leadName = ot.lead_name || a.details?.lead_name || '—';
+    const audience = ot.audience  || '—';
+    const channel  = ot.channel   || 'whatsapp';
+    const preview  = ot.message   || '';
     return `
       <div class="approval-card" id="appr-${a.id}">
-        <div class="approval-info">
+        <div class="approval-info" style="flex:1">
           <div class="approval-action">${a.action}</div>
           <div class="approval-detail">
-            סיכון: ${a.risk_level} | task: ${(a.task_id||'—').slice(0,8)}
-            ${a.created_at ? `| נוצר: ${a.created_at.slice(0,16).replace('T',' ')}` : ''}
+            👤 ${leadName} | 🎯 ${audience} | 📡 ${channel} | סיכון: ${a.risk_level}
+            ${a.created_at ? `| ${a.created_at.slice(0,16).replace('T',' ')}` : ''}
           </div>
+          ${preview ? `<div style="margin-top:6px;padding:8px;background:var(--surface-2,rgba(0,0,0,.06));border-radius:6px;font-size:11px;color:var(--muted);max-height:60px;overflow:hidden;direction:rtl">${preview.slice(0,200)}</div>` : ''}
         </div>
-        <span class="approval-risk">רמה ${a.risk_level}</span>
-        <button class="btn btn-primary" style="padding:6px 12px;font-size:11px;"
-                onclick="ApprovalsPanel.resolve('${a.id}', 'approve')">אשר</button>
-        <button class="btn btn-danger"
-                onclick="ApprovalsPanel.resolve('${a.id}', 'deny')">דחה</button>
+        <div style="display:flex;flex-direction:column;gap:5px;min-width:80px">
+          <span class="approval-risk">רמה ${a.risk_level}</span>
+          <button class="btn btn-primary" style="padding:5px 10px;font-size:11px;"
+                  onclick="ApprovalsPanel.resolve('${a.id}', 'approve')">✅ אשר</button>
+          <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;"
+                  onclick="ApprovalsPanel.resolve('${a.id}', 'deny')">❌ דחה</button>
+        </div>
       </div>
     `;
   }
