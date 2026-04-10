@@ -243,6 +243,31 @@ def _job_telegram_delivery(force: bool = False) -> dict:
         return {"status": "error", "error": str(e)}
 
 
+def _job_gmail_scan():
+    """Scan Gmail inbox for new aluminum leads. Runs every 30 min."""
+    try:
+        from services.integrations.gmail_listener import scan_inbox
+        result = scan_inbox(max_results=20)
+        log.info(f"[Scheduler] gmail_scan: {result}")
+    except Exception as e:
+        log.error(f"[Scheduler] gmail_scan crashed: {e}", exc_info=True)
+
+
+def _job_maps_scan():
+    """Scrape Google Maps for leads in key cities. Runs daily 06:00 IL."""
+    try:
+        from services.integrations.lead_scraper import scrape, CATEGORIES
+        cities = ["נס ציונה", "רחובות", "ראשון לציון", "תל אביב"]
+        total_created = 0
+        for city in cities:
+            for cat in CATEGORIES[:2]:   # limit to 2 categories per run
+                result = scrape(city, cat)
+                total_created += result.get("created", 0)
+        log.info(f"[Scheduler] maps_scan: total_created={total_created}")
+    except Exception as e:
+        log.error(f"[Scheduler] maps_scan crashed: {e}", exc_info=True)
+
+
 # ── Scheduler lifecycle ───────────────────────────────────────────────────────
 
 def start():
@@ -306,6 +331,26 @@ def start():
                 trigger="cron",
                 hour=20, minute=0,
                 id="daily_learning_report",
+                replace_existing=True,
+                misfire_grace_time=1800,
+            )
+
+            # Gmail scan every 30 min
+            sched.add_job(
+                _job_gmail_scan,
+                trigger="interval",
+                hours=0, minutes=30,
+                id="gmail_scan",
+                replace_existing=True,
+                misfire_grace_time=300,
+            )
+
+            # Maps lead scrape daily at 06:00 IL
+            sched.add_job(
+                _job_maps_scan,
+                trigger="cron",
+                hour=6, minute=0,
+                id="maps_scan",
                 replace_existing=True,
                 misfire_grace_time=1800,
             )
