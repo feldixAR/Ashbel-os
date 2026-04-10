@@ -107,12 +107,15 @@ memory/sessions/                (Token usage, agent decisions, session logs)
 ---
 
 ## Governance Rules
+
+> Source of truth: `docs/ashbelos-governance.md`. Rules below are a summary.
+
 1. Business context locked to Ashbal Aluminum only
-2. Approved external channel: **Telegram only** (Wave One)
-3. WhatsApp execution route exists but must not be expanded
+2. Approved external channel: **Telegram only** (Wave One) — see `docs/TELEGRAM.md`
+3. WhatsApp execution route exists but must not be expanded — see `docs/INTEGRATIONS.md`
 4. Sensitive action flow: **Intent → Preview → Approval → Execute → Audit Log**
 5. Business logic stays native to AshbelOS (lead scoring, revenue logic, Israeli adaptation)
-6. Fallback paths must work without external bridges
+6. Fallback paths must work without external bridges — see `docs/FALLBACK.md`
 
 ---
 

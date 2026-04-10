@@ -1,5 +1,8 @@
 # AshbelOS Copilot Instructions
 
+> Adapter of `docs/ashbelos-governance.md` and `docs/ashbelos-token-efficiency-policy.md`.
+> Source of truth for governance and token policy lives in `docs/`. If conflict exists, `docs/` wins.
+
 ## Product Identity
 - AshbelOS is the independent business core. OpenClaw is a detachable orchestration layer, not the core.
 - Claude bridge is an orchestration interface only — business logic stays in AshbelOS engines.
@@ -7,6 +10,7 @@
 ## Stack
 - Backend: Flask + Gunicorn (Python 3.11), Railway, PostgreSQL
 - Phase 11 scoring: engines/phase11_engine.py (source of truth)
+- Docs: docs/AGENT.md, docs/TELEGRAM.md, docs/FALLBACK.md, docs/INTEGRATIONS.md, docs/DEPLOY.md, docs/API.md
 
 ## Lead statuses (DB values, Hebrew)
 - חדש, ניסיון קשר, מתעניין, סגור_זכה, סגור_הפסיד

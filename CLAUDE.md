@@ -161,7 +161,7 @@ WhatsApp / Dashboard UI
 
 ## Governance Policy
 
-> Source of truth: governance document. This section is its adapter. If conflict exists, governance doc wins until this section is corrected.
+> Source of truth: `docs/ashbelos-governance.md` (repo-resident). This section is its adapter. If conflict exists, the source-of-truth doc wins until this section is corrected.
 
 ### Product Layers
 - **AshbelOS** is the independent business core. Its autonomy must not be weakened.
@@ -201,6 +201,8 @@ Do not introduce the following unless explicitly approved:
 ---
 
 ## Token Discipline Policy
+
+> Source of truth: `docs/ashbelos-token-efficiency-policy.md` (repo-resident). This section is its adapter.
 
 This policy is binding for all work in this repository.
 
