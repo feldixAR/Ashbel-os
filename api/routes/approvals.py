@@ -110,6 +110,70 @@ def resolve_approval(approval_id: str):
     return ok(resp)
 
 
+def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str:
+    """
+    Shared resolution logic callable from telegram webhook (no HTTP context).
+    Returns a human-readable Hebrew result string.
+    """
+    from services.storage.repositories.approval_repo import ApprovalRepository
+    from events.event_bus                             import event_bus
+    import events.event_types                         as ET
+
+    repo   = ApprovalRepository()
+    status = "approved" if action == "approve" else "denied"
+    result = repo.resolve(approval_id, status=status, resolved_by=source, note="")
+
+    if not result:
+        return f"❌ אישור `{approval_id[:8]}` לא נמצא או כבר טופל"
+
+    event_type = ET.APPROVAL_GRANTED if action == "approve" else ET.APPROVAL_DENIED
+    event_bus.publish(event_type, payload={
+        "approval_id": approval_id,
+        "action":      result.action,
+        "resolved_by": source,
+        "task_id":     result.task_id,
+    })
+
+    if action == "approve":
+        details = result.details or {}
+        ot = details.get("outreach_task") if isinstance(details, dict) else None
+        if ot and isinstance(ot, dict) and ot.get("lead_id") and ot.get("phone"):
+            try:
+                import uuid as _uuid
+                from engines.outreach_engine import (
+                    OutreachTask, execute_outreach,
+                    record_outreach_sent, record_outreach_failed,
+                    _build_whatsapp_link,
+                )
+                msg  = ot.get("message", "")
+                task = OutreachTask(
+                    task_id  = str(_uuid.uuid4()),
+                    lead_id  = ot["lead_id"],
+                    lead_name= ot.get("lead_name", ""),
+                    phone    = ot["phone"],
+                    channel  = ot.get("channel", "whatsapp"),
+                    message  = msg,
+                    audience = ot.get("audience", "general"),
+                    priority = ot.get("priority", 1),
+                    urgency  = "today",
+                    reason   = f"אושר דרך {source}",
+                    attempt  = ot.get("attempt", 1),
+                    deep_link= _build_whatsapp_link(ot["phone"], msg),
+                )
+                res = execute_outreach(task)
+                if res.success:
+                    record_outreach_sent(task, mode=res.mode)
+                    return f"✅ אושר ובוצע — {ot.get('lead_name','')} ({res.mode})"
+                else:
+                    record_outreach_failed(task, error=res.error or "failed")
+                    return f"✅ אושר אך ביצוע נכשל: {res.error}"
+            except Exception as ex:
+                return f"✅ אושר אך שגיאת ביצוע: {ex}"
+        return f"✅ אישור {approval_id[:8]} אושר"
+
+    return f"❌ אישור {approval_id[:8]} נדחה"
+
+
 def _serialize(a) -> dict:
     return {
         "id":          a.id,
