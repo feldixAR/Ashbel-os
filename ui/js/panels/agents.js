@@ -36,6 +36,21 @@ const AgentsPanel = (() => {
         </select>
       </div>
       <div id="agInsight" style="margin-bottom:12px"></div>
+
+      <!-- Chief of Staff quick card -->
+      <div style="background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:14px;margin-bottom:14px;direction:rtl">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:600;font-size:13px">🧠 Chief of Staff</div>
+          <span class="live-dot"></span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">תכנון אסטרטגי · מדיניות · תיאום צוות</div>
+        <div id="cosLastDecision" style="font-size:10px;color:var(--muted);margin-bottom:10px;min-height:16px">—</div>
+        <button class="btn btn-primary" style="font-size:11px;padding:6px 14px"
+                onclick="App.switchTo('command');setTimeout(()=>{const i=document.getElementById('cmdInput');if(i){i.value='מה הצעד הבא?';document.getElementById('cmdSend')?.click();}},300)">
+          שאל את Chief of Staff
+        </button>
+      </div>
+
       <div class="agents-grid" id="agentsGrid">${UI.loading('טוען סוכנים...')}</div>
 
       <!-- Today's system activity -->
