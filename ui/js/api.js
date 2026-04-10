@@ -173,5 +173,11 @@ const API = (() => {
       request('POST', '/briefing/call/end',
         { call_id: callId, lead_id: leadId, notes, outcome,
           duration_sec: durationSec, performed_by: performedBy }),
+
+    // ── SEO Engine ───────────────────────────────────────────────────────────
+    seoMeta:   () => request('GET', '/seo/meta'),
+    seoCities: () => request('GET', '/seo/cities'),
+    seoBlog:   () => request('GET', '/seo/blog'),
+    seoImages: () => request('GET', '/seo/images'),
   };
 })();

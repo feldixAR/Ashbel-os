@@ -26,6 +26,7 @@ const App = (() => {
     { id: 'agents',         label: 'סוכנים',           icon: '⊙',  panel: () => AgentsPanel         },
     { id: 'goals',          label: 'יעדים',            icon: '⊕',  panel: () => GoalsPanel          },
     { id: 'reports',        label: 'דוחות',            icon: '▣',  panel: () => ReportsPanel        },
+    { id: 'seo',            label: 'SEO Engine',       icon: '⊞',  panel: () => SEOPanel            },
     { id: 'settings',       label: 'הגדרות',           icon: '⚙',  panel: () => SettingsPanel       },
   ];
 

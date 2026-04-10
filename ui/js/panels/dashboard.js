@@ -214,6 +214,35 @@ const DashboardPanel = (() => {
               ${[0,1,2].map(() => skelQueueItem()).join('')}
             </div>
           </div>
+
+          <!-- Policy Status + Lead Sources + Health -->
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+
+            <!-- Policy status -->
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 14px;direction:rtl">
+              <div style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.08em;margin-bottom:6px">POLICY STATUS</div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:12px;color:rgba(255,255,255,.7)">מותר לשלוח עכשיו?</span>
+                <span id="cc2PolicyStatus" style="font-size:12px;font-weight:600">—</span>
+              </div>
+              <div id="cc2PolicyReason" style="font-size:10px;color:rgba(255,255,255,.35);margin-top:3px">בודק...</div>
+            </div>
+
+            <!-- Lead sources -->
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 14px;direction:rtl">
+              <div style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.08em;margin-bottom:8px">LEAD SOURCES</div>
+              <div id="cc2LeadSources" style="display:flex;gap:8px;flex-wrap:wrap">
+                <span style="font-size:10px;color:rgba(255,255,255,.3)">טוען...</span>
+              </div>
+            </div>
+
+            <!-- Weekly health -->
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 14px;direction:rtl">
+              <div style="font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.08em;margin-bottom:6px">WEEKLY HEALTH</div>
+              <div id="cc2WeeklyHealth" style="font-size:11px;color:rgba(255,255,255,.6)">טוען...</div>
+            </div>
+
+          </div>
         </section>
 
       </main>
@@ -229,10 +258,12 @@ const DashboardPanel = (() => {
       console.warn('[Dashboard] load() aborted — no API key in sessionStorage');
       return;
     }
-    // ── Parallel: dashboard summary + revenue queue ────────────────────────
-    const [res, revRes] = await Promise.all([
+    // ── Parallel: dashboard summary + revenue queue + leads + usage ──────
+    const [res, revRes, leadsRes, usageRes] = await Promise.all([
       API.dashboardSummary(),
       API.dailyRevenue(),
+      API.leads({ limit: 300 }).catch(() => ({ success: false })),
+      API.adminUsage().catch(() => ({ success: false })),
     ]);
     const revQueue = revRes.success ? (revRes.data?.queue || []) : [];
     if (!res.success) {
@@ -352,6 +383,56 @@ const DashboardPanel = (() => {
         </div>
       </div>`).join('')
       : '<div style="text-align:center;color:rgba(255,255,255,.35);padding:24px 0;font-size:13px">אין עסקאות תקועות</div>');
+
+    // ── Policy status (client-side, Israel UTC+3) ─────────────────────────
+    const _policyStatus = () => {
+      const now = new Date();
+      const il  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+      const d   = il.getDay();    // 0=Sun … 5=Fri, 6=Sat
+      const h   = il.getHours();
+      if (d === 6) return { ok: false, reason: 'שבת — שליחה חסומה' };
+      if (d === 5 && h >= 13) return { ok: false, reason: 'שישי אחה"צ — שליחה חסומה' };
+      if (h < 9 || h >= 20)  return { ok: false, reason: `מחוץ לשעות פעילות (09:00–20:00) | עכשיו ${h}:${String(il.getMinutes()).padStart(2,'0')}` };
+      return { ok: true,  reason: `מותר לשלוח | שעה ${h}:${String(il.getMinutes()).padStart(2,'0')} בישראל` };
+    };
+    const ps = _policyStatus();
+    const psEl = document.getElementById('cc2PolicyStatus');
+    const prEl = document.getElementById('cc2PolicyReason');
+    if (psEl) { psEl.textContent = ps.ok ? '✅ כן' : '🔴 לא'; psEl.style.color = ps.ok ? '#4ade80' : '#f87171'; }
+    if (prEl)   prEl.textContent = ps.reason;
+
+    // ── Lead sources breakdown ─────────────────────────────────────────────
+    const sourcesEl = document.getElementById('cc2LeadSources');
+    if (sourcesEl && leadsRes.success) {
+      const all = leadsRes.data?.leads || leadsRes.data || [];
+      const counts = {};
+      all.forEach(l => { const s = l.source || 'manual'; counts[s] = (counts[s]||0) + 1; });
+      const srcColors = { gmail: '#4ade80', maps: '#60a5fa', manual: '#a78bfa', whatsapp: '#34d399' };
+      sourcesEl.innerHTML = Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([src, n]) => `
+        <div style="background:rgba(255,255,255,.06);border-radius:6px;padding:4px 10px;text-align:center">
+          <div style="font-size:12px;font-weight:600;color:${srcColors[src]||'#fff'}">${n}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.4)">${src}</div>
+        </div>`).join('') || '<span style="font-size:10px;color:rgba(255,255,255,.3)">אין לידים</span>';
+    } else if (sourcesEl) {
+      sourcesEl.innerHTML = '<span style="font-size:10px;color:rgba(255,255,255,.3)">אין נתונים</span>';
+    }
+
+    // ── Weekly health summary ──────────────────────────────────────────────
+    const healthEl = document.getElementById('cc2WeeklyHealth');
+    if (healthEl) {
+      if (usageRes.success) {
+        const u = usageRes.data;
+        const total = u.total_actions || 0;
+        const acts  = Object.entries(u.activities || {});
+        healthEl.innerHTML = `
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <span>פעולות היום: <strong style="color:#60a5fa">${total}</strong></span>
+            ${acts.slice(0,3).map(([k,v]) => `<span>${k}: <strong>${v}</strong></span>`).join('')}
+          </div>`;
+      } else {
+        healthEl.innerHTML = '<span style="color:rgba(255,255,255,.3)">אין נתוני פעילות</span>';
+      }
+    }
   }
 
   function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
