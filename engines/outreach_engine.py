@@ -169,6 +169,22 @@ def execute_outreach(task: OutreachTask) -> OutreachResult:
     import os
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+    # ── Cultural adaptation (pure Python, 0 tokens) ────────────────────────────
+    try:
+        from services.integrations.cultural_adapter import cultural_adapter
+        lead_stub = type("L", (), {
+            "name":   task.lead_name,
+            "notes":  "",
+            "status": task.audience or "",
+            "source": "",
+        })()
+        task = task.__class__(
+            **{**task.__dict__,
+               "message": cultural_adapter.adapt_message(lead_stub, task.message, task.attempt or 0)}
+        )
+    except Exception as _ca_err:
+        log.debug(f"[Outreach] cultural_adapter skipped: {_ca_err}")
+
     # ── Email channel ──────────────────────────────────────────────────────────
     if task.channel == "email":
         return _send_email(task)
