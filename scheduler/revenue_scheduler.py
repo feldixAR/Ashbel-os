@@ -243,6 +243,22 @@ def _job_telegram_delivery(force: bool = False) -> dict:
         return {"status": "error", "error": str(e)}
 
 
+def _job_maintenance():
+    """Weekly health report + CLAUDE.md improvements. Sunday 07:00 IL."""
+    try:
+        from agents.departments.executive.maintenance_agent import MaintenanceAgent
+        agent = MaintenanceAgent()
+        analysis = agent.analyze_sessions()
+        agent.propose_improvements(analysis)
+        report   = agent.build_health_report(analysis)
+        agent._log_run(analysis)
+        from services.telegram_service import telegram_service
+        telegram_service.send(report)
+        log.info("[Scheduler] maintenance_job: done")
+    except Exception as e:
+        log.error(f"[Scheduler] maintenance_job crashed: {e}", exc_info=True)
+
+
 def _job_gmail_scan():
     """Scan Gmail inbox for new aluminum leads. Runs every 30 min."""
     try:
@@ -333,6 +349,16 @@ def start():
                 id="daily_learning_report",
                 replace_existing=True,
                 misfire_grace_time=1800,
+            )
+
+            # Maintenance agent: Sunday 07:00 IL
+            sched.add_job(
+                _job_maintenance,
+                trigger="cron",
+                day_of_week="sun", hour=7, minute=0,
+                id="maintenance",
+                replace_existing=True,
+                misfire_grace_time=3600,
             )
 
             # Gmail scan every 30 min
