@@ -135,6 +135,13 @@ WhatsApp / Dashboard UI
 | `SECRET_KEY` | Railway secret | Flask session key |
 | `ANTHROPIC_API_KEY` | Railway secret | For AI-powered engines |
 | `BUSINESS_ID` | Railway env | Set to `ashbel` (default if unset) |
+| `TELEGRAM_BOT_TOKEN` | Railway secret | Telegram Bot API token from @BotFather |
+| `TELEGRAM_CHAT_ID` | Railway secret | Target chat/channel ID for outbound messages |
+| `WEBHOOK_VERIFY_TOKEN` | Railway secret | Authenticates inbound Telegram webhook |
+| `WHATSAPP_ACCESS_TOKEN` | Railway secret | Meta WhatsApp Business API access token |
+| `WHATSAPP_PHONE_NUMBER_ID` | Railway secret | Meta WhatsApp sender phone number ID |
+| `GMAIL_CREDENTIALS_JSON` | Railway secret | Google service account JSON for Gmail listener |
+| `GOOGLE_MAPS_API_KEY` | Railway secret | Google Maps Places API key for lead scraper |
 
 ---
 
