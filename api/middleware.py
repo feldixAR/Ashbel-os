@@ -75,6 +75,10 @@ def require_auth(fn):
     return wrapper
 
 
+# Alias — lead_ops.py uses require_api_key
+require_api_key = require_auth
+
+
 def log_request(fn):
     """Decorator — logs method, path, and duration for every request."""
     @functools.wraps(fn)

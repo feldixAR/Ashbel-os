@@ -25,14 +25,18 @@ import datetime
 import logging
 import uuid
 
-import pytz
+try:
+    import pytz as _pytz
+    _IL = _pytz.timezone("Asia/Jerusalem")
+except ImportError:
+    _IL = datetime.timezone(datetime.timedelta(hours=2))   # UTC+2 fallback
+
 from flask import Blueprint, request
 
 from api.middleware import require_auth, log_request, ok, _error
 
 log   = logging.getLogger(__name__)
 bp    = Blueprint("crm", __name__)
-_IL   = pytz.timezone("Asia/Jerusalem")
 
 
 # ── Deals ──────────────────────────────────────────────────────────────────────

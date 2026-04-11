@@ -14,7 +14,10 @@ import logging
 import os
 from dataclasses import dataclass
 
-import httpx
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +47,8 @@ class TelegramService:
             msg = "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set"
             log.warning(f"[TelegramService] {msg}")
             return TelegramResult(success=False, error=msg)
+        if httpx is None:
+            return TelegramResult(success=False, error="httpx not installed")
 
         url = _TELEGRAM_API.format(token=self._token)
         payload = {
@@ -59,10 +64,6 @@ class TelegramService:
             message_id = str(data.get("result", {}).get("message_id", ""))
             log.info(f"[TelegramService] sent message_id={message_id}")
             return TelegramResult(success=True, message_id=message_id)
-        except httpx.HTTPStatusError as e:
-            err = f"HTTP {e.response.status_code}: {e.response.text}"
-            log.error(f"[TelegramService] {err}")
-            return TelegramResult(success=False, error=err)
         except Exception as e:
             log.error(f"[TelegramService] send failed: {e}", exc_info=True)
             return TelegramResult(success=False, error=str(e))
@@ -84,6 +85,8 @@ class TelegramService:
         """
         if not self._token or not self._chat_id:
             return TelegramResult(success=False, error="token/chat_id not set")
+        if httpx is None:
+            return TelegramResult(success=False, error="httpx not installed")
 
         text = (
             f"🔔 *בקשת אישור*\n\n"
@@ -120,7 +123,7 @@ class TelegramService:
 
     def answer_callback(self, callback_query_id: str, text: str = "") -> None:
         """Acknowledge a callback query (removes loading spinner in Telegram)."""
-        if not self._token:
+        if not self._token or httpx is None:
             return
         try:
             url = _TELEGRAM_ANSWER_CBQ.format(token=self._token)

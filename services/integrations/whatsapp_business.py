@@ -25,11 +25,19 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-import httpx
-import pytz
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore
+
+try:
+    import pytz as _pytz
+    _IL_TZ = _pytz.timezone("Asia/Jerusalem")
+except ImportError:
+    import datetime as _dt2
+    _IL_TZ = _dt2.timezone(_dt2.timedelta(hours=2))
 
 log = logging.getLogger(__name__)
-_IL_TZ = pytz.timezone("Asia/Jerusalem")
 
 _BASE_URL = "https://graph.facebook.com/{version}/{phone_number_id}/messages"
 
@@ -137,6 +145,8 @@ class WhatsAppBusinessClient:
         return result.success
 
     def _post(self, payload: dict) -> WASendResult:
+        if httpx is None:
+            return WASendResult(success=False, error="httpx not installed")
         try:
             resp = httpx.post(
                 self._url(),
@@ -152,10 +162,6 @@ class WhatsAppBusinessClient:
             )
             log.info(f"[WA_Business] sent message_id={msg_id}")
             return WASendResult(success=True, message_id=msg_id)
-        except httpx.HTTPStatusError as e:
-            err = f"HTTP {e.response.status_code}: {e.response.text[:300]}"
-            log.error(f"[WA_Business] send failed: {err}")
-            return WASendResult(success=False, error=err)
         except Exception as e:
             log.error(f"[WA_Business] send error: {e}", exc_info=True)
             return WASendResult(success=False, error=str(e))

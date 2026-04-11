@@ -1,8 +1,6 @@
 """
 events/handlers/lead_acquisition_handlers.py
-Phase 12: Lead Acquisition OS
-
-Handlers for new lead acquisition events.
+Phase 12: Lead Acquisition OS — fixed handler signatures to match event_bus 3-arg convention.
 """
 
 import logging
@@ -11,9 +9,8 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
-def on_lead_discovered(event: dict[str, Any]) -> None:
+def on_lead_discovered(event_type: str, payload: dict, meta: dict) -> None:
     """Auto-flag high-score discovered leads + push Telegram alert for hot leads."""
-    payload    = event.get("payload") or {}
     lead_id    = payload.get("lead_id")
     session_id = payload.get("session_id")
     score      = payload.get("score", 0)
@@ -27,7 +24,6 @@ def on_lead_discovered(event: dict[str, Any]) -> None:
             repo = LeadRepository()
             repo.update_status(lead_id, "ליד חם — נגלה")
 
-            # Telegram alert for hot leads (non-blocking)
             lead = repo.get_by_id(lead_id)
             if lead:
                 _telegram_hot_lead_alert(lead, int(score), source or "")
@@ -35,9 +31,8 @@ def on_lead_discovered(event: dict[str, Any]) -> None:
             log.warning(f"[on_lead_discovered] status update failed: {e}")
 
 
-def on_inbound_lead_received(event: dict[str, Any]) -> None:
+def on_inbound_lead_received(event_type: str, payload: dict, meta: dict) -> None:
     """Set priority status for inbound lead, trigger approval draft."""
-    payload = event.get("payload") or {}
     lead_id = payload.get("lead_id")
     score   = payload.get("score", 0)
     source  = payload.get("source", "inbound")
@@ -49,7 +44,6 @@ def on_inbound_lead_received(event: dict[str, Any]) -> None:
             from services.storage.repositories.lead_repo import LeadRepository
             repo = LeadRepository()
             repo.update_status(lead_id, "ליד נכנס — ממתין לתגובה")
-            # If draft exists, create approval record
             lead = repo.get_by_id(lead_id)
             if lead and getattr(lead, "outreach_draft", None):
                 _create_approval_for_inbound(lead_id, lead)
@@ -57,9 +51,8 @@ def on_inbound_lead_received(event: dict[str, Any]) -> None:
             log.warning(f"[on_inbound_lead_received] update failed: {e}")
 
 
-def on_lead_outreach_sent(event: dict[str, Any]) -> None:
+def on_lead_outreach_sent(event_type: str, payload: dict, meta: dict) -> None:
     """Update lead after approved outreach is sent: status, attempts, follow-up."""
-    payload = event.get("payload") or {}
     lead_id = payload.get("lead_id")
     channel = payload.get("channel")
     action  = payload.get("action")
@@ -85,9 +78,8 @@ def on_lead_outreach_sent(event: dict[str, Any]) -> None:
             log.warning(f"[on_lead_outreach_sent] update failed: {e}")
 
 
-def on_lead_followup_proposed(event: dict[str, Any]) -> None:
+def on_lead_followup_proposed(event_type: str, payload: dict, meta: dict) -> None:
     """Mark meeting_suggested if action is meeting_request."""
-    payload = event.get("payload") or {}
     lead_id = payload.get("lead_id")
     action  = payload.get("action")
 
@@ -105,9 +97,8 @@ def on_lead_followup_proposed(event: dict[str, Any]) -> None:
             log.warning(f"[on_lead_followup_proposed] update failed: {e}")
 
 
-def on_website_analysis_requested(event: dict[str, Any]) -> None:
+def on_website_analysis_requested(event_type: str, payload: dict, meta: dict) -> None:
     """Log website analysis request for audit trail."""
-    payload = event.get("payload") or {}
     log.info(f"[LeadAcquisition] WEBSITE_ANALYSIS_REQUESTED url={payload.get('url')} score={payload.get('audit_score')}")
 
 
@@ -132,7 +123,6 @@ def _create_approval_for_inbound(lead_id: str, lead: Any) -> None:
                 details={
                     "lead_id":   lead_id,
                     "lead_name": getattr(lead, "name", ""),
-                    "lead_name": getattr(lead, "name", ""),
                     "body":      getattr(lead, "outreach_draft", ""),
                     "channel":   getattr(lead, "source_type", "") or "whatsapp",
                 },
@@ -145,7 +135,6 @@ def _create_approval_for_inbound(lead_id: str, lead: Any) -> None:
         log.warning(f"[_create_approval_for_inbound] failed: {e}")
         return
 
-    # Send Telegram approval request (non-blocking, best-effort)
     if approval_id:
         _telegram_send_approval(
             lead=lead,
@@ -157,7 +146,6 @@ def _create_approval_for_inbound(lead_id: str, lead: Any) -> None:
 
 
 def _telegram_hot_lead_alert(lead: Any, score: int, source: str) -> None:
-    """Push a simple Telegram alert for a newly discovered hot lead."""
     try:
         from services.telegram_service import telegram_service
         name  = getattr(lead, "name", "לא ידוע")
@@ -176,10 +164,9 @@ def _telegram_hot_lead_alert(lead: Any, score: int, source: str) -> None:
 
 def _telegram_send_approval(lead: Any, draft: str, approval_id: str,
                              action_label: str, channel: str) -> None:
-    """Send Telegram approval card with approve/deny/edit buttons."""
     try:
         from services.telegram_service import telegram_service
-        name = getattr(lead, "name", "לא ידוע")
+        name  = getattr(lead, "name", "לא ידוע")
         score = getattr(lead, "score", 0) or 0
         telegram_service.send_approval_request(
             action=action_label,
