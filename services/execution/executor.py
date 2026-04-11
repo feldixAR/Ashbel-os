@@ -770,6 +770,152 @@ def _handle_performance_report(task: TaskModel) -> ExecutionResult:
         return ExecutionResult(success=False, message=f"שגיאה בדוח ביצועים: {e}", output={"error": str(e)})
 
 
+# ── Phase 16: Document upload + System self-evolution ─────────────────────────
+
+def _handle_parse_document(task: TaskModel) -> ExecutionResult:
+    """Parse an uploaded document → lead records → feed into acquisition pipeline."""
+    from skills.document_intelligence import parse_document
+    from engines.lead_acquisition_engine import process_inbound
+
+    started = _now_ms()
+    p = _params(task)
+    content_b64 = p.get("content_base64") or ""
+    file_name   = p.get("file_name") or "upload.csv"
+    hint_fmt    = p.get("format") or ""
+
+    if not content_b64:
+        return ExecutionResult(success=False, message="חסר תוכן קובץ",
+                               output={"error": "missing content"})
+    try:
+        import base64
+        content = base64.b64decode(content_b64)
+        parsed  = parse_document(content, file_name, hint_fmt)
+        saved   = 0
+        for rec in parsed.records:
+            try:
+                rec["source_type"] = rec.get("source_type") or "document_upload"
+                process_inbound(rec)
+                saved += 1
+            except Exception:
+                pass
+        return ExecutionResult(
+            success=True,
+            message=f"קובץ עובד — {parsed.row_count} שורות, {saved} לידים נשמרו",
+            output={"file_name": file_name, "format": parsed.format,
+                    "row_count": parsed.row_count, "saved": saved,
+                    "warnings": parsed.warnings},
+            duration_ms=_elapsed_ms(started),
+        )
+    except Exception as e:
+        return ExecutionResult(success=False, message=f"שגיאת עיבוד קובץ: {e}",
+                               output={"error": str(e)})
+
+
+def _handle_preview_system_change(task: TaskModel) -> ExecutionResult:
+    """
+    Classify a natural-language system-change request, generate a preview,
+    identify affected components, and create an ApprovalModel.
+    Follows: Intent → Preview → Approval → Branch/PR → Verify → Deploy.
+    Never modifies production directly.
+    """
+    from services.storage.models.approval import ApprovalModel
+    from services.storage.db import get_session
+
+    started = _now_ms()
+    p = _params(task)
+    request_text = p.get("command") or p.get("request") or _command(task) or ""
+
+    if not request_text:
+        return ExecutionResult(success=False, message="חסרה בקשת שינוי",
+                               output={"error": "missing request"})
+
+    # Classify the change type
+    preview = _classify_system_change(request_text)
+
+    # Create approval record
+    approval_id = None
+    try:
+        import json
+        with get_session() as s:
+            from services.storage.models.base import new_uuid
+            approval_id = new_uuid()
+            s.add(ApprovalModel(
+                id=approval_id,
+                action="system_change",
+                details=json.dumps({
+                    "request":            request_text,
+                    "change_type":        preview["change_type"],
+                    "affected_files":     preview["affected_files"],
+                    "preview_summary":    preview["summary"],
+                    "implementation_plan": preview["plan"],
+                }, ensure_ascii=False),
+                risk_level=3,
+                status="pending",
+                requested_by="telegram",
+            ))
+    except Exception as e:
+        log.warning(f"[system_change] approval creation failed: {e}")
+
+    # Send Telegram approval card
+    try:
+        from services.telegram_service import telegram_service
+        telegram_service.send_approval_request(
+            action="system_change",
+            preview=preview["summary"],
+            approval_id=approval_id or "preview",
+            lead_name=f"שינוי מערכת",
+            channel="system",
+        )
+    except Exception:
+        pass
+
+    return ExecutionResult(
+        success=True,
+        message=f"בקשת שינוי התקבלה — {preview['change_type']}. ממתין לאישור.",
+        output={
+            "approval_id":   approval_id,
+            "change_type":   preview["change_type"],
+            "summary":       preview["summary"],
+            "affected_files": preview["affected_files"],
+            "plan":          preview["plan"],
+            "status":        "pending_approval",
+        },
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _classify_system_change(request: str) -> dict:
+    """Classify a system-change request into type, affected files, and plan."""
+    tl = request.lower()
+
+    if any(w in tl for w in ["ווידג'ט", "widget"]):
+        change_type = "ui_widget"
+        files = ["ui/index.html", "ui/css/app.css"]
+        plan  = "1. הגדר את תוכן הווידג'ט\n2. הוסף HTML ל-index.html\n3. הוסף CSS ל-app.css\n4. בדוק בדפדפן\n5. commit + push"
+    elif any(w in tl for w in ["טאב", "tab", "פאנל", "panel", "מודול", "module"]):
+        change_type = "ui_panel"
+        files = ["ui/index.html", "ui/js/app.js", "ui/js/panels/"]
+        plan  = "1. צור ui/js/panels/<name>.js\n2. הוסף nav item ל-index.html\n3. רשום ב-app.js\n4. commit + PR"
+    elif any(w in tl for w in ["ראוט", "route", "endpoint", "api"]):
+        change_type = "api_route"
+        files = ["api/routes/", "api/app.py"]
+        plan  = "1. צור api/routes/<name>.py\n2. רשום ב-api/app.py\n3. הוסף tests\n4. commit + PR"
+    elif any(w in tl for w in ["עיצוב", "css", "צבע", "color", "theme"]):
+        change_type = "ui_style"
+        files = ["ui/css/app.css"]
+        plan  = "1. עדכן משתני CSS ב-app.css\n2. בדוק light theme\n3. commit + PR"
+    else:
+        change_type = "general"
+        files = ["תלוי בסוג השינוי"]
+        plan  = "1. הגדר דרישות מדויקות\n2. זהה קבצים מושפעים\n3. צור branch\n4. יישם\n5. PR + review + deploy"
+
+    return {
+        "change_type":    change_type,
+        "summary":        f"שינוי {change_type}: {request[:200]}",
+        "affected_files": files,
+        "plan":           plan,
+    }
+
 
 # ── Handler Registry ──────────────────────────────────────────────────────────
 # FIX (Axis 1 / Bootstrap): module-level dict defined AFTER all _handle_* functions.
@@ -818,6 +964,9 @@ _HANDLERS = {
     # Revenue Learning (Batch 9)
     "learning_cycle":       _handle_learning_cycle,
     "performance_report":   _handle_performance_report,
+    # Phase 16: Document + system self-evolution
+    "parse_document":          _handle_parse_document,
+    "preview_system_change":   _handle_preview_system_change,
 }
 
 

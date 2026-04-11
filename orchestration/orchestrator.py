@@ -124,6 +124,10 @@ _INTENT_TASK_MAP = {
     Intent.PROCESS_INBOUND:          ("acquisition",  "process_inbound"),
     Intent.WEBSITE_ANALYSIS:         ("acquisition",  "website_analysis"),
     Intent.LEAD_OPS_QUEUE:           ("acquisition",  "lead_ops_queue"),
+
+    # Phase 16: Channel-native + self-evolution
+    Intent.DOCUMENT_UPLOAD:          ("acquisition",  "parse_document"),
+    Intent.SYSTEM_CHANGE:            ("executive",    "preview_system_change"),
 }
 
 

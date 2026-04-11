@@ -90,6 +90,10 @@ class Intent(str, Enum):
     WEBSITE_ANALYSIS          = "website_analysis"
     LEAD_OPS_QUEUE            = "lead_ops_queue"
 
+    # Phase 16: Channel-native + self-evolution
+    DOCUMENT_UPLOAD           = "document_upload"
+    SYSTEM_CHANGE             = "system_change"
+
 
 @dataclass
 class IntentResult:
@@ -157,6 +161,24 @@ class IntentParser:
             return Intent.BOTTLENECK, 0.9
         if any(w in text for w in ["מה כדאי לעשות", "next action", "מה לפעול", "מה הצעד הבא"]):
             return Intent.NEXT_ACTION, 0.9
+
+        # Phase 16: System self-evolution — checked first (sensitive, highest priority)
+        if any(w in tl for w in [
+            "הוסף ווידג'ט", "שנה ui", "צור מודול", "צור טאב", "הוסף טאב",
+            "הוסף עמוד", "שנה עיצוב", "עדכן ui", "הוסף פאנל", "צור פאנל",
+            "add widget", "add module", "add tab", "change ui", "modify ui",
+            "create module", "שנה מראה", "עדכן מראה", "system change",
+            "הוסף לוח", "ערוך לוח", "הוסף תכונה", "add feature",
+        ]):
+            return Intent.SYSTEM_CHANGE, 0.95
+
+        # Phase 16: Document upload / processing
+        if any(w in tl for w in [
+            "העלה קובץ", "עבד קובץ", "ייבא קובץ", "csv", "excel",
+            "אקסל", "קובץ לידים", "רשימת לידים", "import leads",
+            "upload", "parse document", "process file", "קובץ",
+        ]):
+            return Intent.DOCUMENT_UPLOAD, 0.9
 
         # Lead Acquisition OS (Phase 12) — checked before generic lead/sales
         if any(w in tl for w in [
