@@ -169,6 +169,35 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
                     return f"✅ אושר אך ביצוע נכשל: {res.error}"
             except Exception as ex:
                 return f"✅ אושר אך שגיאת ביצוע: {ex}"
+
+        # Lead ops approval format: {lead_id, lead_name, body, channel, action_type}
+        lead_id   = details.get("lead_id") if isinstance(details, dict) else None
+        lead_name = details.get("lead_name", "") if isinstance(details, dict) else ""
+        body      = details.get("body", "")      if isinstance(details, dict) else ""
+        channel   = details.get("channel", "")   if isinstance(details, dict) else ""
+        if lead_id and body:
+            try:
+                import datetime as _dt
+                from services.storage.db import get_session
+                from services.storage.models.activity import ActivityModel
+                with get_session() as s:
+                    s.add(ActivityModel(
+                        lead_id=lead_id,
+                        activity_type="note",
+                        subject=f"הודעת פנייה אושרה — {channel}",
+                        notes=body[:500],
+                        outcome="completed",
+                        performed_by=source,
+                    ))
+                event_bus.publish(
+                    ET.LEAD_OUTREACH_SENT,
+                    payload={"lead_id": lead_id, "lead_name": lead_name,
+                             "channel": channel, "approval_id": approval_id},
+                )
+                return f"✅ אושר ונרשם — {lead_name}"
+            except Exception as ex:
+                return f"✅ אושר אך רישום נכשל: {ex}"
+
         return f"✅ אישור {approval_id[:8]} אושר"
 
     return f"❌ אישור {approval_id[:8]} נדחה"
