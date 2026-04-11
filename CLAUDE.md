@@ -272,10 +272,10 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 
 ---
 
-## Session Updates — Phase 14: Lead Ops Full Pipeline v4.0
+## Session Updates — Phase 16: Channel-Native + Self-Evolution v5.0
 
 - **Date:** 2026-04-11
-- **Phases complete:** 3–14 + UI + SEO
+- **Phases complete:** 3–16 + UI + SEO
 - **Test count:** 149 passing (all green)
 - **Phase 12 new components:**
   - `skills/` package: `source_discovery`, `lead_intelligence`, `outreach_intelligence`, `israeli_context`, `workflow_skills`, `website_growth` — all stateless, contract-based, multi-agent compatible
@@ -298,7 +298,17 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `POST /api/lead_ops/batch_score` — deterministic scoring + Haiku explanations for top 5
   - `POST /api/lead_ops/execute/<id>` — approval execute flow: approve/deny, ActivityModel log, LEAD_OUTREACH_SENT event
 - **Governance:** all outreach drafts require_approval=True; no unapproved execution channels opened; sensitive flow enforced
-- **Status: PRODUCTION READY v4.0**
+- **Phase 15 additions:**
+  - `events/handlers/lead_acquisition_handlers.py` — Telegram hot-lead alerts (score≥70) and inbound approval cards
+  - `api/routes/approvals.py` — `_resolve_approval()` closes lead-ops loop: ActivityModel log + LEAD_OUTREACH_SENT event
+- **Phase 16 additions:**
+  - `services/intake/normalizer.py` — unified channel-agnostic normalizer for all Telegram payload types → IntakePayload
+  - `skills/document_intelligence.py` — stateless document parser: CSV/Excel/Word/PDF/TXT, Hebrew+English column detection
+  - `api/routes/telegram.py` — full multi-modal routing via normalize_telegram(); document download → task_manager dispatch; voice fallback; contact → process_inbound
+  - `services/execution/executor.py` — `_handle_parse_document` (base64 → parse → process_inbound per record); `_handle_preview_system_change` (classify → preview → ApprovalModel → Telegram card)
+  - `orchestration/intent_parser.py` — DOCUMENT_UPLOAD + SYSTEM_CHANGE intents
+  - `orchestration/orchestrator.py` — DOCUMENT_UPLOAD → acquisition/parse_document; SYSTEM_CHANGE → executive/preview_system_change
+- **Status: PRODUCTION READY v5.0**
 
 ---
 
