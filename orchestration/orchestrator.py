@@ -118,6 +118,12 @@ _INTENT_TASK_MAP = {
 
     # Chief of Staff (Phase 3)
     Intent.CHIEF_OF_STAFF:           ("executive",    "plan_action"),
+
+    # Lead Acquisition OS (Phase 12)
+    Intent.DISCOVER_LEADS:           ("acquisition",  "discover_leads"),
+    Intent.PROCESS_INBOUND:          ("acquisition",  "process_inbound"),
+    Intent.WEBSITE_ANALYSIS:         ("acquisition",  "website_analysis"),
+    Intent.LEAD_OPS_QUEUE:           ("acquisition",  "lead_ops_queue"),
 }
 
 

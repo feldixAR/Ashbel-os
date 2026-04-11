@@ -5,46 +5,46 @@
    One design system. Electric blue accent. RTL Hebrew.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Design tokens ──────────────────────────────────────────────────────── */
+/* ── Design tokens — Light Theme ────────────────────────────────────────── */
 :root {
-  --bg:         #050810;
-  --bg2:        #080d1a;
-  --surface:    rgba(255,255,255,0.04);
-  --surface2:   rgba(255,255,255,0.07);
-  --border:     rgba(255,255,255,0.08);
-  --border2:    rgba(255,255,255,0.14);
-  --text:       #e2e8f0;
+  --bg:         #f0f4f8;
+  --bg2:        #e8edf3;
+  --surface:    rgba(255,255,255,0.85);
+  --surface2:   rgba(255,255,255,0.95);
+  --border:     rgba(30,60,120,0.10);
+  --border2:    rgba(30,60,120,0.18);
+  --text:       #1e2a3a;
   --muted:      #64748b;
-  --faint:      rgba(255,255,255,0.03);
+  --faint:      rgba(30,60,120,0.03);
 
-  --accent:     #3b82f6;
-  --accent2:    #06b6d4;
-  --green:      #10b981;
-  --amber:      #f59e0b;
-  --red:        #ef4444;
-  --purple:     #8b5cf6;
+  --accent:     #2563eb;
+  --accent2:    #0891b2;
+  --green:      #059669;
+  --amber:      #d97706;
+  --red:        #dc2626;
+  --purple:     #7c3aed;
 
   /* Legacy compat aliases */
-  --silver:       #e2e8f0;
-  --silver-hi:    #f1f5f9;
-  --silver-dim:   #94a3b8;
-  --chrome:       #3b82f6;
-  --chrome-light: #60a5fa;
+  --silver:       #1e2a3a;
+  --silver-hi:    #0f172a;
+  --silver-dim:   #64748b;
+  --chrome:       #2563eb;
+  --chrome-light: #3b82f6;
   --chrome-dim:   #1d4ed8;
-  --metal-border: rgba(255,255,255,0.08);
-  --metal-glow:   rgba(59,130,246,0.3);
-  --ils:          #f59e0b;
-  --ils-dim:      rgba(245,158,11,0.15);
-  --steel:        #06b6d4;
-  --copper:       #f59e0b;
+  --metal-border: rgba(30,60,120,0.10);
+  --metal-glow:   rgba(37,99,235,0.15);
+  --ils:          #d97706;
+  --ils-dim:      rgba(217,119,6,0.12);
+  --steel:        #0891b2;
+  --copper:       #d97706;
 
   --font:        'Inter', 'Heebo', system-ui, sans-serif;
   --mono:        'JetBrains Mono', 'Fira Code', monospace;
   --radius:      8px;
   --radius-lg:   14px;
-  --shadow:      0 8px 32px rgba(0,0,0,0.6);
-  --glass:       rgba(255,255,255,0.04);
-  --glass-border: rgba(255,255,255,0.08);
+  --shadow:      0 4px 20px rgba(30,60,120,0.10);
+  --glass:       rgba(255,255,255,0.80);
+  --glass-border: rgba(30,60,120,0.10);
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────── */
@@ -58,8 +58,8 @@ body {
   line-height: 1.6;
   overflow-x:  hidden;
   background-image:
-    radial-gradient(ellipse at 20% 0%, rgba(59,130,246,0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 0%, rgba(6,182,212,0.08) 0%, transparent 40%);
+    radial-gradient(ellipse at 20% 0%, rgba(37,99,235,0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 0%, rgba(8,145,178,0.05) 0%, transparent 40%);
 }
 
 /* ── Glass base class ───────────────────────────────────────────────────── */
@@ -83,11 +83,11 @@ body {
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .header {
   grid-column: 1 / -1;
-  background: rgba(5,8,16,0.85);
+  background: rgba(255,255,255,0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 0 var(--border), 0 4px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 0 var(--border), 0 4px 16px rgba(30,60,120,0.07);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -118,6 +118,26 @@ body {
 }
 .logo-name { font-size: 15px; font-weight: 800; letter-spacing: .3px; color: var(--text); }
 .logo-name span { color: var(--accent); }
+
+/* ── Lead Ops Widget (header) ────────────────────────────────────────────── */
+.lead-ops-widget {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lead-ops-widget:hover { background: rgba(37,99,235,0.08); }
+.low-chip { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.low-val  { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.low-label{ font-size: 9px; color: var(--muted); letter-spacing: .4px; text-transform: uppercase; }
+.low-discovered .low-val { color: var(--accent); }
+.low-inbound    .low-val { color: var(--green);  }
+.low-pending    .low-val { color: var(--amber);  }
 
 .header-meta {
   display: flex;

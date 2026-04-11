@@ -84,6 +84,12 @@ class Intent(str, Enum):
     # Chief of Staff (Phase 3)
     CHIEF_OF_STAFF            = "chief_of_staff"
 
+    # Lead Acquisition OS (Phase 12)
+    DISCOVER_LEADS            = "discover_leads"
+    PROCESS_INBOUND           = "process_inbound"
+    WEBSITE_ANALYSIS          = "website_analysis"
+    LEAD_OPS_QUEUE            = "lead_ops_queue"
+
 
 @dataclass
 class IntentResult:
@@ -151,6 +157,32 @@ class IntentParser:
             return Intent.BOTTLENECK, 0.9
         if any(w in text for w in ["מה כדאי לעשות", "next action", "מה לפעול", "מה הצעד הבא"]):
             return Intent.NEXT_ACTION, 0.9
+
+        # Lead Acquisition OS (Phase 12) — checked before generic lead/sales
+        if any(w in tl for w in [
+            "מצא לידים", "גלה לידים", "חפש לידים", "discover leads",
+            "acquisition", "רכישת לידים", "לידים מהרשת", "לידים חדשים מ",
+            "חיפוש לידים", "discover", "find leads",
+        ]):
+            return Intent.DISCOVER_LEADS, 0.95
+
+        if any(w in tl for w in [
+            "ליד נכנס", "inbound lead", "פנייה נכנסת", "טופס נכנס",
+            "process inbound", "ליד חדש נכנס",
+        ]):
+            return Intent.PROCESS_INBOUND, 0.95
+
+        if any(w in tl for w in [
+            "ניתוח אתר", "website analysis", "בדוק אתר", "אודיט אתר",
+            "site audit", "שפר אתר", "כמה טוב האתר",
+        ]):
+            return Intent.WEBSITE_ANALYSIS, 0.95
+
+        if any(w in tl for w in [
+            "תור לידים", "lead ops", "lead queue", "פעולות לידים",
+            "מה יש בתור", "מה הלידים ממתינים", "כל הלידים הממתינים",
+        ]):
+            return Intent.LEAD_OPS_QUEUE, 0.9
 
         # Leads
         if any(w in tl for w in ["לידים חמים", "hot leads"]):

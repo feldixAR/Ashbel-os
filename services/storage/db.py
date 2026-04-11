@@ -105,6 +105,8 @@ def create_all_tables() -> None:
     import services.storage.models.calendar_event # noqa
     # Execution bridge
     import services.storage.models.claude_task    # noqa
+    # Phase 12 — Lead Acquisition OS
+    import services.storage.models.lead_discovery # noqa
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")
@@ -164,7 +166,17 @@ def _run_column_migrations() -> None:
         "ALTER TABLE deals ADD COLUMN IF NOT EXISTS expected_profit  INTEGER DEFAULT 0",
         "ALTER TABLE deals ADD COLUMN IF NOT EXISTS commercial_stage VARCHAR(60)",
         "ALTER TABLE deals ADD COLUMN IF NOT EXISTS lost_reason      TEXT",
-        # Claude bridge — sensitive action flow
+        # leads — Phase 12 Lead Acquisition OS
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_type          VARCHAR(50)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_url           TEXT",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS segment              VARCHAR(100)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS outreach_action      VARCHAR(50)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS outreach_draft       TEXT",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS is_inbound           VARCHAR(5) DEFAULT 'false'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovery_session_id VARCHAR(100)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS meeting_suggested    VARCHAR(5) DEFAULT 'false'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS geo_fit_score        FLOAT DEFAULT 0",
+    # Claude bridge — sensitive action flow
         "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS sensitive     BOOLEAN DEFAULT FALSE",
         "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS preview_plan  TEXT",
         # GPT connector — review layer

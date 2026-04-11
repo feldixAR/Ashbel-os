@@ -79,6 +79,9 @@ def create_app() -> Flask:
     from api.routes.seo import bp as seo_bp
     app.register_blueprint(seo_bp, url_prefix='/api')
 
+    from api.routes.lead_ops import bp as lead_ops_bp
+    app.register_blueprint(lead_ops_bp, url_prefix='/api')
+
     # Auth key — OS_API_KEY only (Batch 7: API_KEY fallback removed)
     _active_key = os.getenv("OS_API_KEY", "")
     print(f"Auth: OS_API_KEY Check: {_active_key[:3] if _active_key else 'MISSING'}...")

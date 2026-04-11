@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>AshbalOS — אשבל אלומיניום</title>
-  <link rel="stylesheet" href="/ui/css/app.css?v=b12r7" />
+  <link rel="stylesheet" href="/ui/css/app.css?v=p12l1" />
 </head>
 <body>
 
@@ -66,6 +66,22 @@
       </div>
     </div>
 
+    <!-- Lead Ops Status Widget -->
+    <div class="lead-ops-widget" id="leadOpsWidget" title="לחץ לפתיחת מרכז לידים" style="display:none">
+      <div class="low-chip low-discovered">
+        <span class="low-val" id="lowDiscovered">—</span>
+        <span class="low-label">גולשים</span>
+      </div>
+      <div class="low-chip low-inbound">
+        <span class="low-val" id="lowInbound">—</span>
+        <span class="low-label">נכנסים</span>
+      </div>
+      <div class="low-chip low-pending">
+        <span class="low-val" id="lowPending">—</span>
+        <span class="low-label">ממתינים</span>
+      </div>
+    </div>
+
     <button class="bell-btn" id="bellBtn">
       <span>⚑</span>
       <span id="bellTxt">APPROVALS</span>
@@ -102,6 +118,9 @@
     <div id="panel-seo"             class="panel"></div>
     <div id="panel-settings"        class="panel"></div>
 
+    <!-- Lead Acquisition OS -->
+    <div id="panel-lead-ops"        class="panel"></div>
+
     <!-- Legacy screens kept for compatibility -->
     <div id="panel-cmd"             class="panel"></div>
   </main>
@@ -109,36 +128,39 @@
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=b12r7"></script>
-<script src="/ui/js/components/toast.js?v=b12r7"></script>
-<script src="/ui/js/components/ui.js?v=b12r7"></script>
+<script src="/ui/js/api.js?v=p12l1"></script>
+<script src="/ui/js/components/toast.js?v=p12l1"></script>
+<script src="/ui/js/components/ui.js?v=p12l1"></script>
 
 <!-- CRM & Revenue panels -->
-<script src="/ui/js/panels/dashboard.js?v=b12r7"></script>
-<script src="/ui/js/panels/leads.js?v=b12r7"></script>
-<script src="/ui/js/panels/crm.js?v=b12r7"></script>
-<script src="/ui/js/panels/clients.js?v=b12r7"></script>
-<script src="/ui/js/panels/revenue.js?v=b12r7"></script>
-<script src="/ui/js/panels/calendar.js?v=b12r7"></script>
-<script src="/ui/js/panels/briefing.js?v=b12r7"></script>
+<script src="/ui/js/panels/dashboard.js?v=p12l1"></script>
+<script src="/ui/js/panels/leads.js?v=p12l1"></script>
+<script src="/ui/js/panels/crm.js?v=p12l1"></script>
+<script src="/ui/js/panels/clients.js?v=p12l1"></script>
+<script src="/ui/js/panels/revenue.js?v=p12l1"></script>
+<script src="/ui/js/panels/calendar.js?v=p12l1"></script>
+<script src="/ui/js/panels/briefing.js?v=p12l1"></script>
 
 <!-- Operations panels -->
-<script src="/ui/js/panels/tasks.js?v=b12r7"></script>
-<script src="/ui/js/panels/communications.js?v=b12r7"></script>
-<script src="/ui/js/panels/approvals.js?v=b12r7"></script>
-<script src="/ui/js/panels/pipeline.js?v=b12r7"></script>
+<script src="/ui/js/panels/tasks.js?v=p12l1"></script>
+<script src="/ui/js/panels/communications.js?v=p12l1"></script>
+<script src="/ui/js/panels/approvals.js?v=p12l1"></script>
+<script src="/ui/js/panels/pipeline.js?v=p12l1"></script>
 
 <!-- System panels -->
-<script src="/ui/js/panels/agents.js?v=b12r7"></script>
-<script src="/ui/js/panels/goals.js?v=b12r7"></script>
-<script src="/ui/js/panels/reports.js?v=b12r7"></script>
-<script src="/ui/js/panels/seo.js?v=b12r7"></script>
-<script src="/ui/js/panels/settings.js?v=b12r7"></script>
+<script src="/ui/js/panels/agents.js?v=p12l1"></script>
+<script src="/ui/js/panels/goals.js?v=p12l1"></script>
+<script src="/ui/js/panels/reports.js?v=p12l1"></script>
+<script src="/ui/js/panels/seo.js?v=p12l1"></script>
+<script src="/ui/js/panels/settings.js?v=p12l1"></script>
+
+<!-- Lead Acquisition OS panel -->
+<script src="/ui/js/panels/lead_ops.js?v=p12l1"></script>
 
 <!-- Legacy panels -->
-<script src="/ui/js/panels/command.js?v=b12r7"></script>
+<script src="/ui/js/panels/command.js?v=p12l1"></script>
 
-<script src="/ui/js/app.js?v=b12r7"></script>
+<script src="/ui/js/app.js?v=p12l1"></script>
 
 </body>
 </html>

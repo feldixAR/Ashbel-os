@@ -47,6 +47,13 @@ from events.handlers.approval_handlers import (
     on_approval_granted,
     on_approval_denied,
 )
+from events.handlers.lead_acquisition_handlers import (
+    on_lead_discovered,
+    on_inbound_lead_received,
+    on_lead_outreach_sent,
+    on_lead_followup_proposed,
+    on_website_analysis_requested,
+)
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +100,13 @@ def bootstrap() -> None:
     event_bus.subscribe(ET.APPROVAL_REQUESTED, on_approval_requested)
     event_bus.subscribe(ET.APPROVAL_GRANTED,   on_approval_granted)
     event_bus.subscribe(ET.APPROVAL_DENIED,    on_approval_denied)
+
+    # ── Lead Acquisition events (Phase 12) ────────────────────────────────────
+    event_bus.subscribe(ET.LEAD_DISCOVERED,            on_lead_discovered)
+    event_bus.subscribe(ET.INBOUND_LEAD_RECEIVED,      on_inbound_lead_received)
+    event_bus.subscribe(ET.LEAD_OUTREACH_SENT,         on_lead_outreach_sent)
+    event_bus.subscribe(ET.LEAD_FOLLOWUP_PROPOSED,     on_lead_followup_proposed)
+    event_bus.subscribe(ET.WEBSITE_ANALYSIS_REQUESTED, on_website_analysis_requested)
 
     # ── AgentRegistry bootstrap ───────────────────────────────────────────────
     try:

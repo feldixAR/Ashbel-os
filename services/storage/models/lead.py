@@ -35,6 +35,16 @@ class LeadModel(Base, TimestampMixin):
     next_action_due  = Column(String(40),   nullable=True)   # ISO-8601
     last_activity_at = Column(String(40),   nullable=True)   # ISO-8601
     priority_score   = Column(Float,        nullable=False, default=0.0)  # 0-100
+    # Phase 12 — Lead Acquisition OS
+    source_type          = Column(String(50),  nullable=True)   # linkedin|instagram|facebook|inbound|…
+    source_url           = Column(Text,        nullable=True)   # URL where lead was found
+    segment              = Column(String(100), nullable=True)   # architects|contractors|…
+    outreach_action      = Column(String(50),  nullable=True)   # dm|follow_up|meeting_request|…
+    outreach_draft       = Column(Text,        nullable=True)   # drafted message ready for approval
+    is_inbound           = Column(String(5),   nullable=True, default="false")  # stored as string for SQLite compat
+    discovery_session_id = Column(String(100), nullable=True)   # links to LeadDiscoveryModel
+    meeting_suggested    = Column(String(5),   nullable=True, default="false")
+    geo_fit_score        = Column(Float,       nullable=True, default=0.0)
 
     history = relationship("LeadHistoryModel",
                            back_populates="lead",

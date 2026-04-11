@@ -4,12 +4,18 @@ Every event published in the system must use a constant from this file.
 """
 
 # ── Lead events ───────────────────────────────────────────────────────────────
-LEAD_CREATED          = "lead.created"
-LEAD_SCORED           = "lead.scored"
-LEAD_STATUS_CHANGED   = "lead.status_changed"
-LEAD_RESPONDED        = "lead.responded"
-LEAD_CONVERTED        = "lead.converted"
-LEAD_DEAD             = "lead.dead"
+LEAD_CREATED             = "lead.created"
+LEAD_SCORED              = "lead.scored"
+LEAD_STATUS_CHANGED      = "lead.status_changed"
+LEAD_RESPONDED           = "lead.responded"
+LEAD_CONVERTED           = "lead.converted"
+LEAD_DEAD                = "lead.dead"
+# Lead Acquisition (Phase 12)
+LEAD_DISCOVERED          = "lead.discovered"          # web signal found a candidate
+INBOUND_LEAD_RECEIVED    = "lead.inbound_received"    # inbound via Telegram/form
+LEAD_OUTREACH_SENT       = "lead.outreach_sent"       # after approved outreach execution
+LEAD_FOLLOWUP_PROPOSED   = "lead.followup_proposed"   # follow-up surfaced
+WEBSITE_ANALYSIS_REQUESTED = "website.analysis_requested"  # website growth analysis
 
 # ── Task events ───────────────────────────────────────────────────────────────
 TASK_CREATED          = "task.created"
