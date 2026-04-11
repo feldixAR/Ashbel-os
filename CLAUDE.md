@@ -83,6 +83,8 @@ WhatsApp / Dashboard UI
 | 10 | Mobile Quick Actions / Voice / Fast Access / Admin Layer | ✅ Implemented |
 | 11 | Revenue Queue Scoring Engine (`GET /api/daily_revenue_queue`) | ✅ Implemented |
 | 12 | Lead Acquisition OS — 6 skill modules, acquisition engine, 7 API endpoints, light UI, 5 new event hooks | ✅ Implemented |
+| 13 | LeadAcquisitionAgent — registry-owned, Haiku batch signal filter, Sonnet inbound draft, scheduled follow-up proposals | ✅ Implemented |
+| 14 | Brief/batch-score/execute endpoints — AI lead briefing, batch Haiku scoring, approval execute flow + activity log | ✅ Implemented |
 | Bridge | Claude Dispatch (`POST /api/claude/preview`, `/dispatch`, `/tasks/<id>`) — sensitive flow enforced | ✅ Implemented |
 | Bridge | GPT Connector (`/api/gpt/*`) — review, redispatch, OpenAPI schema | ✅ Implemented |
 | Bridge | MCP Endpoint (`POST /api/mcp`) — ChatGPT-compatible, no-auth, `get_latest_claude_task` | ✅ Implemented |
@@ -270,11 +272,11 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 
 ---
 
-## Session Updates — Phase 12: Lead Acquisition OS v3.0
+## Session Updates — Phase 14: Lead Ops Full Pipeline v4.0
 
 - **Date:** 2026-04-11
-- **Phases complete:** 3–12 + UI + SEO
-- **Test count:** 107 passing (all green; 14 env-only errors in test_openclaw_bridge due to missing local pytz — passes on Railway)
+- **Phases complete:** 3–14 + UI + SEO
+- **Test count:** 149 passing (all green)
 - **Phase 12 new components:**
   - `skills/` package: `source_discovery`, `lead_intelligence`, `outreach_intelligence`, `israeli_context`, `workflow_skills`, `website_growth` — all stateless, contract-based, multi-agent compatible
   - `engines/lead_acquisition_engine.py` — orchestrating pipeline (goal → plan → normalize → dedup → enrich → score → outreach → CRM → events)
@@ -286,5 +288,14 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `orchestration/intent_parser.py` — 4 new intents: DISCOVER_LEADS, PROCESS_INBOUND, WEBSITE_ANALYSIS, LEAD_OPS_QUEUE
   - `ui/css/app.css` — light theme (token swap only)
   - `ui/js/panels/lead_ops.js` — full lead ops surface (tabs: inbound/discovered/pending/meetings, discover modal, website analysis modal)
+- **Phase 13 additions:**
+  - `agents/departments/sales/lead_acquisition_agent.py` — registered in registry, handles all acquisition/* actions
+  - Haiku batch signal pre-classification (call_batch), Sonnet inbound draft with prompt cache
+  - Local-first: empty signals → plan only (0 tokens)
+  - `scheduler/revenue_scheduler.py` — `_job_lead_followup_proposals()` daily 09:00 IL
+- **Phase 14 additions:**
+  - `GET /api/lead_ops/brief/<id>` — AI lead briefing (Haiku + deterministic fallback)
+  - `POST /api/lead_ops/batch_score` — deterministic scoring + Haiku explanations for top 5
+  - `POST /api/lead_ops/execute/<id>` — approval execute flow: approve/deny, ActivityModel log, LEAD_OUTREACH_SENT event
 - **Governance:** all outreach drafts require_approval=True; no unapproved execution channels opened; sensitive flow enforced
-- **Status: PRODUCTION READY v3.0**
+- **Status: PRODUCTION READY v4.0**

@@ -25,7 +25,7 @@ Response: { "data": { "message": "...", "intent": "..." }, "success": true }
 
 ---
 
-## Lead Acquisition OS (Phase 12)
+## Lead Acquisition OS (Phase 12–14)
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
@@ -36,6 +36,9 @@ Response: { "data": { "message": "...", "intent": "..." }, "success": true }
 | GET/POST | `/api/lead_ops/discovery_plan` | Yes | Source strategy for a goal — no DB |
 | POST | `/api/lead_ops/draft` | Yes | Draft outreach message: `{lead, action_type}` |
 | GET | `/api/lead_ops/status` | Yes | Summary counts widget data |
+| GET | `/api/lead_ops/brief/<id>` | Yes | AI briefing for a lead: recommended action, timing, tone, AI summary |
+| POST | `/api/lead_ops/batch_score` | Yes | Batch score unscored leads: `{rescore_all?, limit?}` |
+| POST | `/api/lead_ops/execute/<id>` | Yes | Execute approved outreach: `{action: approve\|deny, note?}` |
 
 ---
 

@@ -1,15 +1,18 @@
 """
 api/routes/lead_ops.py — Lead Operations API
-Phase 12: Lead Acquisition OS
+Phase 12–14: Lead Acquisition OS
 
 Endpoints:
-  POST /api/lead_ops/discover       — run acquisition from goal + signals
-  POST /api/lead_ops/inbound        — process inbound lead
-  POST /api/lead_ops/website        — run website growth analysis
-  GET  /api/lead_ops/queue          — get current work queue
-  GET  /api/lead_ops/discovery_plan — get strategy from goal (no DB)
-  POST /api/lead_ops/draft          — draft a message for a lead
-  GET  /api/lead_ops/status         — summary counts
+  POST /api/lead_ops/discover          — run acquisition from goal + signals
+  POST /api/lead_ops/inbound           — process inbound lead
+  POST /api/lead_ops/website           — run website growth analysis
+  GET  /api/lead_ops/queue             — get current work queue
+  GET  /api/lead_ops/discovery_plan    — get strategy from goal (no DB)
+  POST /api/lead_ops/draft             — draft a message for a lead
+  GET  /api/lead_ops/status            — summary counts
+  GET  /api/lead_ops/brief/<id>        — AI briefing for a specific lead
+  POST /api/lead_ops/batch_score       — batch score unscored leads
+  POST /api/lead_ops/execute/<id>      — execute an approved outreach action
 """
 
 import logging
@@ -33,9 +36,7 @@ def discover_leads():
 
     try:
         from engines.lead_acquisition_engine import run_acquisition
-        from services.storage.db import get_session
-        with get_session() as session:
-            result = run_acquisition(goal=goal, signals=signals, session=session)
+        result = run_acquisition(goal=goal, signals=signals)
         return jsonify({
             "success":          True,
             "session_id":       result.session_id,
@@ -60,9 +61,7 @@ def process_inbound():
         return jsonify({"success": False, "error": "name or phone required"}), 400
     try:
         from engines.lead_acquisition_engine import process_inbound as _process
-        from services.storage.db import get_session
-        with get_session() as session:
-            lead_id = _process(lead_data=data, session=session)
+        lead_id = _process(lead_data=data)
         return jsonify({"success": True, "lead_id": lead_id})
     except Exception as e:
         log.error(f"[lead_ops/inbound] {e}", exc_info=True)
@@ -251,4 +250,259 @@ def lead_ops_status():
         })
     except Exception as e:
         log.error(f"[lead_ops/status] {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ── Phase 14: Brief / Batch Score / Execute ───────────────────────────────────
+
+@bp.route("/lead_ops/brief/<lead_id>", methods=["GET"])
+@require_api_key
+def lead_brief(lead_id: str):
+    """
+    Return an AI-generated briefing for a specific lead.
+    Uses Haiku for cheap, fast analysis — deterministic fallback always available.
+    """
+    try:
+        from services.storage.repositories.lead_repo import LeadRepository
+        from skills.outreach_intelligence import choose_action, choose_timing
+        from skills.israeli_context import is_good_timing, get_best_send_window, geo_fit, get_hebrew_tone
+        import datetime
+
+        repo = LeadRepository()
+        lead = repo.get(lead_id)
+        if not lead:
+            return jsonify({"success": False, "error": "lead not found"}), 404
+
+        lead_dict = {
+            "id":            lead.id,
+            "name":          lead.name,
+            "phone":         lead.phone,
+            "email":         lead.email,
+            "city":          lead.city,
+            "company":       lead.company,
+            "status":        lead.status,
+            "score":         lead.score,
+            "source_type":   getattr(lead, "source_type", ""),
+            "segment":       getattr(lead, "segment", ""),
+            "is_inbound":    str(getattr(lead, "is_inbound", "false")).lower() in ("true", "1"),
+            "outreach_action": getattr(lead, "outreach_action", ""),
+            "notes":         getattr(lead, "notes", ""),
+        }
+
+        # Deterministic signals (0 tokens)
+        now         = datetime.datetime.now()
+        good_time   = is_good_timing(now)
+        send_window = get_best_send_window(now)
+        city_fit    = geo_fit(lead.city or "")
+        tone        = get_hebrew_tone(lead_dict.get("segment") or "")
+        action      = choose_action(lead_dict)
+        timing      = choose_timing(lead_dict)
+
+        # AI briefing summary (Haiku — cheap)
+        ai_summary = _build_lead_briefing(lead_dict, action, tone)
+
+        return jsonify({
+            "success":      True,
+            "lead_id":      lead.id,
+            "name":         lead.name,
+            "score":        lead.score,
+            "status":       lead.status,
+            "city":         lead.city,
+            "geo_fit":      city_fit,
+            "recommended_action": action.action,
+            "recommended_channel": action.channel,
+            "tone":         tone,
+            "good_time_now": good_time,
+            "best_send_window": send_window,
+            "timing_notes": timing.notes,
+            "ai_summary":   ai_summary,
+        })
+    except Exception as e:
+        log.error(f"[lead_ops/brief] {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _build_lead_briefing(lead: dict, action, tone: str) -> str:
+    """Generate AI briefing using Haiku. Falls back to deterministic summary."""
+    try:
+        from routing.model_router import model_router
+        from routing.cost_tracker import cost_tracker
+
+        system = (
+            "אתה עוזר מכירות של אשבל אלומיניום. "
+            "צור תקציר מכירתי קצר בעברית לנציג המכירות לפני שיחה עם ליד. "
+            "עד 3 משפטים. כלול: מה לדגיש, מה לשאול, ואיך לגשת."
+        )
+        user = (
+            f"ליד: {lead.get('name')} | עיר: {lead.get('city')} | "
+            f"ציון: {lead.get('score')} | סטטוס: {lead.get('status')} | "
+            f"פעולה מומלצת: {action.action} | ערוץ: {action.channel} | "
+            f"הערות: {lead.get('notes') or ''}"
+        )
+        result = model_router.call(
+            task_type="classification",
+            system_prompt=system,
+            user_prompt=user,
+            priority="cheap",
+            max_tokens=150,
+        )
+        cost_tracker.flush_to_session_log("lead_brief_endpoint")
+        return result
+    except Exception:
+        # Deterministic fallback
+        return (
+            f"ליד {lead.get('name')} מ{lead.get('city') or 'לא ידוע'}, "
+            f"ציון {lead.get('score') or 0}. "
+            f"פעולה מומלצת: {action.action} ({action.channel}). "
+            f"טון מומלץ: {tone}."
+        )
+
+
+@bp.route("/lead_ops/batch_score", methods=["POST"])
+@require_api_key
+def batch_score_leads():
+    """
+    Batch-score unscored or low-scored leads using call_batch().
+    Body: { "rescore_all": false, "limit": 20 }
+    """
+    data       = request.get_json(silent=True) or {}
+    rescore_all = bool(data.get("rescore_all", False))
+    limit       = min(int(data.get("limit") or 20), 50)
+
+    try:
+        from services.storage.repositories.lead_repo import LeadRepository
+        from engines.lead_engine import compute_score
+        from routing.model_router import model_router
+        from routing.cost_tracker import cost_tracker
+
+        repo  = LeadRepository()
+        leads = repo.list_all(limit=limit)
+
+        # Filter to unscored (or all if rescore_all)
+        targets = [l for l in leads if rescore_all or not l.score or l.score == 0]
+        if not targets:
+            return jsonify({"success": True, "scored": 0, "message": "אין לידים לדירוג"})
+
+        # Deterministic scoring via lead_engine (0 tokens) for all
+        scored_results = []
+        for lead in targets:
+            score = compute_score(lead)
+            repo.update_score(lead.id, score)
+            scored_results.append({"lead_id": lead.id, "name": lead.name, "score": score})
+
+        # AI enrichment: batch-generate score explanations for top 5 (Haiku)
+        top5 = sorted(scored_results, key=lambda x: x["score"], reverse=True)[:5]
+        if top5:
+            prompts = [
+                f"ליד {r['name']}, ציון {r['score']}/100. הסבר קצר (עד 10 מילים) מדוע הציון הזה."
+                for r in top5
+            ]
+            system = "אתה מנהל מכירות. הסבר ציוני לידים בעברית קצרה."
+            try:
+                explanations = model_router.call_batch(
+                    task_type="classification",
+                    system_prompt=system,
+                    user_prompts=prompts,
+                    priority="cheap",
+                    max_tokens=50,
+                )
+                cost_tracker.flush_to_session_log("batch_score_endpoint")
+                for r, ex in zip(top5, explanations):
+                    r["explanation"] = ex
+            except Exception:
+                pass   # explanations are optional
+
+        return jsonify({
+            "success": True,
+            "scored":  len(scored_results),
+            "top_5":   top5,
+            "message": f"דורגו {len(scored_results)} לידים",
+        })
+    except Exception as e:
+        log.error(f"[lead_ops/batch_score] {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route("/lead_ops/execute/<approval_id>", methods=["POST"])
+@require_api_key
+def execute_outreach(approval_id: str):
+    """
+    Execute an approved outreach action.
+    Marks the approval as approved, logs to activity, publishes LEAD_OUTREACH_SENT.
+    Body: { "action": "approve" | "deny", "note": "..." }
+    """
+    data   = request.get_json(silent=True) or {}
+    action = data.get("action") or "approve"
+    note   = data.get("note") or ""
+
+    if action not in ("approve", "deny"):
+        return jsonify({"success": False, "error": "action must be approve or deny"}), 400
+
+    try:
+        from services.storage.db import get_session
+        from services.storage.models.approval import ApprovalModel
+        from services.storage.models.activity import ActivityModel
+        from events.event_bus import event_bus
+        import events.event_types as ET
+        import datetime, json
+
+        with get_session() as s:
+            approval = s.get(ApprovalModel, approval_id)
+            if not approval:
+                return jsonify({"success": False, "error": "approval not found"}), 404
+            if approval.status not in ("pending",):
+                return jsonify({
+                    "success": False,
+                    "error": f"approval already {approval.status}",
+                }), 409
+
+            approval.status      = action + "d"   # "approved" | "denied"
+            approval.resolved_by = "api"
+            approval.resolved_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            approval.note        = note
+
+            # Extract lead info from details
+            details = approval.details or {}
+            if isinstance(details, str):
+                try:
+                    details = json.loads(details)
+                except Exception:
+                    details = {}
+            lead_id   = details.get("lead_id") or ""
+            lead_name = details.get("lead_name") or ""
+            channel   = details.get("channel") or ""
+            body      = details.get("body") or ""
+
+            if action == "approve" and lead_id:
+                # Log activity
+                s.add(ActivityModel(
+                    lead_id=lead_id,
+                    activity_type="note",
+                    subject=f"הודעת פנייה אושרה — {channel}",
+                    notes=body[:500],
+                    outcome="completed",
+                    performed_by="lead_ops_api",
+                ))
+
+        # Publish event (outside session)
+        if action == "approve" and lead_id:
+            event_bus.publish(
+                ET.LEAD_OUTREACH_SENT,
+                payload={
+                    "lead_id":   lead_id,
+                    "lead_name": lead_name,
+                    "channel":   channel,
+                    "approval_id": approval_id,
+                },
+            )
+
+        return jsonify({
+            "success":     True,
+            "approval_id": approval_id,
+            "status":      action + "d",
+            "lead_id":     lead_id,
+            "lead_name":   lead_name,
+        })
+    except Exception as e:
+        log.error(f"[lead_ops/execute] {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
