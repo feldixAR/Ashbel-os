@@ -252,3 +252,15 @@ venv/Scripts/python.exe -m pytest tests/ -q
 | Maintenance Agent | Weekly health report + CLAUDE.md | 90b6e0c | ✅ |
 | Observability | StructuredLogger + MetricsCollector + TraceStore | cd667d0 | ✅ |
 | SEO Engine | City pages + blog + image prompts | b01556d | ✅ |
+
+---
+
+## Efficient Execution Rules
+
+- Use this skill as operational baseline before broad repo inspection.
+- Prefer current system structure (agents, routes, hooks, docs) over re-analysis.
+- Use metadata-first approach for external capabilities.
+- External capabilities must be evaluated and adapted, not treated as source of truth.
+- Runtime completion requires real proof: working routes, active hooks, approval flow, execution path, and deploy verification.
+- Natural language system-change requests require preview and approval before execution.
+- Block any change that creates duplication, replaces working flows, or bypasses governance.

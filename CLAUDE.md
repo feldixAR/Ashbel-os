@@ -299,3 +299,40 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `POST /api/lead_ops/execute/<id>` — approval execute flow: approve/deny, ActivityModel log, LEAD_OUTREACH_SENT event
 - **Governance:** all outreach drafts require_approval=True; no unapproved execution channels opened; sensitive flow enforced
 - **Status: PRODUCTION READY v4.0**
+
+---
+
+## Continuous Development Mode
+
+- Work from current repo reality only.
+- Do not re-derive architecture, flows, or decisions already established in code, docs, or commits.
+- Do not rescan the full repo unless required by a real change.
+- Read only files relevant to the current step.
+- Prefer metadata-first inspection before deep reads.
+- Prefer extending existing components over creating new systems.
+- Keep outputs checkpoint-based and compact.
+- Continue execution without stopping for minor confirmations.
+- Stop only for real architectural, policy, or runtime blockers.
+- Completion requires runtime proof, not code structure alone.
+
+---
+
+## Safe Self-Modification Rule
+
+- Any request to change system behavior, UI, modules, flows, or docs is a sensitive action.
+- Sensitive changes must follow: Intent → Preview → Approval → Branch/PR → Verification → Deploy
+- Never mutate production behavior or core flows without explicit approval.
+- Always preserve a rollback path via Git and deploy history.
+- Detect and report conflicts before applying system changes.
+
+---
+
+## External Capability Intake Rules
+
+- Do not clone or import large external repositories by default.
+- Use metadata and documentation before loading full implementations.
+- External skills, agents, MCPs are capabilities only, not source of truth.
+- AshbelOS remains source of truth for state, DB, lifecycle, approvals, and audit.
+- Prefer lightweight adapters over full-code imports.
+- Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
+- Reuse existing internal logic before adding external capability.
