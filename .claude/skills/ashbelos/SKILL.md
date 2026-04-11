@@ -59,7 +59,8 @@ All skills are stateless, contract-based, importable as pure Python. No DB insid
 - `run_website_analysis(url, html)` → `WebsiteAnalysisResult`
 
 ### Lead Ops API
-`/api/lead_ops/*` — 7 endpoints (see `docs/API.md`)
+`/api/lead_ops/*` — 10 endpoints (see `docs/API.md`)
+- Phase 14: `brief/<id>`, `batch_score`, `execute/<id>` added
 
 ### New Intents
 `DISCOVER_LEADS`, `PROCESS_INBOUND`, `WEBSITE_ANALYSIS`, `LEAD_OPS_QUEUE`
@@ -73,12 +74,19 @@ All skills are stateless, contract-based, importable as pure Python. No DB insid
 
 | Agent | File | task_type | action |
 |-------|------|-----------|--------|
+| LeadAcquisitionAgent | sales/lead_acquisition_agent.py | acquisition | * (all 4 actions) |
 | LeadQualifierAgent | sales/lead_qualifier.py | scoring | score_lead |
 | MessagingAgent | sales/messaging_agent.py | sales | generate_content |
 | CEOAgent | executive/ceo_agent.py | strategy | ceo_decision |
 | ChiefOfStaffAgent | executive/chief_of_staff_agent.py | executive | plan_action |
 | MaintenanceAgent | executive/maintenance_agent.py | executive | maintenance_report |
 | GenericTaskAgent | generic/task_agent.py | * | * (fallback) |
+
+### LeadAcquisitionAgent Details (Phase 13)
+- `discover_leads`: local-first (empty signals → plan only), Haiku batch signal pre-filter, calls `run_acquisition()`
+- `process_inbound`: calls `process_inbound()` + Sonnet AI-personalised Hebrew draft (cached system prompt)
+- `website_analysis`: calls `run_website_analysis()`
+- `lead_ops_queue`: direct DB read, 0 tokens
 
 ### Token Routing
 - **Haiku** (`claude-haiku-4-5`): classification, routing, scoring — task_type routing/classification/crm

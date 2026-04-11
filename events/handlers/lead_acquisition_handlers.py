@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def on_lead_discovered(event: dict[str, Any]) -> None:
-    """Auto-flag high-score discovered leads."""
+    """Auto-flag high-score discovered leads + push Telegram alert for hot leads."""
     payload    = event.get("payload") or {}
     lead_id    = payload.get("lead_id")
     session_id = payload.get("session_id")
@@ -24,7 +24,13 @@ def on_lead_discovered(event: dict[str, Any]) -> None:
     if lead_id and score and int(score) >= 70:
         try:
             from services.storage.repositories.lead_repo import LeadRepository
-            LeadRepository().update_status(lead_id, "ליד חם — נגלה")
+            repo = LeadRepository()
+            repo.update_status(lead_id, "ליד חם — נגלה")
+
+            # Telegram alert for hot leads (non-blocking)
+            lead = repo.get_by_id(lead_id)
+            if lead:
+                _telegram_hot_lead_alert(lead, int(score), source or "")
         except Exception as e:
             log.warning(f"[on_lead_discovered] status update failed: {e}")
 
@@ -113,17 +119,22 @@ def _now_iso() -> str:
 
 
 def _create_approval_for_inbound(lead_id: str, lead: Any) -> None:
+    approval_id = None
     try:
         from services.storage.db import get_session
         from services.storage.models.approval import ApprovalModel
+        from services.storage.models.base import new_uuid
+        approval_id = new_uuid()
         with get_session() as s:
             approval = ApprovalModel(
+                id=approval_id,
                 action="inbound_response",
                 details={
                     "lead_id":   lead_id,
                     "lead_name": getattr(lead, "name", ""),
-                    "draft":     getattr(lead, "outreach_draft", ""),
-                    "channel":   getattr(lead, "source_type", ""),
+                    "lead_name": getattr(lead, "name", ""),
+                    "body":      getattr(lead, "outreach_draft", ""),
+                    "channel":   getattr(lead, "source_type", "") or "whatsapp",
                 },
                 risk_level=2,
                 status="pending",
@@ -132,3 +143,50 @@ def _create_approval_for_inbound(lead_id: str, lead: Any) -> None:
             s.add(approval)
     except Exception as e:
         log.warning(f"[_create_approval_for_inbound] failed: {e}")
+        return
+
+    # Send Telegram approval request (non-blocking, best-effort)
+    if approval_id:
+        _telegram_send_approval(
+            lead=lead,
+            draft=getattr(lead, "outreach_draft", ""),
+            approval_id=approval_id,
+            action_label="inbound_response",
+            channel=getattr(lead, "source_type", "") or "whatsapp",
+        )
+
+
+def _telegram_hot_lead_alert(lead: Any, score: int, source: str) -> None:
+    """Push a simple Telegram alert for a newly discovered hot lead."""
+    try:
+        from services.telegram_service import telegram_service
+        name  = getattr(lead, "name", "לא ידוע")
+        city  = getattr(lead, "city", "") or ""
+        phone = getattr(lead, "phone", "") or ""
+        text  = (
+            f"🔥 *ליד חם נגלה*\n\n"
+            f"👤 {name}  |  🏙️ {city}\n"
+            f"📞 {phone}\n"
+            f"⭐ ציון: {score}/100  |  מקור: {source}"
+        )
+        telegram_service.send(text)
+    except Exception as e:
+        log.debug(f"[_telegram_hot_lead_alert] non-critical: {e}")
+
+
+def _telegram_send_approval(lead: Any, draft: str, approval_id: str,
+                             action_label: str, channel: str) -> None:
+    """Send Telegram approval card with approve/deny/edit buttons."""
+    try:
+        from services.telegram_service import telegram_service
+        name = getattr(lead, "name", "לא ידוע")
+        score = getattr(lead, "score", 0) or 0
+        telegram_service.send_approval_request(
+            action=action_label,
+            preview=draft[:300] if draft else "(אין טיוטה)",
+            approval_id=approval_id,
+            lead_name=f"{name} (ציון {score})",
+            channel=channel,
+        )
+    except Exception as e:
+        log.debug(f"[_telegram_send_approval] non-critical: {e}")
