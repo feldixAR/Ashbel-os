@@ -856,31 +856,29 @@ def _handle_website_analysis(task: TaskModel) -> ExecutionResult:
 
 def _handle_lead_ops_queue(task: TaskModel) -> ExecutionResult:
     """Return the current lead ops work queue (discovered + inbound + actions)."""
-    from services.storage.db import get_session
     from services.storage.repositories.lead_repo import LeadRepository
 
     started = _now_ms()
     p = _params(task)
     limit = int(p.get("limit") or 50)
     try:
-        with get_session() as session:
-            repo    = LeadRepository(session)
-            all_leads = repo.list_all(limit=limit)
-            discovered = [l for l in all_leads if getattr(l, "source_type", None) and not str(getattr(l, "is_inbound", "false")).lower() in ("true", "1")]
-            inbound    = [l for l in all_leads if str(getattr(l, "is_inbound", "false")).lower() in ("true", "1")]
-            pending_action = [l for l in all_leads if getattr(l, "outreach_draft", None) and l.status not in ("סגור זכה", "לא רלוונטי")]
+        repo      = LeadRepository()
+        all_leads = repo.list_all(limit=limit)
+        discovered     = [l for l in all_leads if getattr(l, "source_type", None) and str(getattr(l, "is_inbound", "false")).lower() not in ("true", "1")]
+        inbound        = [l for l in all_leads if str(getattr(l, "is_inbound", "false")).lower() in ("true", "1")]
+        pending_action = [l for l in all_leads if getattr(l, "outreach_draft", None) and l.status not in ("סגור זכה", "לא רלוונטי")]
 
-            def _lead_dict(l):
-                return {
-                    "id": l.id, "name": l.name, "status": l.status,
-                    "score": l.score, "source_type": getattr(l, "source_type", None),
-                    "is_inbound": str(getattr(l, "is_inbound", "false")).lower() in ("true", "1"),
-                    "outreach_action": getattr(l, "outreach_action", None),
-                    "outreach_draft":  getattr(l, "outreach_draft", None),
-                    "next_action":     l.next_action,
-                    "next_action_due": l.next_action_due,
-                    "meeting_suggested": str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1"),
-                }
+        def _lead_dict(l):
+            return {
+                "id": l.id, "name": l.name, "status": l.status,
+                "score": l.score, "source_type": getattr(l, "source_type", None),
+                "is_inbound": str(getattr(l, "is_inbound", "false")).lower() in ("true", "1"),
+                "outreach_action": getattr(l, "outreach_action", None),
+                "outreach_draft":  getattr(l, "outreach_draft", None),
+                "next_action":     l.next_action,
+                "next_action_due": l.next_action_due,
+                "meeting_suggested": str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1"),
+            }
 
         return ExecutionResult(
             success=True,

@@ -50,7 +50,7 @@ class WebsiteAnalysisResult:
 def run_acquisition(
     goal: str,
     signals: list[dict[str, Any]] | None = None,
-    session: Any = None,
+    session: Any = None,   # kept for API compat; repo manages own sessions
     business_profile: dict[str, Any] | None = None,
 ) -> AcquisitionResult:
     """
@@ -81,10 +81,10 @@ def run_acquisition(
     candidates = extract_candidates(raw_signals)
 
     existing: list[dict] = []
-    if session and candidates:
+    if candidates:
         try:
             from services.storage.repositories.lead_repo import LeadRepository
-            repo = LeadRepository(session)
+            repo = LeadRepository()
             existing = [
                 {"id": l.id, "phone": l.phone or "", "email": l.email or "",
                  "name": l.name, "company": l.company or ""}
@@ -131,24 +131,20 @@ def run_acquisition(
     queue = build_work_queue(leads_for_queue)
 
     # 6. CRM push + events
-    saved_count = 0
-    if session:
-        for lead_d in leads_for_queue:
-            try:
-                lead_id = push_to_crm(lead_d, session)
-                lead_d["id"] = lead_id
-                saved_count += 1
-                event_bus.publish(
-                    ET.LEAD_DISCOVERED,
-                    payload={"lead_id": lead_id, "session_id": session_id,
-                             "source_type": lead_d.get("source_type"), "score": lead_d.get("score")},
-                )
-            except Exception as e:
-                errors.append(f"crm: {e}")
+    for lead_d in leads_for_queue:
+        try:
+            lead_id = push_to_crm(lead_d)
+            lead_d["id"] = lead_id
+            event_bus.publish(
+                ET.LEAD_DISCOVERED,
+                payload={"lead_id": lead_id, "session_id": session_id,
+                         "source_type": lead_d.get("source_type"), "score": lead_d.get("score")},
+            )
+        except Exception as e:
+            errors.append(f"crm: {e}")
 
     # 7. Persist discovery session
-    if session:
-        _save_discovery_session(session, session_id, goal, plan, len(leads_for_queue))
+    _save_discovery_session(session_id, goal, plan, len(leads_for_queue))
 
     return AcquisitionResult(
         goal=goal,
@@ -187,16 +183,15 @@ def process_inbound(lead_data: dict[str, Any], session: Any = None) -> str:
     lead_dict["is_inbound"]      = True
 
     lead_id = ""
-    if session:
-        try:
-            lead_id = push_to_crm(lead_dict, session)
-            event_bus.publish(
-                ET.INBOUND_LEAD_RECEIVED,
-                payload={"lead_id": lead_id, "score": scored.score,
-                         "source": lead_data.get("source_type", "inbound")},
-            )
-        except Exception as e:
-            log.error(f"[LeadAcquisition] inbound push failed: {e}", exc_info=True)
+    try:
+        lead_id = push_to_crm(lead_dict)
+        event_bus.publish(
+            ET.INBOUND_LEAD_RECEIVED,
+            payload={"lead_id": lead_id, "score": scored.score,
+                     "source": lead_data.get("source_type", "inbound")},
+        )
+    except Exception as e:
+        log.error(f"[LeadAcquisition] inbound push failed: {e}", exc_info=True)
 
     return lead_id
 
@@ -303,15 +298,10 @@ def _plan_to_dict(plan: Any) -> dict:
     }
 
 
-def _save_discovery_session(
-    session: Any,
-    session_id: str,
-    goal: str,
-    plan: Any,
-    lead_count: int,
-) -> None:
+def _save_discovery_session(session_id: str, goal: str, plan: Any, lead_count: int) -> None:
     try:
         from services.storage.models.lead_discovery import LeadDiscoveryModel
+        from services.storage.db import get_session as _get_session
         ds = LeadDiscoveryModel(
             session_id=session_id,
             goal=goal,
@@ -320,7 +310,7 @@ def _save_discovery_session(
             lead_count=lead_count,
             status="completed",
         )
-        session.add(ds)
-        session.flush()
+        with _get_session() as s:
+            s.add(ds)
     except Exception as e:
         log.warning(f"[LeadAcquisition] session save failed (non-critical): {e}")

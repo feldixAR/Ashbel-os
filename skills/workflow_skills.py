@@ -105,14 +105,16 @@ def mark_approval_required(item: dict[str, Any], reason: str = "") -> dict[str, 
 
 # ── CRM push ──────────────────────────────────────────────────────────────────
 
-def push_to_crm(lead: dict[str, Any], session: Any) -> str:
+def push_to_crm(lead: dict[str, Any], session: Any = None) -> str:
     """
     Persist a discovered/inbound lead to DB via LeadRepository.
     Returns the new or existing lead_id.
+    session arg kept for API compat but repo manages its own sessions.
     """
     from services.storage.repositories.lead_repo import LeadRepository
+    from services.storage.db import get_session as _get_session
 
-    repo = LeadRepository(session)
+    repo = LeadRepository()
     # Check for existing by phone/email
     existing = None
     if lead.get("phone"):
@@ -124,7 +126,9 @@ def push_to_crm(lead: dict[str, Any], session: Any) -> str:
         return existing.id
 
     from services.storage.models.lead import LeadModel
+    from services.storage.models.base import new_uuid
     new_lead = LeadModel(
+        id=new_uuid(),
         name=lead.get("name") or "ליד חדש",
         phone=lead.get("phone") or "",
         email=lead.get("email") or "",
@@ -144,48 +148,44 @@ def push_to_crm(lead: dict[str, Any], session: Any) -> str:
         if hasattr(new_lead, col) and col in lead:
             setattr(new_lead, col, lead[col])
 
-    session.add(new_lead)
-    session.flush()
+    with _get_session() as s:
+        s.add(new_lead)
     return new_lead.id
 
 
-def update_lead_status(
-    lead_id: str,
-    status: str,
-    note: str = "",
-    session: Any = None,
-) -> bool:
+def update_lead_status(lead_id: str, status: str, note: str = "", session: Any = None) -> bool:
     """Update lead status and append a history note."""
-    if not session:
-        return False
     from services.storage.repositories.lead_repo import LeadRepository
-    repo = LeadRepository(session)
+    from services.storage.db import get_session as _get_session
+    repo = LeadRepository()
     lead = repo.get_by_id(lead_id)
     if not lead:
         return False
-    lead.status = status
-    if note:
-        lead.notes = f"{lead.notes or ''}\n[{_now_iso()}] {note}".strip()
-    lead.last_activity_at = _now_iso()
+    with _get_session() as s:
+        db_lead = s.get(type(lead), lead_id)
+        if not db_lead:
+            return False
+        db_lead.status = status
+        if note:
+            db_lead.notes = f"{db_lead.notes or ''}\n[{_now_iso()}] {note}".strip()
+        db_lead.last_activity_at = _now_iso()
     return True
 
 
-def queue_next_action(
-    lead_id: str,
-    action: str,
-    due: str = "",
-    session: Any = None,
-) -> bool:
+def queue_next_action(lead_id: str, action: str, due: str = "", session: Any = None) -> bool:
     """Set the next_action and next_action_due on a lead."""
-    if not session:
-        return False
     from services.storage.repositories.lead_repo import LeadRepository
-    repo = LeadRepository(session)
+    from services.storage.db import get_session as _get_session
+    repo = LeadRepository()
     lead = repo.get_by_id(lead_id)
     if not lead:
         return False
-    lead.next_action     = action
-    lead.next_action_due = due or _default_due("medium")
+    with _get_session() as s:
+        db_lead = s.get(type(lead), lead_id)
+        if not db_lead:
+            return False
+        db_lead.next_action     = action
+        db_lead.next_action_due = due or _default_due("medium")
     return True
 
 

@@ -83,6 +83,21 @@ class LeadRepository(BaseRepository[LeadModel]):
                     .order_by(LeadModel.score.desc())
                     .all())
 
+    def find_by_phone(self, phone: str) -> "LeadModel | None":
+        if not phone:
+            return None
+        with get_session() as s:
+            return s.query(LeadModel).filter(LeadModel.phone == phone).first()
+
+    def find_by_email(self, email: str) -> "LeadModel | None":
+        if not email:
+            return None
+        with get_session() as s:
+            return s.query(LeadModel).filter(LeadModel.email == email).first()
+
+    def get_by_id(self, lead_id: str) -> "LeadModel | None":
+        return self.get(lead_id)
+
     def list_all(self, limit: int = 200) -> list:
         """Return all leads ordered by score desc."""
         with get_session() as s:

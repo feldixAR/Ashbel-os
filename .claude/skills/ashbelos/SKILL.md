@@ -39,6 +39,36 @@ memory/sessions/                (Token usage, agent decisions, session logs)
 
 ---
 
+## Phase 12 — Lead Acquisition OS Skills
+
+All skills are stateless, contract-based, importable as pure Python. No DB inside skill functions.
+
+| Skill Module | File | Key Functions |
+|---|---|---|
+| Source Discovery | `skills/source_discovery.py` | `discover_sources(goal)`, `detect_source_types(goal)`, `suggest_communities(segment)`, `build_search_intents(goal, segment)`, `rank_sources(sources, segment)`, `explain_source_strategy(plan)` |
+| Lead Intelligence | `skills/lead_intelligence.py` | `normalize(raw)`, `extract_candidates(signals)`, `deduplicate(leads, existing)`, `enrich(lead)`, `score_lead(enriched)`, `rank_leads(scored)`, `explain_fit(lead, goal)` |
+| Outreach Intelligence | `skills/outreach_intelligence.py` | `choose_action(lead, ctx)`, `choose_channel(lead, ctx)`, `choose_timing(lead, ctx)`, `draft_first_contact(lead)`, `draft_followup(lead)`, `draft_meeting_request(lead)`, `draft_inbound_response(lead, text)`, `draft_comment_reply(comment, lead)` |
+| Israeli Context | `skills/israeli_context.py` | `get_hebrew_tone(segment)`, `is_good_timing(dt)`, `get_best_send_window()`, `get_holiday_context()`, `local_signal_detection(text)`, `geo_fit(city)`, `compliance_hints(channel)` |
+| Workflow | `skills/workflow_skills.py` | `build_work_queue(leads)`, `mark_approval_required(item, reason)`, `push_to_crm(lead)`, `update_lead_status(id, status)`, `queue_next_action(id, action)` |
+| Website Growth | `skills/website_growth.py` | `site_audit(url, html)`, `seo_intelligence(audit)`, `content_gap_detection(audit, segment)`, `landing_page_suggestions(audit)`, `lead_capture_review(audit)`, `content_draft(topic, city)`, `priority_planner(audit, gaps)` |
+
+### Acquisition Engine
+`engines/lead_acquisition_engine.py` — orchestrates all skills into a full pipeline.
+- `run_acquisition(goal, signals)` → `AcquisitionResult`
+- `process_inbound(lead_data)` → `lead_id`
+- `run_website_analysis(url, html)` → `WebsiteAnalysisResult`
+
+### Lead Ops API
+`/api/lead_ops/*` — 7 endpoints (see `docs/API.md`)
+
+### New Intents
+`DISCOVER_LEADS`, `PROCESS_INBOUND`, `WEBSITE_ANALYSIS`, `LEAD_OPS_QUEUE`
+
+### New Event Types
+`LEAD_DISCOVERED`, `INBOUND_LEAD_RECEIVED`, `LEAD_OUTREACH_SENT`, `LEAD_FOLLOWUP_PROPOSED`, `WEBSITE_ANALYSIS_REQUESTED`
+
+---
+
 ## Agents
 
 | Agent | File | task_type | action |

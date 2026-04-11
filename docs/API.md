@@ -25,6 +25,20 @@ Response: { "data": { "message": "...", "intent": "..." }, "success": true }
 
 ---
 
+## Lead Acquisition OS (Phase 12)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/lead_ops/discover` | Yes | Run acquisition pipeline: `{goal, signals[]}` → discovery plan + work queue |
+| POST | `/api/lead_ops/inbound` | Yes | Process inbound lead: `{name, phone, city, message, …}` |
+| POST | `/api/lead_ops/website` | Yes | Website growth analysis: `{url, html?}` |
+| GET | `/api/lead_ops/queue` | Yes | Current work queue (discovered + inbound + pending actions) |
+| GET/POST | `/api/lead_ops/discovery_plan` | Yes | Source strategy for a goal — no DB |
+| POST | `/api/lead_ops/draft` | Yes | Draft outreach message: `{lead, action_type}` |
+| GET | `/api/lead_ops/status` | Yes | Summary counts widget data |
+
+---
+
 ## Leads & CRM
 
 | Method | Path | Auth | Purpose |

@@ -102,37 +102,35 @@ def lead_ops_queue():
     """Return current lead ops work queue."""
     limit = int(request.args.get("limit") or 50)
     try:
-        from services.storage.db import get_session
         from services.storage.repositories.lead_repo import LeadRepository
-        with get_session() as session:
-            repo  = LeadRepository(session)
-            leads = repo.list_all(limit=limit)
+        repo  = LeadRepository()
+        leads = repo.list_all(limit=limit)
 
-            def _d(l):
-                return {
-                    "id":             l.id,
-                    "name":           l.name,
-                    "status":         l.status,
-                    "score":          l.score,
-                    "source_type":    getattr(l, "source_type", None),
-                    "is_inbound":     str(getattr(l, "is_inbound", "false")).lower() in ("true", "1"),
-                    "outreach_action": getattr(l, "outreach_action", None),
-                    "outreach_draft":  getattr(l, "outreach_draft", None),
-                    "next_action":    l.next_action,
-                    "next_action_due": l.next_action_due,
-                    "meeting_suggested": str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1"),
-                    "city":           l.city,
-                    "phone":          l.phone,
-                    "segment":        getattr(l, "segment", None),
-                    "geo_fit_score":  getattr(l, "geo_fit_score", 0),
-                }
+        def _d(l):
+            return {
+                "id":             l.id,
+                "name":           l.name,
+                "status":         l.status,
+                "score":          l.score,
+                "source_type":    getattr(l, "source_type", None),
+                "is_inbound":     str(getattr(l, "is_inbound", "false")).lower() in ("true", "1"),
+                "outreach_action": getattr(l, "outreach_action", None),
+                "outreach_draft":  getattr(l, "outreach_draft", None),
+                "next_action":    l.next_action,
+                "next_action_due": l.next_action_due,
+                "meeting_suggested": str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1"),
+                "city":           l.city,
+                "phone":          l.phone,
+                "segment":        getattr(l, "segment", None),
+                "geo_fit_score":  getattr(l, "geo_fit_score", 0),
+            }
 
-            discovered    = [_d(l) for l in leads if getattr(l, "source_type", None) and
-                             str(getattr(l, "is_inbound", "false")).lower() not in ("true", "1")]
-            inbound       = [_d(l) for l in leads if str(getattr(l, "is_inbound", "false")).lower() in ("true", "1")]
-            pending       = [_d(l) for l in leads if getattr(l, "outreach_draft", None)
-                             and l.status not in ("סגור זכה", "לא רלוונטי")]
-            needing_meeting = [_d(l) for l in leads if str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1")]
+        discovered    = [_d(l) for l in leads if getattr(l, "source_type", None) and
+                         str(getattr(l, "is_inbound", "false")).lower() not in ("true", "1")]
+        inbound       = [_d(l) for l in leads if str(getattr(l, "is_inbound", "false")).lower() in ("true", "1")]
+        pending       = [_d(l) for l in leads if getattr(l, "outreach_draft", None)
+                         and l.status not in ("סגור זכה", "לא רלוונטי")]
+        needing_meeting = [_d(l) for l in leads if str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1")]
 
         return jsonify({
             "success":    True,
@@ -235,17 +233,15 @@ def draft_message():
 def lead_ops_status():
     """Return lead ops summary counts for dashboard widget."""
     try:
-        from services.storage.db import get_session
         from services.storage.repositories.lead_repo import LeadRepository
-        with get_session() as session:
-            repo  = LeadRepository(session)
-            leads = repo.list_all(limit=200)
-            discovered  = sum(1 for l in leads if getattr(l, "source_type", None) and
-                              str(getattr(l, "is_inbound", "false")).lower() not in ("true", "1"))
-            inbound     = sum(1 for l in leads if str(getattr(l, "is_inbound", "false")).lower() in ("true", "1"))
-            pending     = sum(1 for l in leads if getattr(l, "outreach_draft", None)
-                              and l.status not in ("סגור זכה", "לא רלוונטי"))
-            meetings    = sum(1 for l in leads if str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1"))
+        repo  = LeadRepository()
+        leads = repo.list_all(limit=200)
+        discovered  = sum(1 for l in leads if getattr(l, "source_type", None) and
+                          str(getattr(l, "is_inbound", "false")).lower() not in ("true", "1"))
+        inbound     = sum(1 for l in leads if str(getattr(l, "is_inbound", "false")).lower() in ("true", "1"))
+        pending     = sum(1 for l in leads if getattr(l, "outreach_draft", None)
+                          and l.status not in ("סגור זכה", "לא רלוונטי"))
+        meetings    = sum(1 for l in leads if str(getattr(l, "meeting_suggested", "false")).lower() in ("true", "1"))
         return jsonify({
             "success":    True,
             "discovered": discovered,

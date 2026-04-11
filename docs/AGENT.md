@@ -1,5 +1,7 @@
 # AshbelOS — Agent Contracts
 
+> **Phase 12 update:** Six skill modules added under `skills/`. Skills are stateless, contract-based units. Engines orchestrate skills. Agents use skills for sub-tasks.
+
 > Derived from `agents/base/base_agent.py`, `agents/base/agent_registry.py`, `CLAUDE.md`, and `SKILL.md`.
 > Do not invent new architecture here — this reflects code reality.
 
