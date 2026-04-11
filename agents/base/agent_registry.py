@@ -56,6 +56,7 @@ class AgentRegistry:
     def bootstrap(self) -> None:
         from agents.departments.sales.lead_qualifier import LeadQualifierAgent
         from agents.departments.sales.messaging_agent import MessagingAgent
+        from agents.departments.sales.lead_acquisition_agent import LeadAcquisitionAgent
         from agents.departments.executive.ceo_agent import CEOAgent
         from agents.departments.executive.build_manager_agent import BuildManagerAgent
         from agents.departments.executive.code_builder_agent import CodeBuilderAgent
@@ -65,6 +66,7 @@ class AgentRegistry:
         from agents.departments.generic.task_agent import GenericTaskAgent
 
         for agent in [
+            LeadAcquisitionAgent(),
             LeadQualifierAgent(),
             MessagingAgent(),
             CEOAgent(),

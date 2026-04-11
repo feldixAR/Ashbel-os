@@ -284,6 +284,108 @@ def _job_maps_scan():
         log.error(f"[Scheduler] maps_scan crashed: {e}", exc_info=True)
 
 
+def _job_lead_followup_proposals():
+    """
+    Phase 13 — Daily 09:00 IL: scan for leads overdue for follow-up and
+    create Telegram-approval requests for outreach drafts.
+
+    Targets leads that:
+      - Are not closed/irrelevant
+      - Have an outreach_draft but no meeting yet
+      - Were last updated > 72 hours ago
+    Generates a follow-up draft per lead via outreach_intelligence and
+    creates an ApprovalModel for human review via Telegram.
+    Publishes LEAD_FOLLOWUP_PROPOSED for each.
+    """
+    try:
+        import datetime as _dt
+        from services.storage.repositories.lead_repo import LeadRepository
+        from skills.outreach_intelligence import draft_followup
+        from events.event_bus import event_bus
+        import events.event_types as ET
+
+        repo   = LeadRepository()
+        leads  = repo.list_all(limit=100)
+        cutoff = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=72)
+
+        proposed = 0
+        closed_statuses = {"סגור זכה", "לא רלוונטי", "closed", "won", "lost"}
+
+        for lead in leads:
+            try:
+                if getattr(lead, "status", "") in closed_statuses:
+                    continue
+                if not getattr(lead, "outreach_draft", None):
+                    continue
+                if str(getattr(lead, "meeting_suggested", "false")).lower() in ("true", "1"):
+                    continue
+
+                # Check last update time
+                updated = getattr(lead, "updated_at", None) or getattr(lead, "created_at", None)
+                if updated and updated.tzinfo is None:
+                    updated = updated.replace(tzinfo=_dt.timezone.utc)
+                if updated and updated > cutoff:
+                    continue   # too recent
+
+                lead_dict = {
+                    "id":     lead.id,
+                    "name":   lead.name,
+                    "phone":  lead.phone,
+                    "city":   getattr(lead, "city", ""),
+                    "status": getattr(lead, "status", ""),
+                    "score":  getattr(lead, "score", 0),
+                    "notes":  getattr(lead, "notes", ""),
+                    "outreach_action": getattr(lead, "outreach_action", ""),
+                }
+                draft = draft_followup(lead_dict)
+
+                # Create approval record
+                try:
+                    from services.storage.models.approval import ApprovalModel
+                    from services.storage.db import get_session
+                    import json
+
+                    with get_session() as s:
+                        approval = ApprovalModel(
+                            action="lead_followup",
+                            details=json.dumps({
+                                "lead_id":   lead.id,
+                                "lead_name": lead.name,
+                                "phone":     lead.phone,
+                                "channel":   draft.channel,
+                                "body":      draft.body,
+                                "action_type": "followup",
+                            }, ensure_ascii=False),
+                            risk_level="low",
+                            status="pending",
+                            requested_by="scheduler",
+                        )
+                        s.add(approval)
+
+                    event_bus.publish(
+                        ET.LEAD_FOLLOWUP_PROPOSED,
+                        payload={
+                            "lead_id":   lead.id,
+                            "lead_name": lead.name,
+                            "channel":   draft.channel,
+                        },
+                    )
+                    proposed += 1
+                except Exception as e_inner:
+                    log.warning(f"[Scheduler] followup_proposal approval failed lead={lead.id}: {e_inner}")
+
+            except Exception as e_lead:
+                log.warning(f"[Scheduler] followup_proposal lead={getattr(lead, 'id', '?')} failed: {e_lead}")
+
+        if proposed:
+            log.info(f"[Scheduler] lead_followup_proposals: proposed={proposed}")
+        else:
+            log.debug("[Scheduler] lead_followup_proposals: no overdue leads")
+
+    except Exception as e:
+        log.error(f"[Scheduler] lead_followup_proposals crashed: {e}", exc_info=True)
+
+
 # ── Scheduler lifecycle ───────────────────────────────────────────────────────
 
 def start():
@@ -377,6 +479,16 @@ def start():
                 trigger="cron",
                 hour=6, minute=0,
                 id="maps_scan",
+                replace_existing=True,
+                misfire_grace_time=1800,
+            )
+
+            # Lead follow-up proposals daily at 09:00 IL (Phase 13)
+            sched.add_job(
+                _job_lead_followup_proposals,
+                trigger="cron",
+                hour=9, minute=0,
+                id="lead_followup_proposals",
                 replace_existing=True,
                 misfire_grace_time=1800,
             )

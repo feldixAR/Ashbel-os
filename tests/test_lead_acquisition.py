@@ -383,18 +383,28 @@ class TestLeadAcquisitionEvents(unittest.TestCase):
         self.assertEqual(WEBSITE_ANALYSIS_REQUESTED, "website.analysis_requested")
 
 
-# ── Executor _HANDLERS ────────────────────────────────────────────────────────
+# ── Agent Registry (Phase 13) ────────────────────────────────────────────────
 
 class TestPhase12ExecutorHandlers(unittest.TestCase):
-    def test_handlers_registered(self):
-        from services.execution.executor import _HANDLERS
-        for key in ("discover_leads", "process_inbound", "website_analysis", "lead_ops_queue"):
-            self.assertIn(key, _HANDLERS, f"Missing handler: {key}")
+    """Phase 13: acquisition actions handled by LeadAcquisitionAgent via registry."""
 
-    def test_handlers_callable(self):
+    def setUp(self):
+        from agents.base.agent_registry import AgentRegistry
+        self.registry = AgentRegistry()
+        self.registry.bootstrap()
+
+    def test_agent_handles_acquisition_actions(self):
+        """LeadAcquisitionAgent.can_handle() covers all 4 acquisition actions."""
+        for action in ("discover_leads", "process_inbound", "website_analysis", "lead_ops_queue"):
+            agent = self.registry.find("acquisition", action)
+            self.assertIsNotNone(agent, f"No agent found for acquisition/{action}")
+            self.assertEqual(agent.agent_id, "builtin_lead_acquisition_v1")
+
+    def test_agent_not_in_handlers(self):
+        """Acquisition actions are no longer in _HANDLERS — agent registry owns them."""
         from services.execution.executor import _HANDLERS
         for key in ("discover_leads", "process_inbound", "website_analysis", "lead_ops_queue"):
-            self.assertTrue(callable(_HANDLERS[key]))
+            self.assertNotIn(key, _HANDLERS, f"Action {key!r} should be agent-owned, not in _HANDLERS")
 
 
 # ── Intent parser ──────────────────────────────────────────────────────────────

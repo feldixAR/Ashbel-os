@@ -132,8 +132,12 @@ class TestOrchestratorMapping(unittest.TestCase):
         pairs   = self._get_task_map_pairs()
         handlers = self._get_handler_keys()
         # Actions routed through agent registry — no direct handler needed
-        agent_routed = {"build_agent_code", "apply_files", "roadmap",
-                        "gap_analysis", "batch_status", "read_data"}
+        agent_routed = {
+            "build_agent_code", "apply_files", "roadmap",
+            "gap_analysis", "batch_status", "read_data",
+            # Phase 13: acquisition actions handled by LeadAcquisitionAgent
+            "discover_leads", "process_inbound", "website_analysis", "lead_ops_queue",
+        }
         for intent_name, action in pairs.items():
             if action not in agent_routed:
                 self.assertIn(action, handlers,
