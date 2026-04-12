@@ -129,14 +129,17 @@ def run(raw_goal: str) -> PipelineResult:
 
         client_profile = build_client_profile(top_audience, domain)
         market_map     = build_market_map(domain)
+        import dataclasses
         research = {
             "client_profile": (
-                client_profile.__dict__
-                if hasattr(client_profile, "__dict__") else str(client_profile)
+                dataclasses.asdict(client_profile)
+                if dataclasses.is_dataclass(client_profile) else
+                (client_profile.__dict__ if hasattr(client_profile, "__dict__") else str(client_profile))
             ),
             "market_map": (
-                market_map.__dict__
-                if hasattr(market_map, "__dict__") else str(market_map)
+                dataclasses.asdict(market_map)
+                if dataclasses.is_dataclass(market_map) else
+                (market_map.__dict__ if hasattr(market_map, "__dict__") else str(market_map))
             ),
         }
         log.info(f"[Pipeline] research complete: audience={top_audience} domain={domain}")
