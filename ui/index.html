@@ -2,12 +2,12 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>AshbalOS — אשבל אלומיניום</title>
-  <link rel="stylesheet" href="/ui/css/app.css?v=p12l1" />
+  <link rel="stylesheet" href="/ui/css/app.css?v=p18" />
 </head>
 <body>
 
@@ -31,6 +31,66 @@
   </div>
 </div>
 
+<!-- ── Upload / Import Modal ──────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="uploadModal">
+  <div class="um-modal">
+    <div class="um-header">
+      <div style="font-size:15px;font-weight:700">📂 העלה קובץ / יבוא לידים</div>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="UploadModal.close()">✕</button>
+    </div>
+
+    <!-- Stage: Drop zone -->
+    <div id="umStage-drop">
+      <div class="um-dropzone" id="umDropZone">
+        <div class="um-dz-icon">📂</div>
+        <div class="um-dz-title">גרור קובץ לכאן, או לחץ לבחירה</div>
+        <div class="um-dz-sub">Excel, Word, CSV, PDF, TXT · עד 10MB</div>
+        <button class="btn btn-primary" style="margin-top:12px">בחר קובץ</button>
+        <input type="file" id="umFileInput" accept=".csv,.xlsx,.xls,.docx,.doc,.pdf,.txt" style="display:none" />
+      </div>
+      <div class="um-drop-error" id="umDropError"></div>
+    </div>
+
+    <!-- Stage: Parsing -->
+    <div id="umStage-parsing" style="display:none">
+      <div class="um-loading-block">
+        <div class="um-spinner"></div>
+        <div class="um-parsing-title">מנתח קובץ...</div>
+        <div class="um-parsing-name" id="umParsingName"></div>
+      </div>
+    </div>
+
+    <!-- Stage: Review -->
+    <div id="umStage-review" style="display:none">
+      <div class="um-review-header">
+        <div id="umReviewTitle" class="um-review-title">נמצאו רשומות</div>
+        <div class="um-review-actions">
+          <span class="um-approved-count" id="umApprovedCount">0 אושרו</span>
+          <button class="btn btn-ghost" style="font-size:11px" id="umApproveAllBtn">אשר הכל הרלוונטי</button>
+          <button class="btn btn-primary" id="umCommitBtn">ייבא אושרו →</button>
+        </div>
+      </div>
+      <div class="um-group-summary" id="umGroupSummary"></div>
+      <div class="um-records-container" id="umRecordsContainer"></div>
+    </div>
+
+    <!-- Stage: Committing -->
+    <div id="umStage-committing" style="display:none">
+      <div class="um-loading-block">
+        <div class="um-spinner"></div>
+        <div id="umCommittingCount" class="um-parsing-title">מייבא...</div>
+      </div>
+    </div>
+
+    <!-- Stage: Results -->
+    <div id="umStage-results" style="display:none">
+      <div id="umResultMsg"></div>
+      <button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="UploadModal.close()">סגור</button>
+    </div>
+
+  </div>
+</div>
+
 <!-- ── Shell ──────────────────────────────────────────────────────────── -->
 <div class="os-shell">
 
@@ -40,6 +100,12 @@
       <div class="logo-hex"></div>
       <span class="logo-name">Ashbal<span>OS</span></span>
     </a>
+
+    <!-- Upload button — visible on all screens -->
+    <button class="header-upload-btn" onclick="UploadModal.open()" title="העלה קובץ / יבוא לידים">
+      <span>📂</span>
+      <span class="header-upload-label">יבוא</span>
+    </button>
 
     <div class="header-meta">
       <!-- Live KPI strip -->
@@ -62,29 +128,13 @@
 
       <div class="header-live">
         <div class="pulse"></div>
-        <span style="font-family:var(--mono);font-size:10px;letter-spacing:.5px">SYSTEM ONLINE</span>
-      </div>
-    </div>
-
-    <!-- Lead Ops Status Widget -->
-    <div class="lead-ops-widget" id="leadOpsWidget" title="לחץ לפתיחת מרכז לידים" style="display:none">
-      <div class="low-chip low-discovered">
-        <span class="low-val" id="lowDiscovered">—</span>
-        <span class="low-label">גולשים</span>
-      </div>
-      <div class="low-chip low-inbound">
-        <span class="low-val" id="lowInbound">—</span>
-        <span class="low-label">נכנסים</span>
-      </div>
-      <div class="low-chip low-pending">
-        <span class="low-val" id="lowPending">—</span>
-        <span class="low-label">ממתינים</span>
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:.5px">LIVE</span>
       </div>
     </div>
 
     <button class="bell-btn" id="bellBtn">
       <span>⚑</span>
-      <span id="bellTxt">APPROVALS</span>
+      <span id="bellTxt">אישורים</span>
       <span class="bell-badge hidden" id="bellBadge">0</span>
     </button>
   </header>
@@ -96,6 +146,9 @@
 
   <!-- Main content area -->
   <main class="main">
+    <!-- Home (daily work surface) -->
+    <div id="panel-home"          class="panel"></div>
+
     <!-- CRM & Revenue screens -->
     <div id="panel-dashboard"       class="panel"></div>
     <div id="panel-leads"           class="panel"></div>
@@ -128,39 +181,43 @@
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=p12l1"></script>
-<script src="/ui/js/components/toast.js?v=p12l1"></script>
-<script src="/ui/js/components/ui.js?v=p12l1"></script>
+<script src="/ui/js/api.js?v=p18"></script>
+<script src="/ui/js/components/toast.js?v=p18"></script>
+<script src="/ui/js/components/ui.js?v=p18"></script>
+<script src="/ui/js/components/upload_modal.js?v=p18"></script>
+
+<!-- Home panel (first) -->
+<script src="/ui/js/panels/home.js?v=p18"></script>
 
 <!-- CRM & Revenue panels -->
-<script src="/ui/js/panels/dashboard.js?v=p12l1"></script>
-<script src="/ui/js/panels/leads.js?v=p12l1"></script>
-<script src="/ui/js/panels/crm.js?v=p12l1"></script>
-<script src="/ui/js/panels/clients.js?v=p12l1"></script>
-<script src="/ui/js/panels/revenue.js?v=p12l1"></script>
-<script src="/ui/js/panels/calendar.js?v=p12l1"></script>
-<script src="/ui/js/panels/briefing.js?v=p12l1"></script>
+<script src="/ui/js/panels/dashboard.js?v=p18"></script>
+<script src="/ui/js/panels/leads.js?v=p18"></script>
+<script src="/ui/js/panels/crm.js?v=p18"></script>
+<script src="/ui/js/panels/clients.js?v=p18"></script>
+<script src="/ui/js/panels/revenue.js?v=p18"></script>
+<script src="/ui/js/panels/calendar.js?v=p18"></script>
+<script src="/ui/js/panels/briefing.js?v=p18"></script>
 
 <!-- Operations panels -->
-<script src="/ui/js/panels/tasks.js?v=p12l1"></script>
-<script src="/ui/js/panels/communications.js?v=p12l1"></script>
-<script src="/ui/js/panels/approvals.js?v=p12l1"></script>
-<script src="/ui/js/panels/pipeline.js?v=p12l1"></script>
+<script src="/ui/js/panels/tasks.js?v=p18"></script>
+<script src="/ui/js/panels/communications.js?v=p18"></script>
+<script src="/ui/js/panels/approvals.js?v=p18"></script>
+<script src="/ui/js/panels/pipeline.js?v=p18"></script>
 
 <!-- System panels -->
-<script src="/ui/js/panels/agents.js?v=p12l1"></script>
-<script src="/ui/js/panels/goals.js?v=p12l1"></script>
-<script src="/ui/js/panels/reports.js?v=p12l1"></script>
-<script src="/ui/js/panels/seo.js?v=p12l1"></script>
-<script src="/ui/js/panels/settings.js?v=p12l1"></script>
+<script src="/ui/js/panels/agents.js?v=p18"></script>
+<script src="/ui/js/panels/goals.js?v=p18"></script>
+<script src="/ui/js/panels/reports.js?v=p18"></script>
+<script src="/ui/js/panels/seo.js?v=p18"></script>
+<script src="/ui/js/panels/settings.js?v=p18"></script>
 
 <!-- Lead Acquisition OS panel -->
-<script src="/ui/js/panels/lead_ops.js?v=p12l1"></script>
+<script src="/ui/js/panels/lead_ops.js?v=p18"></script>
 
 <!-- Legacy panels -->
-<script src="/ui/js/panels/command.js?v=p12l1"></script>
+<script src="/ui/js/panels/command.js?v=p18"></script>
 
-<script src="/ui/js/app.js?v=p12l1"></script>
+<script src="/ui/js/app.js?v=p18"></script>
 
 </body>
 </html>

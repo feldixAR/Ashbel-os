@@ -6,32 +6,37 @@ const App = (() => {
 
   // ── Navigation definition ────────────────────────────────────────────────
   const NAV = [
+    // HOME — daily work surface (first + default)
+    { group: 'ראשי' },
+    { id: 'home',           label: 'הבית — יומי',       icon: '⌂',  panel: () => HomePanel           },
+    // Lead intake shortcuts (promoted to top)
+    { group: 'לידים ויבוא' },
+    { id: 'leads',          label: 'לידים',              icon: '◎',  panel: () => LeadsPanel          },
+    { id: 'briefing',       label: 'Briefing חי',        icon: '⊛',  panel: () => BriefingPanel       },
     // CRM & Revenue
-    { group: 'CRM & REVENUE' },
-    { id: 'dashboard',      label: 'מרכז פיקוד',      icon: '◈',  panel: () => DashboardPanel      },
-    { id: 'leads',          label: 'לידים',            icon: '◎',  panel: () => LeadsPanel          },
-    { id: 'crm',            label: 'עסקאות',           icon: '◇',  panel: () => CrmPanel            },
-    { id: 'clients',        label: 'לקוחות',           icon: '◉',  panel: () => ClientsPanel        },
-    { id: 'revenue',        label: 'תוכנית יומית',     icon: '▲',  panel: () => RevenuePanel        },
-    { id: 'calendar',       label: 'יומן שבועי',       icon: '▦',  panel: () => CalendarPanel       },
-    { id: 'briefing',       label: 'Briefing חי',      icon: '⊛',  panel: () => BriefingPanel       },
+    { group: 'CRM ומכירות' },
+    { id: 'crm',            label: 'עסקאות',             icon: '◇',  panel: () => CrmPanel            },
+    { id: 'clients',        label: 'לקוחות',             icon: '◉',  panel: () => ClientsPanel        },
+    { id: 'revenue',        label: 'תוכנית יומית',       icon: '▲',  panel: () => RevenuePanel        },
+    { id: 'calendar',       label: 'יומן שבועי',         icon: '▦',  panel: () => CalendarPanel       },
     // Operations
-    { group: 'OPERATIONS' },
-    { id: 'tasks',          label: 'משימות',           icon: '◫',  panel: () => TasksPanel          },
-    { id: 'communications', label: 'תקשורת',           icon: '◁',  panel: () => CommunicationsPanel },
-    { id: 'approvals',      label: 'אישורים',          icon: '⚑',  panel: () => ApprovalsPanel      },
-    { id: 'pipeline',       label: 'צנרת Outreach',    icon: '⊳',  panel: () => PipelinePanel       },
-    // System
-    { group: 'SYSTEM' },
-    { id: 'agents',         label: 'סוכנים',           icon: '⊙',  panel: () => AgentsPanel         },
-    { id: 'goals',          label: 'יעדים',            icon: '⊕',  panel: () => GoalsPanel          },
-    { id: 'reports',        label: 'דוחות',            icon: '▣',  panel: () => ReportsPanel        },
-    { id: 'seo',            label: 'SEO Engine',       icon: '⊞',  panel: () => SEOPanel            },
-    { id: 'settings',       label: 'הגדרות',           icon: '⚙',  panel: () => SettingsPanel       },
+    { group: 'פעילות' },
+    { id: 'tasks',          label: 'משימות',             icon: '◫',  panel: () => TasksPanel          },
+    { id: 'approvals',      label: 'אישורים',            icon: '⚑',  panel: () => ApprovalsPanel      },
+    { id: 'communications', label: 'תקשורת',             icon: '◁',  panel: () => CommunicationsPanel },
+    { id: 'pipeline',       label: 'צנרת יוצאת',         icon: '⊳',  panel: () => PipelinePanel       },
+    // System (demoted)
+    { group: 'מערכת' },
+    { id: 'dashboard',      label: 'מרכז שליטה',        icon: '◈',  panel: () => DashboardPanel      },
+    { id: 'agents',         label: 'סוכנים',             icon: '⊙',  panel: () => AgentsPanel         },
+    { id: 'goals',          label: 'יעדים',              icon: '⊕',  panel: () => GoalsPanel          },
+    { id: 'reports',        label: 'דוחות',              icon: '▣',  panel: () => ReportsPanel        },
+    { id: 'seo',            label: 'SEO',                icon: '⊞',  panel: () => SEOPanel            },
+    { id: 'settings',       label: 'הגדרות',             icon: '⚙',  panel: () => SettingsPanel       },
   ];
 
   const PANELS     = NAV.filter(p => p.id);
-  let currentPanel = 'dashboard';
+  let currentPanel = 'home';
 
   // ── Init ─────────────────────────────────────────────────────────────────
   function init() {
@@ -57,9 +62,9 @@ const App = (() => {
       nav.appendChild(el);
     });
 
-    // Render initial panel only when key is already present
+    // Render home as default
     if (API.hasKey()) {
-      switchTo('dashboard');
+      switchTo('home');
     }
 
     // Pre-check "remember" if key is already in localStorage
@@ -73,7 +78,7 @@ const App = (() => {
       if (!key) return;
       API.setKey(key, remember);
       document.getElementById('apiModal').classList.add('hidden');
-      switchTo('dashboard');
+      switchTo('home');
       refreshBadge();
       refreshHeaderKpis();
       _loadProfileBadge();
@@ -81,6 +86,9 @@ const App = (() => {
 
     // Bell → approvals
     document.getElementById('bellBtn').onclick = () => switchTo('approvals');
+
+    // Init upload modal
+    if (typeof UploadModal !== 'undefined') UploadModal.init();
 
     // Load active business profile badge into sidebar footer
     if (API.hasKey()) _loadProfileBadge();
@@ -183,10 +191,11 @@ const App = (() => {
     fab.innerHTML = `
       <button class="fab-main" id="fabMain" title="פעולות מהירות">＋</button>
       <div class="fab-sheet hidden" id="fabSheet">
-        <button class="fab-action" onclick="App.switchTo('leads');document.getElementById('fabSheet').classList.add('hidden')">לידים חדשים</button>
-        <button class="fab-action" onclick="App.switchTo('briefing');document.getElementById('fabSheet').classList.add('hidden')">Briefing חי</button>
+        <button class="fab-action" onclick="UploadModal.open();document.getElementById('fabSheet').classList.add('hidden')">📂 יבוא קובץ</button>
+        <button class="fab-action" onclick="HomePanel.openDiscover();App.switchTo('home');document.getElementById('fabSheet').classList.add('hidden')">🔍 גלה לידים</button>
+        <button class="fab-action" onclick="App.switchTo('leads');document.getElementById('fabSheet').classList.add('hidden')">לידים חמים</button>
+        <button class="fab-action" onclick="App.switchTo('approvals');document.getElementById('fabSheet').classList.add('hidden')">⚑ אישורים</button>
         <button class="fab-action" onclick="App.switchTo('revenue');document.getElementById('fabSheet').classList.add('hidden')">תוכנית היום</button>
-        <button class="fab-action" onclick="App.switchTo('calendar');document.getElementById('fabSheet').classList.add('hidden')">יומן</button>
       </div>`;
     document.body.appendChild(fab);
 
