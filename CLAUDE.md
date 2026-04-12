@@ -317,7 +317,17 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `api/routes/approvals.py` — system_change approval: auto-creates `feat/system-change-{id}` branch,
     stores execution plan in MemoryStore `global.pending_change_{id}` for implementation pass
   - `tests/test_learning_skills.py` — 21 unit tests for learning_skills (fake MemoryStore, no DB)
-- **Status: PRODUCTION READY v5.1**
+- **Phase 17 completion additions (2026-04-12 final):**
+  - `ui/js/panels/calendar.js` — calInsight + calNextAction (events/deals/revenue-at-risk)
+  - `ui/js/panels/pipeline.js` — pipeInsight + pipeNextAction (follow-up queue)
+  - `ui/js/panels/goals.js` — goalsInsight + goalsNextAction (build plan for top goal)
+  - `ui/js/panels/seo.js` — seoInsight (cities/posts/images counts)
+  - `services/intake/normalizer.py` — video, poll, reply_to, forward metadata
+  - `skills/lead_intelligence.py` — learning-aware weight adjustment + segment-aware next_action
+  - `agents/departments/sales/lead_acquisition_agent.py` — live learning hooks
+  - `api/routes/approvals.py` — template outcome recording on outreach approval
+  - `api/routes/system.py` — GET /api/system/pending_changes for self-evolution consumption
+- **Status: PRODUCTION READY v5.1 — FULL SYSTEM COMPLETE**
 
 ---
 
