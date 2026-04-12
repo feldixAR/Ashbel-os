@@ -20,10 +20,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-import pytz as _pytz
+try:
+    import pytz as _pytz
+except ImportError:
+    _pytz = None
 
 log = logging.getLogger(__name__)
-_IL_TZ        = _pytz.timezone("Asia/Jerusalem")
+_IL_TZ        = (_pytz.timezone("Asia/Jerusalem") if _pytz else __import__("datetime").timezone(__import__("datetime").timedelta(hours=3)))
 WINDOW_DAYS   = 30
 AVG_DEAL_ILS  = 15_000   # Ashbal Aluminum average deal size
 BASE_CONV_RATE = 0.20    # baseline conversion assumed before learning data exists

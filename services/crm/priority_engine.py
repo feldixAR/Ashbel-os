@@ -21,10 +21,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-import pytz
+try:
+    import pytz
+    _IL_TZ = pytz.timezone("Asia/Jerusalem")
+except ImportError:
+    import datetime as _dt
+    _IL_TZ = _dt.timezone(_dt.timedelta(hours=3))
 
 log = logging.getLogger(__name__)
-_IL_TZ = pytz.timezone("Asia/Jerusalem")
 
 _MIN_BLOCK   = 15    # minutes
 _MAX_BLOCK   = 60    # minutes

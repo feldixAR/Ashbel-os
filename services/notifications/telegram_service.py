@@ -24,11 +24,14 @@ import logging
 import os
 
 import httpx
-import pytz
+try:
+    import pytz
+except ImportError:
+    pytz = None
 from sqlalchemy.exc import IntegrityError
 
 log = logging.getLogger(__name__)
-_IL_TZ       = pytz.timezone("Asia/Jerusalem")
+_IL_TZ       = (pytz.timezone("Asia/Jerusalem") if pytz else __import__("datetime").timezone(__import__("datetime").timedelta(hours=3)))
 _TG_API      = "https://api.telegram.org/bot{token}/sendMessage"
 _AVG_DEAL    = 15_000   # ILS — Ashbal Aluminum baseline
 

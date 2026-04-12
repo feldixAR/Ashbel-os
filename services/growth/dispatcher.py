@@ -19,10 +19,13 @@ import datetime
 import logging
 from dataclasses import dataclass
 
-import pytz as _pytz
+try:
+    import pytz as _pytz
+except ImportError:
+    _pytz = None
 
 log = logging.getLogger(__name__)
-_IL_TZ = _pytz.timezone("Asia/Jerusalem")
+_IL_TZ = (_pytz.timezone("Asia/Jerusalem") if _pytz else __import__("datetime").timezone(__import__("datetime").timedelta(hours=3)))
 
 # WhatsApp business number (deep-link for operator to tap and open chat)
 _WA_NUMBER = "972501234567"   # override via env in production

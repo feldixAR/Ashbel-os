@@ -24,11 +24,11 @@ const App = (() => {
     { id: 'tasks',          label: 'משימות',             icon: '◫',  panel: () => TasksPanel          },
     { id: 'approvals',      label: 'אישורים',            icon: '⚑',  panel: () => ApprovalsPanel      },
     { id: 'communications', label: 'תקשורת',             icon: '◁',  panel: () => CommunicationsPanel },
+    { id: 'agents',         label: 'סוכנים',             icon: '⊙',  panel: () => AgentsPanel         },
     { id: 'pipeline',       label: 'צנרת יוצאת',         icon: '⊳',  panel: () => PipelinePanel       },
-    // System (demoted)
+    // System (demoted — admin/reporting)
     { group: 'מערכת' },
     { id: 'dashboard',      label: 'מרכז שליטה',        icon: '◈',  panel: () => DashboardPanel      },
-    { id: 'agents',         label: 'סוכנים',             icon: '⊙',  panel: () => AgentsPanel         },
     { id: 'goals',          label: 'יעדים',              icon: '⊕',  panel: () => GoalsPanel          },
     { id: 'reports',        label: 'דוחות',              icon: '▣',  panel: () => ReportsPanel        },
     { id: 'seo',            label: 'SEO',                icon: '⊞',  panel: () => SEOPanel            },

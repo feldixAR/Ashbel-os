@@ -24,10 +24,13 @@ import uuid
 from dataclasses import dataclass, field
 from typing import List
 
-import pytz as _pytz
+try:
+    import pytz as _pytz
+except ImportError:
+    _pytz = None
 
 log = logging.getLogger(__name__)
-_IL_TZ = _pytz.timezone("Asia/Jerusalem")
+_IL_TZ = (_pytz.timezone("Asia/Jerusalem") if _pytz else __import__("datetime").timezone(__import__("datetime").timedelta(hours=3)))
 
 # ── Result contract ────────────────────────────────────────────────────────────
 

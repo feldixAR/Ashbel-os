@@ -16,10 +16,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import List
 
-import pytz
-
 log = logging.getLogger(__name__)
-_IL_TZ = pytz.timezone("Asia/Jerusalem")
+
+try:
+    import pytz
+    _IL_TZ = pytz.timezone("Asia/Jerusalem")
+except ImportError:
+    import datetime as _dt
+    _IL_TZ = _dt.timezone(_dt.timedelta(hours=3))  # IST fallback
 
 
 @dataclass

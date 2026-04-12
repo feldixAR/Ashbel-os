@@ -128,7 +128,16 @@ const TasksPanel = (() => {
         <td style="font-family:var(--mono);font-size:11px;color:${priorityColor(t.priority || 5)}">${t.priority || 5}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--muted)" title="${(t.created_at||'').slice(0,16).replace('T',' ')}">${relCreated}</td>
       </tr>`;}).join('')
-      : `<tr><td colspan="6">${UI.empty('אין משימות פעילות', '◫')}</td></tr>`;
+      : `<tr><td colspan="6">
+          <div class="empty-state">
+            <div class="empty-state-icon">◫</div>
+            <div class="empty-state-msg">אין משימות פעילות</div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+              <button class="btn btn-ghost" onclick="HomePanel.openDiscover();App.switchTo('home')">🔍 גלה לידים חדשים</button>
+              <button class="btn btn-ghost" onclick="App.switchTo('leads')">◎ ראה לידים</button>
+            </div>
+          </div>
+        </td></tr>`;
 
     document.getElementById('tasksTable').innerHTML = `
       <div class="table-wrap" style="margin-top:0">

@@ -123,6 +123,21 @@ const LeadsPanel = (() => {
     _allLeads = res.data.leads || [];
     cnt.textContent = `${_allLeads.length} לידים`;
 
+    // Guided empty state — no leads at all
+    if (!_allLeads.length) {
+      document.getElementById('leadsBody').innerHTML = `<tr><td colspan="7">
+        <div class="empty-state">
+          <div class="empty-state-icon">◎</div>
+          <div class="empty-state-msg">אין לידים במערכת עדיין</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="UploadModal.open()">📂 יבא קובץ לידים</button>
+            <button class="btn btn-ghost" onclick="HomePanel.openDiscover();App.switchTo('home')">🔍 גלה לידים חדשים</button>
+          </div>
+        </div>
+      </td></tr>`;
+      return;
+    }
+
     // Update widgets
     const hot  = _allLeads.filter(l => l.status === 'חם').length;
     const nw   = _allLeads.filter(l => l.status === 'חדש').length;
@@ -175,7 +190,13 @@ const LeadsPanel = (() => {
     list = [...list].sort((a, b) => (b.priority_score || b.score || 0) - (a.priority_score || a.score || 0));
 
     if (!list.length) {
-      body.innerHTML = `<tr><td colspan="7">${UI.empty('אין לידים התואמים את הסינון', '○')}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7">
+        <div class="empty-state">
+          <div class="empty-state-icon">○</div>
+          <div class="empty-state-msg">אין לידים התואמים את הסינון</div>
+          <button class="btn btn-ghost" style="margin-top:10px" onclick="document.getElementById('leadSearch').value='';LeadsPanel.renderTable()">נקה סינון</button>
+        </div>
+      </td></tr>`;
       return;
     }
     const now = new Date();

@@ -20,12 +20,15 @@ import uuid
 from dataclasses import dataclass
 from typing import List
 
-import pytz as _pytz
+try:
+    import pytz as _pytz
+except ImportError:
+    _pytz = None
 
 from services.growth.asset_factory import AssetBundle, GeneratedAsset
 
 log = logging.getLogger(__name__)
-_IL_TZ = _pytz.timezone("Asia/Jerusalem")
+_IL_TZ = (_pytz.timezone("Asia/Jerusalem") if _pytz else __import__("datetime").timezone(__import__("datetime").timedelta(hours=3)))
 
 
 # ── In-memory contract ─────────────────────────────────────────────────────────

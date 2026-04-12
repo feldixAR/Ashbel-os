@@ -27,10 +27,14 @@ import uuid
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-import pytz
-
+try:
+    import pytz
+    _IL_TZ = pytz.timezone("Asia/Jerusalem")
+except ImportError:
+    import datetime as _dt_
+    _IL_TZ = _dt_.timezone(_dt_.timedelta(hours=3))
 log = logging.getLogger(__name__)
-_IL_TZ = pytz.timezone("Asia/Jerusalem")
+
 
 # In-memory call sessions (process-local, acceptable for pilot)
 _active_sessions: dict[str, dict] = {}
