@@ -13,53 +13,32 @@ const HomePanel = (() => {
     return `
 <div class="home-shell" dir="rtl">
 
-  <!-- Date + system status bar -->
   <div class="home-top-bar">
     <div class="home-date">${today}</div>
-    <div class="home-status-strip" id="homeStatus">
+    <div class="home-status-strip">
       <span class="home-status-dot"></span>
       <span style="font-size:11px;color:var(--muted)">מערכת פעילה</span>
     </div>
   </div>
 
-  <!-- Primary action buttons -->
   <div class="home-primary-actions">
-    <button class="home-action-btn home-upload-btn" id="homeUploadBtn" onclick="UploadModal.open()">
+    <button class="home-action-btn home-upload-btn" onclick="UploadModal.open()">
       <span class="home-action-icon">📂</span>
       <div>
-        <div class="home-action-title">העלה קובץ / יבוא לידים</div>
+        <div class="home-action-title">יבוא לידים</div>
         <div class="home-action-sub">Excel, Word, CSV, PDF</div>
       </div>
     </button>
-    <button class="home-action-btn home-discover-btn" id="homeDiscoverBtn" onclick="HomePanel.openDiscover()">
+    <button class="home-action-btn home-discover-btn" onclick="HomePanel.openDiscover()">
       <span class="home-action-icon">🔍</span>
       <div>
         <div class="home-action-title">גלה לידים חכם</div>
-        <div class="home-action-sub">סריקה פעילה + דירוג + המלצות</div>
+        <div class="home-action-sub">סריקה + דירוג + המלצות</div>
       </div>
     </button>
   </div>
 
-  <!-- Discover modal (inline) -->
-  <div class="home-discover-modal hidden" id="homeDiscoverModal">
-    <div class="home-discover-inner">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div style="font-size:14px;font-weight:700">גילוי לידים חכם</div>
-        <button class="btn btn-ghost" style="font-size:12px" onclick="document.getElementById('homeDiscoverModal').classList.add('hidden')">✕</button>
-      </div>
-      <div style="margin-bottom:10px">
-        <div class="form-label">מטרה / סוג לקוח</div>
-        <input class="form-input" id="homeDiscoverGoal" placeholder="לדוגמה: אדריכלים בתל אביב, קבלנים בחיפה..." />
-      </div>
-      <button class="btn btn-primary" style="width:100%" id="homeDiscoverRun">הפעל גילוי →</button>
-      <div id="homeDiscoverResult" style="margin-top:12px"></div>
-    </div>
-  </div>
-
-  <!-- Main grid: 2 columns -->
   <div class="home-grid">
-
-    <!-- Urgent Next Actions -->
     <div class="home-card">
       <div class="home-card-hd">
         <span class="home-card-icon">⚡</span>
@@ -67,9 +46,9 @@ const HomePanel = (() => {
         <span class="home-card-badge" id="homeUrgentCount">—</span>
       </div>
       <div id="homeUrgentList"><div class="home-loading">טוען...</div></div>
+      <button class="home-card-more" onclick="App.switchTo('tasks')">הצג הכל →</button>
     </div>
 
-    <!-- Pending Approvals -->
     <div class="home-card">
       <div class="home-card-hd">
         <span class="home-card-icon">⚑</span>
@@ -80,7 +59,6 @@ const HomePanel = (() => {
       <button class="home-card-more" onclick="App.switchTo('approvals')">הצג הכל →</button>
     </div>
 
-    <!-- Hot Leads -->
     <div class="home-card">
       <div class="home-card-hd">
         <span class="home-card-icon">🔥</span>
@@ -91,18 +69,33 @@ const HomePanel = (() => {
       <button class="home-card-more" onclick="App.switchTo('leads')">הצג הכל →</button>
     </div>
 
-    <!-- System status / today summary -->
     <div class="home-card">
       <div class="home-card-hd">
         <span class="home-card-icon">◈</span>
         <span>מצב מערכת</span>
       </div>
       <div id="homeSysStatus"><div class="home-loading">טוען...</div></div>
-      <button class="home-card-more" onclick="App.switchTo('dashboard')">מרכז שליטה מלא →</button>
+      <button class="home-card-more" onclick="App.switchTo('dashboard')">מרכז שליטה →</button>
     </div>
-
   </div>
 
+</div>
+
+<!-- Discover overlay modal -->
+<div class="home-disc-overlay hidden" id="homeDiscoverOverlay">
+  <div class="home-disc-modal">
+    <div class="home-disc-modal-hd">
+      <span>גילוי לידים חכם</span>
+      <button class="btn btn-ghost" style="font-size:12px" id="homeDiscCloseBtn">✕</button>
+    </div>
+    <div style="padding:16px">
+      <div class="form-label" style="margin-bottom:6px">מטרה / סוג לקוח</div>
+      <input class="form-input" id="homeDiscoverGoal"
+             placeholder="לדוגמה: אדריכלים בתל אביב, קבלנים בחיפה..." />
+      <button class="btn btn-primary" style="width:100%;margin-top:10px" id="homeDiscoverRun">הפעל גילוי →</button>
+      <div id="homeDiscoverResult" style="margin-top:14px"></div>
+    </div>
+  </div>
 </div>
     `;
   }
@@ -117,156 +110,113 @@ const HomePanel = (() => {
     ]);
 
     document.getElementById('homeDiscoverRun')?.addEventListener('click', _runDiscover);
+    document.getElementById('homeDiscoverGoal')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') _runDiscover();
+    });
+    document.getElementById('homeDiscCloseBtn')?.addEventListener('click', closeDiscover);
+    document.getElementById('homeDiscoverOverlay')?.addEventListener('click', e => {
+      if (e.target === document.getElementById('homeDiscoverOverlay')) closeDiscover();
+    });
   }
 
-  // ── Urgent next actions ───────────────────────────────────────────────────
-  async function _loadUrgent() {
-    const el = document.getElementById('homeUrgentList');
-    const countEl = document.getElementById('homeUrgentCount');
-    try {
-      const res = await API.tasks({ status: 'created', limit: 5 });
-      const tasks = res.success ? (res.data?.tasks || []) : [];
-      const overdue = tasks.filter(t => t.priority <= 2 || t.status === 'running');
-      countEl.textContent = overdue.length || tasks.length;
-      if (!tasks.length) {
-        el.innerHTML = '<div class="home-empty">אין פעולות ממתינות ✓</div>';
-        return;
-      }
-      el.innerHTML = tasks.slice(0,4).map(t => `
-        <div class="home-item" onclick="App.switchTo('tasks')">
-          <div class="home-item-title">${t.action || t.type || 'משימה'}</div>
-          <div class="home-item-sub">${t.status || ''} · עדיפות ${t.priority ?? '—'}</div>
-          ${_statusPill(t.status)}
-        </div>`).join('');
-    } catch(e) {
-      el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>';
-    }
-  }
-
-  // ── Pending approvals ─────────────────────────────────────────────────────
-  async function _loadApprovals() {
-    const el = document.getElementById('homeAppList');
-    const countEl = document.getElementById('homeAppCount');
-    try {
-      const res = await API.approvals();
-      const items = res.success ? (res.data?.approvals || []).filter(a => a.status === 'pending') : [];
-      countEl.textContent = items.length;
-      if (!items.length) {
-        el.innerHTML = '<div class="home-empty">אין אישורים ממתינים ✓</div>';
-        return;
-      }
-      el.innerHTML = items.slice(0,3).map(a => `
-        <div class="home-item" onclick="App.switchTo('approvals')">
-          <div class="home-item-title">${a.action || '—'}</div>
-          <div class="home-item-sub">סיכון ${a.risk_level || '—'} · ${(a.created_at || '').slice(0,10)}</div>
-          <span class="pill pill-amber" style="font-size:9px">ממתין</span>
-        </div>`).join('');
-    } catch(e) {
-      el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>';
-    }
-  }
-
-  // ── Hot leads ─────────────────────────────────────────────────────────────
-  async function _loadHotLeads() {
-    const el = document.getElementById('homeHotList');
-    const countEl = document.getElementById('homeHotCount');
-    try {
-      const res = await API.leads({ limit: 20 });
-      const all  = res.success ? (res.data?.leads || []) : [];
-      const hot  = all.filter(l => (l.score || l.priority_score || 0) >= 60 || l.status === 'חם');
-      hot.sort((a,b) => (b.score||b.priority_score||0) - (a.score||a.priority_score||0));
-      countEl.textContent = hot.length;
-      if (!hot.length) {
-        el.innerHTML = '<div class="home-empty">אין לידים חמים כרגע</div>';
-        return;
-      }
-      el.innerHTML = hot.slice(0,4).map(l => `
-        <div class="home-item" onclick="App.switchTo('briefing')">
-          <div class="home-item-title">${l.name || '—'}</div>
-          <div class="home-item-sub">${l.city || ''} · ציון ${Math.round(l.score||l.priority_score||0)}</div>
-          <span class="score ${(l.score||0)>=70?'score-hot':'score-warm'}" style="font-size:9px">${Math.round(l.score||0)}</span>
-        </div>`).join('');
-    } catch(e) {
-      el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>';
-    }
-  }
-
-  // ── System status ─────────────────────────────────────────────────────────
-  async function _loadSysStatus() {
-    const el = document.getElementById('homeSysStatus');
-    try {
-      const [planRes, healthRes] = await Promise.all([
-        API.dailyPlan(),
-        API.get('/health'),
-      ]);
-      const plan  = planRes.success  ? (planRes.data || {}) : {};
-      const db_ok = (healthRes.data?.db || healthRes.data?.data?.db || false);
-      el.innerHTML = `
-        <div class="home-sys-row">
-          <span>DB</span>
-          <span class="${db_ok ? 'home-ok' : 'home-err'}">${db_ok ? '✓ מחובר' : '✗ ניתוק'}</span>
-        </div>
-        <div class="home-sys-row">
-          <span>Pipeline</span>
-          <span class="home-val">${ils(plan.pipeline_value||0)}</span>
-        </div>
-        <div class="home-sys-row">
-          <span>עסקאות פעילות</span>
-          <span class="home-val">${plan.total_deals||0}</span>
-        </div>
-        <div class="home-sys-row">
-          <span>לידים סה"כ</span>
-          <span class="home-val">${plan.total_leads||0}</span>
-        </div>`;
-    } catch(e) {
-      el.innerHTML = '<div class="home-empty">לא ניתן לטעון מצב</div>';
-    }
-  }
-
-  // ── Smart discovery ───────────────────────────────────────────────────────
+  // ── Discover overlay ──────────────────────────────────────────────────────
   function openDiscover() {
-    document.getElementById('homeDiscoverModal').classList.remove('hidden');
-    document.getElementById('homeDiscoverGoal').focus();
+    document.getElementById('homeDiscoverOverlay')?.classList.remove('hidden');
+    document.getElementById('homeDiscoverGoal')?.focus();
   }
 
+  function closeDiscover() {
+    document.getElementById('homeDiscoverOverlay')?.classList.add('hidden');
+    const r = document.getElementById('homeDiscoverResult');
+    if (r) r.innerHTML = '';
+    const btn = document.getElementById('homeDiscoverRun');
+    if (btn) { btn.disabled = false; btn.textContent = 'הפעל גילוי →'; }
+  }
+
+  // ── Smart Discovery — real /api/lead_ops/discover ─────────────────────────
   async function _runDiscover() {
-    const goal = (document.getElementById('homeDiscoverGoal').value || '').trim();
-    const btn  = document.getElementById('homeDiscoverRun');
+    const goal  = (document.getElementById('homeDiscoverGoal')?.value || '').trim();
+    const btn   = document.getElementById('homeDiscoverRun');
     const resEl = document.getElementById('homeDiscoverResult');
     if (!goal) return;
+
     btn.disabled = true;
     btn.textContent = 'מגלה...';
-    resEl.innerHTML = '<div class="home-loading">סורק מקורות...</div>';
+    resEl.innerHTML = '<div class="home-loading" style="text-align:center;padding:16px 0">ממפה מקורות ולידים...</div>';
 
     try {
-      const res = await API.post('/command', {
-        command: `גלה לידים: ${goal}`,
-        params: { goal, signals: [] },
-      });
-      const data = res.success ? (res.data?.output || res.data || {}) : {};
-      const queue = data.work_queue || [];
-      const plan  = data.discovery_plan || {};
+      const res = await API.post('/lead_ops/discover', { goal, signals: [] });
 
       if (!res.success) {
-        resEl.innerHTML = `<div class="home-err-msg">${res.data?.message || 'שגיאה'}</div>`;
+        resEl.innerHTML = `<div class="home-err-msg">שגיאה: ${res.error || res.message || 'נסה שוב'}</div>`;
         return;
       }
 
-      // Show discovery results
-      resEl.innerHTML = `
-        <div class="home-disc-summary">
-          <span class="home-disc-count">${queue.length}</span> לידים נמצאו
-          <span style="font-size:11px;color:var(--muted);margin-right:8px">·
-            ${plan.suggested_sources?.length || 0} מקורות הומלצו</span>
-        </div>
-        ${queue.slice(0,5).map(item => `
+      const queue   = res.work_queue        || [];
+      const plan    = res.discovery_plan    || {};
+      const segs    = plan.segments         || [];
+      const intents = plan.search_intents   || [];
+      const comms   = plan.communities      || [];
+
+      let html = '';
+
+      if (queue.length > 0) {
+        html += `<div class="home-disc-section-title">לידים שנמצאו (${queue.length})</div>`;
+        html += queue.slice(0,5).map(item => `
           <div class="home-disc-item">
-            <div class="home-item-title">${item.lead_name||item.name||'—'}</div>
-            <div class="home-item-sub">${item.next_action||'בדוק ידנית'}</div>
-            <span class="score ${(item.score||0)>=70?'score-hot':'score-warm'}">${Math.round(item.score||0)}</span>
-          </div>`).join('')}
-        ${queue.length > 0 ? `<button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="App.switchTo('leads');document.getElementById('homeDiscoverModal').classList.add('hidden')">הצג לידים →</button>` : ''}
-      `;
+            <div>
+              <div class="home-item-title">${item.lead_name || item.name || '—'}</div>
+              <div class="home-item-sub">${item.next_action || 'בדוק ידנית'}</div>
+            </div>
+            <span class="score ${(item.score||0)>=70?'score-hot':(item.score||0)>=40?'score-warm':'score-cold'}"
+                  style="font-size:10px">${Math.round(item.score||0)}</span>
+          </div>`).join('');
+        html += `<button class="btn btn-primary" style="width:100%;margin-top:10px"
+          onclick="App.switchTo('leads');HomePanel.closeDiscover()">הצג לידים ב-CRM →</button>`;
+        if (segs.length || intents.length) {
+          html += '<div style="border-top:1px solid var(--border);margin:14px 0"></div>';
+        }
+      }
+
+      if (segs.length) {
+        html += `<div class="home-disc-section-title">קהלי יעד</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">
+            ${segs.map(s=>`<span class="insight-chip insight-good">${_segLabel(s)}</span>`).join('')}
+          </div>`;
+      }
+
+      if (intents.length) {
+        html += `<div class="home-disc-section-title">ביטויי חיפוש מומלצים</div>
+          ${intents.slice(0,5).map(i=>`
+            <div class="home-disc-intent">
+              <span class="home-disc-src-icon">${_srcIcon(i.source_type)}</span>
+              <span style="font-size:12px">${i.query}</span>
+            </div>`).join('')}`;
+      }
+
+      if (comms.length) {
+        html += `<div class="home-disc-section-title" style="margin-top:10px">קהילות לסרוק</div>
+          ${comms.slice(0,4).map(c=>`
+            <div class="home-disc-intent">
+              <span class="home-disc-src-icon">${_srcIcon(c.source_type)}</span>
+              <span style="font-size:12px">${c.name}</span>
+            </div>`).join('')}`;
+      }
+
+      if (segs.length || intents.length || comms.length || queue.length === 0) {
+        html += `<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn-primary" style="flex:1;min-width:120px"
+            onclick="UploadModal.open();HomePanel.closeDiscover()">📂 יבא קובץ לידים</button>
+          <button class="btn btn-secondary" style="flex:1;min-width:120px"
+            onclick="App.switchTo('leads');HomePanel.closeDiscover()">רשימת לידים</button>
+        </div>`;
+      }
+
+      if (!html) {
+        html = '<div class="home-empty">לא נמצאו תוצאות לשאילתה זו</div>';
+      }
+
+      resEl.innerHTML = html;
     } catch(e) {
       resEl.innerHTML = `<div class="home-err-msg">שגיאה: ${e.message || e}</div>`;
     } finally {
@@ -275,11 +225,96 @@ const HomePanel = (() => {
     }
   }
 
-  function _statusPill(status) {
-    const map = { running: 'pill-amber', completed: 'pill-green', failed: 'pill-red', created: 'pill-steel' };
-    const lbl = { running: 'פועל', completed: 'הושלם', failed: 'נכשל', created: 'ממתין' };
+  function _segLabel(s) {
+    const map = { architects:'אדריכלים', contractors:'קבלנים', interior_design:'מעצבי פנים',
+                  developers:'יזמים', homeowners:'בעלי בתים', business:'עסקים' };
+    return map[s] || s;
+  }
+  function _srcIcon(t) {
+    const m = { linkedin:'💼', instagram:'📸', facebook_group:'👥', facebook:'👥',
+                directory:'📋', google_maps:'📍', forum:'💬', blog:'📝',
+                professional_blog:'📝', whatsapp_group:'📱', pinterest:'📌',
+                yad2:'🏠', company_site:'🌐' };
+    return m[t] || '🔎';
+  }
+
+  // ── Data loaders ──────────────────────────────────────────────────────────
+  async function _loadUrgent() {
+    const el = document.getElementById('homeUrgentList');
+    const countEl = document.getElementById('homeUrgentCount');
+    try {
+      const res = await API.tasks({ status: 'created', limit: 5 });
+      const tasks = res.success ? (res.data?.tasks || []) : [];
+      countEl.textContent = tasks.length || '0';
+      if (!tasks.length) { el.innerHTML = '<div class="home-empty">אין משימות פתוחות ✓</div>'; return; }
+      el.innerHTML = tasks.slice(0,4).map(t => `
+        <div class="home-item" onclick="App.switchTo('tasks')">
+          <div class="home-item-title">${t.action || t.type || 'משימה'}</div>
+          <div class="home-item-sub">עדיפות ${t.priority ?? '—'}</div>
+          ${_pill(t.status)}
+        </div>`).join('');
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>'; }
+  }
+
+  async function _loadApprovals() {
+    const el = document.getElementById('homeAppList');
+    const countEl = document.getElementById('homeAppCount');
+    try {
+      const res = await API.approvals();
+      const items = res.success ? (res.data?.approvals || []).filter(a => a.status === 'pending') : [];
+      countEl.textContent = items.length || '0';
+      if (!items.length) { el.innerHTML = '<div class="home-empty">אין אישורים ממתינים ✓</div>'; return; }
+      el.innerHTML = items.slice(0,3).map(a => `
+        <div class="home-item" onclick="App.switchTo('approvals')">
+          <div class="home-item-title">${a.action || '—'}</div>
+          <div class="home-item-sub">סיכון ${a.risk_level || '—'}</div>
+          <span class="pill pill-amber" style="font-size:9px">ממתין</span>
+        </div>`).join('');
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>'; }
+  }
+
+  async function _loadHotLeads() {
+    const el = document.getElementById('homeHotList');
+    const countEl = document.getElementById('homeHotCount');
+    try {
+      const res = await API.leads({ limit: 20 });
+      const all  = res.success ? (res.data?.leads || []) : [];
+      const hot  = all.filter(l => (l.score || l.priority_score || 0) >= 60 || l.status === 'חם');
+      hot.sort((a,b) => (b.score||b.priority_score||0) - (a.score||a.priority_score||0));
+      countEl.textContent = hot.length || '0';
+      if (!hot.length) { el.innerHTML = '<div class="home-empty">אין לידים חמים כרגע</div>'; return; }
+      el.innerHTML = hot.slice(0,4).map(l => `
+        <div class="home-item" onclick="App.switchTo('briefing')">
+          <div class="home-item-title">${l.name || '—'}</div>
+          <div class="home-item-sub">${l.city || ''} · ציון ${Math.round(l.score||l.priority_score||0)}</div>
+          <span class="score ${(l.score||0)>=70?'score-hot':'score-warm'}" style="font-size:9px">${Math.round(l.score||0)}</span>
+        </div>`).join('');
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>'; }
+  }
+
+  async function _loadSysStatus() {
+    const el = document.getElementById('homeSysStatus');
+    try {
+      const [planRes, healthRes] = await Promise.all([API.dailyPlan(), API.get('/health')]);
+      const plan  = planRes.success  ? (planRes.data || {}) : {};
+      const db_ok = (healthRes.data?.db || healthRes.data?.data?.db || false);
+      el.innerHTML = `
+        <div class="home-sys-row"><span>DB</span>
+          <span class="${db_ok?'home-ok':'home-err'}">${db_ok?'✓ מחובר':'✗ ניתוק'}</span></div>
+        <div class="home-sys-row"><span>Pipeline</span>
+          <span class="home-val">${ils(plan.pipeline_value||0)}</span></div>
+        <div class="home-sys-row"><span>עסקאות פעילות</span>
+          <span class="home-val">${plan.total_deals||0}</span></div>
+        <div class="home-sys-row"><span>לידים סה"כ</span>
+          <span class="home-val">${plan.total_leads||0}</span></div>`;
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון מצב</div>'; }
+  }
+
+  function _pill(status) {
+    const map = { running:'pill-amber', completed:'pill-green', failed:'pill-red', created:'pill-steel' };
+    const lbl = { running:'פועל', completed:'הושלם', failed:'נכשל', created:'ממתין' };
     return `<span class="pill ${map[status]||''}" style="font-size:9px">${lbl[status]||status||''}</span>`;
   }
 
-  return { render, init, openDiscover };
+  return { render, init, openDiscover, closeDiscover };
 })();

@@ -93,6 +93,9 @@ const App = (() => {
     // Load active business profile badge into sidebar footer
     if (API.hasKey()) _loadProfileBadge();
 
+    // ── Mobile sidebar toggle ─────────────────────────────────────────────
+    _initMobileSidebar();
+
     // ── Mobile FAB ─────────────────────────────────────────────────────────
     _initFab();
 
@@ -103,11 +106,33 @@ const App = (() => {
     if (API.hasKey()) refreshHeaderKpis();
   }
 
+  // ── Mobile sidebar ────────────────────────────────────────────────────────
+  function _initMobileSidebar() {
+    const toggleBtn = document.getElementById('sidebarToggle');
+    if (!toggleBtn) return;
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = sidebar.classList.toggle('sidebar-open');
+      if (overlay) overlay.classList.toggle('hidden', !isOpen);
+    });
+
+    overlay?.addEventListener('click', _closeMobileSidebar);
+  }
+
+  function _closeMobileSidebar() {
+    document.querySelector('.sidebar')?.classList.remove('sidebar-open');
+    document.getElementById('sidebarOverlay')?.classList.add('hidden');
+  }
+
   // ── Panel switching ───────────────────────────────────────────────────────
   function switchTo(id) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
     document.getElementById('nav-' + id)?.classList.add('active');
+    // Close mobile sidebar when navigating
+    _closeMobileSidebar();
 
     const panelEl = document.getElementById('panel-' + id);
     if (!panelEl) return;

@@ -2246,3 +2246,168 @@ tr:hover td { background: var(--surface); }
   .um-act-btn { font-size: 9px; padding: 3px 6px; }
   .um-review-header { flex-direction: column; align-items: flex-start; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Mobile Sidebar Toggle (p19)
+   ════════════════════════════════════════════════════════════════════════════ */
+.sidebar-toggle-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: var(--text);
+  flex-shrink: 0;
+  line-height: 1;
+  border-radius: var(--radius);
+  transition: background 0.12s;
+}
+.sidebar-toggle-btn:hover { background: var(--bg2); }
+@media (max-width: 640px) {
+  .sidebar-toggle-btn { display: flex; align-items: center; }
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 49;
+}
+
+/* Mobile open sidebar */
+@media (max-width: 640px) {
+  .sidebar.sidebar-open {
+    display: block !important;
+    position: fixed;
+    right: 0;
+    top: 52px;
+    height: calc(100vh - 52px);
+    width: 240px;
+    z-index: 50;
+    overflow-y: auto;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.25);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Home Discover Overlay Modal (p19)
+   ════════════════════════════════════════════════════════════════════════════ */
+.home-disc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+.home-disc-overlay.hidden { display: none; }
+
+.home-disc-modal {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  width: 520px;
+  max-width: 95vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(30,60,120,0.18);
+}
+.home-disc-modal-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  background: var(--surface2);
+  z-index: 1;
+}
+
+.home-disc-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 6px;
+}
+.home-disc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.home-disc-item:last-child { border-bottom: none; }
+.home-disc-intent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.home-disc-intent:last-child { border-bottom: none; }
+.home-disc-src-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Tasks Panel — Mobile Card View (p19)
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Hide table header, convert rows to cards */
+  #tasksTable thead { display: none; }
+  #tasksTable tbody { display: block; }
+  #tasksTable tr {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    gap: 4px;
+  }
+  #tasksTable td {
+    display: flex;
+    align-items: center;
+    padding: 2px 0;
+    border: none;
+    font-size: 12px;
+  }
+  #tasksTable td:first-child { font-size: 10px; color: var(--muted); }
+  /* Hide ID column on mobile */
+  #tasksTable td:nth-child(1) { display: none; }
+  /* Type + action side by side */
+  #tasksTable td:nth-child(2)::before { content: 'סוג: '; font-size: 10px; color: var(--muted); margin-left: 4px; }
+  #tasksTable td:nth-child(3)::before { content: 'פעולה: '; font-size: 10px; color: var(--muted); margin-left: 4px; }
+  #tasksTable td:nth-child(5)::before { content: 'עדיפות: '; font-size: 10px; color: var(--muted); margin-left: 4px; }
+
+  /* Leads table on mobile: hide less critical columns */
+  .table-wrap table thead th:nth-child(4),
+  .table-wrap table tbody td:nth-child(4) { display: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   General mobile UX improvements (p19)
+   ════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Bigger tap targets for pills and buttons */
+  .filter-pill { min-height: 34px; padding: 6px 12px; font-size: 11px; }
+  .btn { min-height: 36px; }
+  /* Main panel padding reduced on mobile */
+  .main { padding: 12px; }
+  /* Section head wraps on mobile */
+  .section-head { flex-wrap: wrap; gap: 10px; }
+  .section-head > div:last-child { width: 100%; }
+  /* Agent grid single column on mobile */
+  .agents-grid { grid-template-columns: 1fr; }
+  /* Form inputs larger touch target */
+  .form-input, .form-select { min-height: 40px; font-size: 14px; }
+}
