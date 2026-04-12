@@ -104,6 +104,7 @@ const API = (() => {
     approvalHistory: (limit=50)  => request('GET', `/approvals/history?limit=${limit}`),
     approve:         (id, note)  => request('POST', `/approvals/${id}`, { action: 'approve', note }),
     deny:            (id, note)  => request('POST', `/approvals/${id}`, { action: 'deny',    note }),
+    approvalCreate:  (data)      => request('POST', '/approvals/create', data),
 
     // Reports
     dailyReport:      ()          => request('GET', '/reports/daily'),

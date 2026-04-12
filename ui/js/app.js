@@ -6,29 +6,24 @@ const App = (() => {
 
   // ── Navigation definition ────────────────────────────────────────────────
   const NAV = [
-    // HOME — daily work surface (first + default)
-    { group: 'ראשי' },
-    { id: 'home',           label: 'הבית — יומי',       icon: '⌂',  panel: () => HomePanel           },
-    // Lead intake shortcuts (promoted to top)
-    { group: 'לידים ויבוא' },
+    // ── Primary daily surfaces (no group label — always visible at top) ───
+    { id: 'home',           label: 'הבית',               icon: '⌂',  panel: () => HomePanel           },
     { id: 'leads',          label: 'לידים',              icon: '◎',  panel: () => LeadsPanel          },
+    { id: 'tasks',          label: 'משימות',             icon: '◫',  panel: () => TasksPanel          },
+    { id: 'approvals',      label: 'אישורים',            icon: '⚑',  panel: () => ApprovalsPanel      },
     { id: 'briefing',       label: 'Briefing חי',        icon: '⊛',  panel: () => BriefingPanel       },
-    // CRM & Revenue
-    { group: 'CRM ומכירות' },
+    { id: 'communications', label: 'תקשורת',             icon: '◁',  panel: () => CommunicationsPanel },
+    { id: 'agents',         label: 'סוכנים',             icon: '⊙',  panel: () => AgentsPanel         },
+    // ── CRM ──────────────────────────────────────────────────────────────────
+    { group: 'CRM' },
     { id: 'crm',            label: 'עסקאות',             icon: '◇',  panel: () => CrmPanel            },
     { id: 'clients',        label: 'לקוחות',             icon: '◉',  panel: () => ClientsPanel        },
     { id: 'revenue',        label: 'תוכנית יומית',       icon: '▲',  panel: () => RevenuePanel        },
-    { id: 'calendar',       label: 'יומן שבועי',         icon: '▦',  panel: () => CalendarPanel       },
-    // Operations
-    { group: 'פעילות' },
-    { id: 'tasks',          label: 'משימות',             icon: '◫',  panel: () => TasksPanel          },
-    { id: 'approvals',      label: 'אישורים',            icon: '⚑',  panel: () => ApprovalsPanel      },
-    { id: 'communications', label: 'תקשורת',             icon: '◁',  panel: () => CommunicationsPanel },
-    { id: 'agents',         label: 'סוכנים',             icon: '⊙',  panel: () => AgentsPanel         },
-    { id: 'pipeline',       label: 'צנרת יוצאת',         icon: '⊳',  panel: () => PipelinePanel       },
-    // System (demoted — admin/reporting)
+    { id: 'pipeline',       label: 'צנרת',               icon: '⊳',  panel: () => PipelinePanel       },
+    { id: 'calendar',       label: 'יומן',               icon: '▦',  panel: () => CalendarPanel       },
+    // ── System / Admin ────────────────────────────────────────────────────────
     { group: 'מערכת' },
-    { id: 'dashboard',      label: 'מרכז שליטה',        icon: '◈',  panel: () => DashboardPanel      },
+    { id: 'dashboard',      label: 'מרכז שליטה',         icon: '◈',  panel: () => DashboardPanel      },
     { id: 'goals',          label: 'יעדים',              icon: '⊕',  panel: () => GoalsPanel          },
     { id: 'reports',        label: 'דוחות',              icon: '▣',  panel: () => ReportsPanel        },
     { id: 'seo',            label: 'SEO',                icon: '⊞',  panel: () => SEOPanel            },

@@ -327,7 +327,28 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `agents/departments/sales/lead_acquisition_agent.py` — live learning hooks
   - `api/routes/approvals.py` — template outcome recording on outreach approval
   - `api/routes/system.py` — GET /api/system/pending_changes for self-evolution consumption
-- **Status: PRODUCTION READY v5.1 — FULL SYSTEM COMPLETE**
+- **Phase 20 additions (2026-04-12):**
+  - pytz ImportError fixed in 9 service files (daily_plan, priority_engine, client_briefing, weekly_calendar, telegram_service, 5 growth services) — try/except with IST fallback
+  - NameError: log fixed in daily_plan.py (logger moved above try/except)
+  - `ui/js/app.js` — nav restructure: agents promoted to Operations; primary work surfaces at top without group label
+  - `ui/js/panels/agents.js` — real 24h status indicator, guided empty states, removed dead command button, per-card CTAs
+  - `ui/js/panels/leads.js` — guided empty state with Import/Discover CTAs; filter-empty CTA
+  - `ui/js/panels/tasks.js` — guided empty state with Discover/Leads CTAs
+- **Phase 21 additions (2026-04-12):**
+  - `docs/PRODUCT_OPERATING_MODEL.md` — binding product shape, UX contract, screen hierarchy
+  - `docs/AGENTS_SKILLS_ORCHESTRATION.md` — capability architecture, agent registry, skill contracts
+  - `docs/UI_UX_MOBILE_RULES.md` — design system, mobile rules, component hierarchy
+  - `docs/DEPLOY_AND_VERIFICATION_DISCIPLINE.md` — branch model, push discipline, done criteria
+  - `ui/js/components/ui.js` — `UI.guidedEmpty()` helper with CTA buttons (backwards-compatible)
+  - `ui/js/components/draft_modal.js` — governed DraftModal component: lead context → action type → `/api/lead_ops/draft` → preview → approval gate
+  - `api/routes/approvals.py` — `POST /api/approvals/create` endpoint for UI-initiated approval requests
+  - `ui/js/api.js` — `API.approvalCreate()` method
+  - `ui/js/panels/leads.js` — action-centric: per-row Draft (✉) + Briefing (⊛) buttons; 8-col table
+  - `ui/js/panels/communications.js` — guided empty states; Draft button per outreach item; `draftFor()` method
+  - `ui/js/panels/clients.js` — guided empty with Leads + Deals CTAs
+  - `ui/css/app.css` — DraftModal styles, empty-state-actions, lead-action-row, mobile shell improvements, nav-group secondary
+  - `ui/index.html` — bumped to v=p21; added draft_modal.js script tag
+- **Status: PRODUCTION READY v5.2 — GUIDED OPERATOR CONSOLE**
 
 ---
 

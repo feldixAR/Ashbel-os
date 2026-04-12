@@ -143,6 +143,29 @@ const UI = (() => {
     </div>`;
   }
 
+  /**
+   * guidedEmpty — empty state with mandatory CTA
+   * ctaBtns: [{label, onclick, primary?}]  OR single label+onclick
+   */
+  function guidedEmpty(msg, icon = '○', ctaBtns = [], subMsg = '') {
+    // Accept old 4-arg signature: (msg, icon, ctaLabel, ctaJs)
+    if (typeof ctaBtns === 'string') {
+      const js = subMsg;
+      ctaBtns = ctaBtns ? [{ label: ctaBtns, onclick: js, primary: true }] : [];
+      subMsg  = '';
+    }
+    const btns = ctaBtns.map(b =>
+      `<button class="btn ${b.primary !== false ? 'btn-primary' : 'btn-ghost'}"
+               onclick="${b.onclick}">${b.label}</button>`
+    ).join('');
+    return `<div class="empty-state">
+      <div class="empty-state-icon">${icon}</div>
+      <div class="empty-state-msg">${msg}</div>
+      ${subMsg ? `<div class="empty-state-sub">${subMsg}</div>` : ''}
+      ${btns ? `<div class="empty-state-actions">${btns}</div>` : ''}
+    </div>`;
+  }
+
   // ── Skeleton lines ────────────────────────────────────────────────────────
 
   function skel(widthClass = 'skel-w80', heightClass = 'skel-h12') {
@@ -170,7 +193,7 @@ const UI = (() => {
     ils, num, relTime,
     pill, leadPill, dealPill, taskPill, scoreBadge,
     widgetBar, sectionHead, insightStrip, nextAction,
-    loading, empty, error,
+    loading, empty, error, guidedEmpty,
     skel, skelBlock,
     tableRow, tableHead,
     LEAD_STATUS_MAP, DEAL_STAGE_MAP,

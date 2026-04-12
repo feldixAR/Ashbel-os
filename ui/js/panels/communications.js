@@ -159,7 +159,18 @@ const CommunicationsPanel = (() => {
   function renderQueue(tasks) {
     const el  = document.getElementById('comQueueView');
     const now = new Date().toISOString().slice(0, 10);
-    if (!tasks.length) { el.innerHTML = UI.empty('אין פניות ממתינות', '📭'); return; }
+    if (!tasks.length) {
+      el.innerHTML = UI.guidedEmpty(
+        'אין פניות ממתינות בתור',
+        '◁',
+        [
+          { label: '🔍 גלה לידים', onclick: "HomePanel.openDiscover();App.switchTo('home')", primary: false },
+          { label: '◎ ראה לידים', onclick: "App.switchTo('leads')", primary: false },
+        ],
+        'כשיש לידים עם טיוטות מאושרות הם יופיעו כאן'
+      );
+      return;
+    }
 
     el.innerHTML = tasks.map(t => {
       const dueDate   = (t.due_date || t.scheduled_at || '').slice(0, 10);
@@ -175,10 +186,14 @@ const CommunicationsPanel = (() => {
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
             <div class="comm-due ${isOverdue ? 'overdue' : ''}">${dueDate || '—'}</div>
-            ${t.deep_link
-              ? `<a href="${t.deep_link}" target="_blank" class="btn btn-primary" style="font-size:10px;padding:4px 10px;text-decoration:none">📱 שלח</a>`
-              : `<button class="btn btn-primary" style="font-size:10px;padding:4px 10px"
-                         onclick="CommunicationsPanel.executeOutreach('${t.lead_id || t.id || ''}')">שלח</button>`}
+            <div style="display:flex;gap:5px">
+              <button class="btn btn-ghost" style="font-size:10px;padding:4px 8px"
+                onclick="CommunicationsPanel.draftFor('${t.lead_id || ''}','${t.contact_name || t.lead_name || ''}')">✉ טיוטה</button>
+              ${t.deep_link
+                ? `<a href="${t.deep_link}" target="_blank" class="btn btn-primary" style="font-size:10px;padding:4px 10px;text-decoration:none">📱 שלח</a>`
+                : `<button class="btn btn-primary" style="font-size:10px;padding:4px 10px"
+                           onclick="CommunicationsPanel.executeOutreach('${t.lead_id || t.id || ''}')">שלח</button>`}
+            </div>
           </div>
         </div>
       `;
@@ -188,7 +203,11 @@ const CommunicationsPanel = (() => {
   function renderFollowups(followups) {
     const el  = document.getElementById('comFollowupView');
     const now = new Date().toISOString().slice(0, 10);
-    if (!followups.length) { el.innerHTML = UI.empty('אין follow-ups ממתינים', '✓'); return; }
+    if (!followups.length) {
+      el.innerHTML = UI.guidedEmpty('אין follow-ups ממתינים', '✓',
+        [{ label: '◎ לידים פעילים', onclick: "App.switchTo('leads')", primary: false }]);
+      return;
+    }
 
     el.innerHTML = followups.map(f => {
       const nextDate  = (f.next_action_at || f.next_followup || '').slice(0, 10);
@@ -231,7 +250,8 @@ const CommunicationsPanel = (() => {
       </div>` : '';
 
     if (!list.length) {
-      el.innerHTML = pillsHtml + UI.empty('אין רשומות pipeline', '○');
+      el.innerHTML = pillsHtml + UI.guidedEmpty('אין רשומות pipeline', '○',
+        [{ label: '◁ תור שליחה', onclick: "document.querySelector('[data-tab=queue]')?.click()", primary: false }]);
       return;
     }
 
@@ -288,5 +308,11 @@ const CommunicationsPanel = (() => {
 
   function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
-  return { render, init, executeOutreach, filterPipeline };
+  function draftFor(leadId, leadName) {
+    if (typeof DraftModal !== 'undefined') {
+      DraftModal.openForAction({ id: leadId, name: leadName }, 'follow_up');
+    }
+  }
+
+  return { render, init, executeOutreach, filterPipeline, draftFor };
 })();

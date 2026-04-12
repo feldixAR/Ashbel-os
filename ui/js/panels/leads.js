@@ -89,7 +89,7 @@ const LeadsPanel = (() => {
       </div>
 
       <div class="table-wrap">
-        <table>
+        <table class="leads-tbl">
           <thead>
             <tr>
               <th>שם</th>
@@ -99,10 +99,11 @@ const LeadsPanel = (() => {
               <th>סטטוס</th>
               <th>ציון</th>
               <th>פעולה הבאה</th>
+              <th>פעולות</th>
             </tr>
           </thead>
           <tbody id="leadsBody">
-            <tr><td colspan="7">${UI.loading('טוען לידים...')}</td></tr>
+            <tr><td colspan="8">${UI.loading('טוען לידים...')}</td></tr>
           </tbody>
         </table>
       </div>
@@ -125,11 +126,11 @@ const LeadsPanel = (() => {
 
     // Guided empty state — no leads at all
     if (!_allLeads.length) {
-      document.getElementById('leadsBody').innerHTML = `<tr><td colspan="7">
+      document.getElementById('leadsBody').innerHTML = `<tr><td colspan="8">
         <div class="empty-state">
           <div class="empty-state-icon">◎</div>
           <div class="empty-state-msg">אין לידים במערכת עדיין</div>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+          <div class="empty-state-actions">
             <button class="btn btn-primary" onclick="UploadModal.open()">📂 יבא קובץ לידים</button>
             <button class="btn btn-ghost" onclick="HomePanel.openDiscover();App.switchTo('home')">🔍 גלה לידים חדשים</button>
           </div>
@@ -190,7 +191,7 @@ const LeadsPanel = (() => {
     list = [...list].sort((a, b) => (b.priority_score || b.score || 0) - (a.priority_score || a.score || 0));
 
     if (!list.length) {
-      body.innerHTML = `<tr><td colspan="7">
+      body.innerHTML = `<tr><td colspan="8">
         <div class="empty-state">
           <div class="empty-state-icon">○</div>
           <div class="empty-state-msg">אין לידים התואמים את הסינון</div>
@@ -206,9 +207,12 @@ const LeadsPanel = (() => {
       const lastAct    = l.last_activity_at || l.updated_at;
       const daysSince  = lastAct ? Math.floor((now - new Date(lastAct)) / 86400000) : null;
       const staleCls   = daysSince !== null && daysSince > 14 ? 'color:var(--amber)' : 'color:var(--muted)';
+      // Serialize lead for DraftModal (avoid quotes issues)
+      const leadKey = `_leads_${l.id}`;
+      const actionType = !l.last_activity_at ? 'first_contact' : 'follow_up';
       return `
-        <tr style="cursor:pointer" onclick="LeadsPanel.openBriefing('${l.id}')">
-          <td style="font-weight:600;">
+        <tr>
+          <td style="font-weight:600;cursor:pointer" onclick="LeadsPanel.openBriefing('${l.id}')">
             ${l.name || '—'}
             ${daysSince !== null ? `<div style="font-size:9px;${staleCls}">${daysSince}י' ללא קשר</div>` : ''}
           </td>
@@ -219,9 +223,17 @@ const LeadsPanel = (() => {
           <td><span class="score ${scoreClass(score)}">${Math.round(score) || '—'}</span></td>
           <td style="font-size:11px;color:${isOverdue ? 'var(--red)' : 'var(--muted)'}">
             ${l.next_action
-              ? `${l.next_action.slice(0, 30)}${l.next_action.length > 30 ? '…' : ''}
+              ? `${l.next_action.slice(0, 28)}${l.next_action.length > 28 ? '…' : ''}
                  ${isOverdue ? `<div style="font-size:9px;color:var(--red)">⚠ ${l.next_action_due?.slice(0,10)}</div>` : ''}`
               : '<span style="color:var(--red);font-size:10px">⚠ חסרה</span>'}
+          </td>
+          <td>
+            <div class="lead-action-row">
+              <button class="btn btn-primary" style="font-size:9px;padding:2px 7px;min-height:24px"
+                onclick="event.stopPropagation();LeadsPanel.openDraft('${l.id}','${actionType}')">✉ טיוטה</button>
+              <button class="btn btn-ghost" style="font-size:9px;padding:2px 7px;min-height:24px"
+                onclick="event.stopPropagation();LeadsPanel.openBriefing('${l.id}')">⊛ Briefing</button>
+            </div>
           </td>
         </tr>
       `;
@@ -288,5 +300,11 @@ const LeadsPanel = (() => {
     }, 200);
   }
 
-  return { render, init, reload: () => load(), openBriefing };
+  function openDraft(leadId, actionType) {
+    const lead = _allLeads.find(l => l.id === leadId);
+    if (!lead) return;
+    if (typeof DraftModal !== 'undefined') DraftModal.openForAction(lead, actionType || 'first_contact');
+  }
+
+  return { render, init, reload: () => load(), openBriefing, openDraft, renderTable };
 })();

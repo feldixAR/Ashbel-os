@@ -151,7 +151,15 @@ const ClientsPanel = (() => {
     }
 
     if (!list.length) {
-      grid.innerHTML = `<div style="grid-column:1/-1">${UI.empty('אין לקוחות — לידים עם סטטוס "סגור זכה" יופיעו כאן', '◉')}</div>`;
+      grid.innerHTML = `<div style="grid-column:1/-1">${UI.guidedEmpty(
+        'אין לקוחות עדיין',
+        '◉',
+        [
+          { label: '◎ ראה לידים', onclick: "App.switchTo('leads')", primary: true },
+          { label: '◇ עסקאות', onclick: "App.switchTo('crm')", primary: false },
+        ],
+        'לידים עם סטטוס "סגור זכה" יופיעו כאן'
+      )}</div>`;
       return;
     }
 

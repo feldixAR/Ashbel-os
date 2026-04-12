@@ -34,6 +34,39 @@ def approval_history():
     })
 
 
+@bp.route("/approvals/create", methods=["POST"])
+@require_auth
+@log_request
+def create_approval():
+    """Create a pending approval — used by DraftModal and other UI surfaces."""
+    body = request.get_json(silent=True) or {}
+    action     = (body.get("action") or "send_outreach").strip()
+    risk_level = int(body.get("risk_level") or 2)
+    lead_id    = body.get("lead_id") or ""
+    details    = {
+        "lead_id":      lead_id,
+        "lead_name":    body.get("lead_name") or "",
+        "draft_body":   body.get("draft_body") or "",
+        "draft_subject": body.get("draft_subject") or "",
+        "channel":      body.get("channel") or "",
+        "action_type":  body.get("action_type") or "",
+        "rationale":    body.get("rationale") or "",
+    }
+    try:
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        approval = ApprovalRepository().create(
+            action=action,
+            details=details,
+            risk_level=risk_level,
+            task_id=None,
+            requested_by="ui",
+        )
+        return ok({"id": approval.id, "status": approval.status})
+    except Exception as e:
+        log.error(f"[approvals/create] {e}", exc_info=True)
+        return _error(str(e), 500)
+
+
 @bp.route("/approvals/<approval_id>", methods=["POST"])
 @require_auth
 @log_request
