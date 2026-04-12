@@ -213,8 +213,29 @@ _DEFAULT_WEIGHTS = {
 
 
 def score_lead(enriched: EnrichedLead, weights: dict[str, int] | None = None) -> ScoredLead:
-    """Score 0-100. Higher = better prospect."""
-    w = weights or _DEFAULT_WEIGHTS
+    """
+    Score 0-100. Higher = better prospect.
+    Optionally consults learned conversion stats from MemoryStore to bias
+    inbound weight upward when historical data supports it.
+    """
+    w = dict(weights or _DEFAULT_WEIGHTS)  # copy so we can adjust
+
+    # ── Learning-aware weight adjustment ─────────────────────────────────
+    try:
+        from memory.memory_store import MemoryStore
+        seg = (enriched.lead.segment or "").lower()
+        seg_stats = MemoryStore.read("leads", f"conversion_seg_{seg}", {})
+        total = seg_stats.get("total", 0)
+        if total >= 5:
+            rate = seg_stats.get("converted", 0) / total
+            # Boost or dampen signal_strength weight based on segment conversion history
+            if rate >= 0.4:
+                w["signal_strength"] = min(30, w.get("signal_strength", 20) + 5)
+            elif rate < 0.15:
+                w["signal_strength"] = max(10, w.get("signal_strength", 20) - 5)
+    except Exception:
+        pass
+
     raw_score = (
         enriched.geo_fit    * w.get("geo_fit", 25)
         + enriched.role_fit * w.get("role_fit", 30)
@@ -229,9 +250,21 @@ def score_lead(enriched: EnrichedLead, weights: dict[str, int] | None = None) ->
     if not reasons:
         reasons.append(f"ציון בסיס: {score}")
 
-    action = "שלח הודעה ראשונה" if score >= 70 else \
-             "מעקב נוסף נדרש" if score >= 40 else \
-             "שמור לסגמנט עתידי"
+    # ── Segment-aware next action ─────────────────────────────────────────
+    seg = (enriched.lead.segment or "").lower()
+    if score >= 70:
+        if enriched.lead.is_inbound:
+            action = "ענה מיד — ליד חם שפנה אליך"
+        elif "architect" in seg or "אדריכל" in seg:
+            action = "שלח פרטי דגמים לאדריכל + הצע ביקור"
+        elif "contractor" in seg or "קבלן" in seg:
+            action = "שלח מחירון סיטונאי + הצע כינוס פרויקט"
+        else:
+            action = "שלח הצעת מחיר ראשונה + קבע פגישה"
+    elif score >= 40:
+        action = "שלח הודעת היכרות + בקש מידע נוסף"
+    else:
+        action = "שמור לסגמנט עתידי — נמוך עדיפות"
 
     return ScoredLead(
         lead=enriched.lead,

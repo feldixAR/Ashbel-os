@@ -31,6 +31,9 @@ const CalendarPanel = (() => {
             </div>
           </div>
 
+          <!-- Mission Control: State insight strip -->
+          <div id="calInsight" style="margin-bottom:12px"></div>
+
           <!-- Week grid -->
           <div class="week-grid" id="weekGrid">
             ${Array(7).fill(`<div class="day-col"><span class="skel skel-h12 skel-w60" style="display:block;margin-bottom:6px"></span><span class="skel skel-h20" style="display:block"></span></div>`).join('')}
@@ -84,6 +87,9 @@ const CalendarPanel = (() => {
         <div class="ws-right">
           <div class="ws-right-label">פרטי יום</div>
 
+          <!-- Mission Control: Next action -->
+          <div id="calNextAction" style="margin-bottom:8px"></div>
+
           <div id="dayDetail">
             <div class="no-select" style="padding:40px 0">
               <div style="font-size:24px;margin-bottom:8px">📅</div>
@@ -120,6 +126,31 @@ const CalendarPanel = (() => {
     document.getElementById('calPipeTotal').textContent = ils(cal.total_pipeline||0);
 
     renderWeekGrid(cal.days || []);
+
+    // ── Mission Control: State → Insight → Next Action ──────────────────
+    const days = cal.days || [];
+    const today = days.find(d => d.date_str === todayStr) || {};
+    const todayEvs   = (today.events || []).length;
+    const todayDeals = (today.deals_due || []).length;
+    const revRisk    = days.reduce((s, d) => s + (d.revenue_at_risk || 0), 0);
+    const iChips = [];
+    if (todayEvs > 0)   iChips.push({ icon: '📅', text: `${todayEvs} אירועים היום`,    cls: 'insight-good'  });
+    if (todayDeals > 0) iChips.push({ icon: '💰', text: `${todayDeals} עסקאות היום`,   cls: 'insight-alert' });
+    if (revRisk > 0)    iChips.push({ icon: '⚠',  text: `${ils(revRisk)} בסיכון`,      cls: 'insight-warn'  });
+    if (!iChips.length) iChips.push({ icon: '✓',  text: 'אין אירועים מתוכננים היום',  cls: 'insight-good'  });
+    const iEl = document.getElementById('calInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    const naEl = document.getElementById('calNextAction');
+    const allDeals = days.flatMap(d => (d.deals_due || []).map(deal => ({ ...deal, _date: d.date_str })))
+      .sort((a, b) => a._date.localeCompare(b._date));
+    const nextDeal  = allDeals[0];
+    const nextEvent = (today.events || [])[0];
+    if (naEl && nextDeal) {
+      naEl.innerHTML = UI.nextAction(`עסקה: ${nextDeal.title || '—'} — ${nextDeal._date}`);
+    } else if (naEl && nextEvent) {
+      naEl.innerHTML = UI.nextAction(`${(nextEvent.starts_at_il || '').slice(11,16)} ${nextEvent.title || 'אירוע'}`);
+    } else if (naEl) { naEl.innerHTML = ''; }
   }
 
   function renderWeekGrid(days) {

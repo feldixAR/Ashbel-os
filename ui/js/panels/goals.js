@@ -21,6 +21,8 @@ const GoalsPanel = (() => {
           <button class="btn btn-primary" id="addGoalBtn">+ יעד</button>
         </div>
       </div>
+      <div id="goalsInsight" style="margin-bottom:10px"></div>
+      <div id="goalsNextAction" style="margin-bottom:12px"></div>
       <div id="goalsGrid"></div>
       <div class="section-head" style="margin-top:24px">
         <div class="section-title">תוכנית צמיחה אחרונה</div>
@@ -41,6 +43,25 @@ const GoalsPanel = (() => {
     const res = await API.post('/command', { command: 'הצג יעדים' });
     const goals = res.success ? (res.data?.output?.goals || res.data?.output?.goals || res.data?.goals || []) : [];
     document.getElementById('goalCount').textContent = `${goals.length} יעדים פעילים`;
+
+    // ── Mission Control: State → Insight → Next Action ──────────────────
+    const active   = goals.filter(g => !g.status || g.status === 'active').length;
+    const paused   = goals.filter(g => g.status === 'paused').length;
+    const done     = goals.filter(g => g.status === 'completed').length;
+    const iChips   = [];
+    if (active > 0) iChips.push({ icon: '⊕', text: `${active} יעדים פעילים`,  cls: 'insight-good'  });
+    if (paused > 0) iChips.push({ icon: '○', text: `${paused} מושהים`,          cls: 'insight-warn'  });
+    if (done > 0)   iChips.push({ icon: '✓', text: `${done} הושלמו`,            cls: 'insight-good'  });
+    if (!goals.length) iChips.push({ icon: '○', text: 'אין יעדים מוגדרים',      cls: 'insight-warn'  });
+    const iEl = document.getElementById('goalsInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    const naEl = document.getElementById('goalsNextAction');
+    const topGoal = goals.find(g => !g.status || g.status === 'active');
+    if (naEl && topGoal) {
+      const safeGoal = JSON.stringify(topGoal.raw_goal || '');
+      naEl.innerHTML = UI.nextAction(`בנה תוכנית: ${topGoal.raw_goal || '—'}`, 'תוכנית', `GoalsPanel.buildPlan(${safeGoal})`);
+    } else if (naEl) { naEl.innerHTML = ''; }
     document.getElementById('goalsGrid').innerHTML = goals.length
       ? goals.map(g => `
           <div class="card" style="margin-bottom:12px">

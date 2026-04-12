@@ -110,6 +110,17 @@ class LeadAcquisitionAgent(BaseAgent):
 
         result = run_acquisition(goal=goal, signals=signals)
 
+        # ── Live learning: track agent outcome + source strategy ──────────
+        try:
+            from skills.learning_skills import record_agent_outcome, record_source_outcome
+            record_agent_outcome(self.agent_id, "discover_leads", success=True)
+            goal_type = p.get("goal_type") or "residential"
+            if result.total_discovered > 0:
+                record_source_outcome("manual", goal_type,
+                                      result.total_discovered, result.new_leads)
+        except Exception:
+            pass
+
         msg = (
             f"גולה {result.new_leads} לידים חדשים "
             f"({result.duplicates} כפילויות) עבור: {goal}"
@@ -174,6 +185,13 @@ class LeadAcquisitionAgent(BaseAgent):
 
         lead_data = {k: v for k, v in p.items()}
         lead_id   = process_inbound(lead_data)
+
+        # ── Live learning: track inbound processing ───────────────────────
+        try:
+            from skills.learning_skills import record_agent_outcome
+            record_agent_outcome(self.agent_id, "process_inbound", success=bool(lead_id))
+        except Exception:
+            pass
 
         # AI-enhanced draft: personalised response using inbound message
         draft = self._ai_inbound_draft(lead_data)

@@ -21,6 +21,8 @@ const PipelinePanel = (() => {
           <button class="btn btn-secondary" id="followupBtn">🔄 תור Follow-up</button>
         </div>
       </div>
+      <div id="pipeInsight" style="margin:8px 0 4px"></div>
+      <div id="pipeNextAction" style="margin-bottom:8px"></div>
       <div id="pipelineTable"><div class="empty-state"><span>⏳</span><p>טוען נתונים...</p></div></div>
     `;
   }
@@ -35,6 +37,28 @@ const PipelinePanel = (() => {
     const res = await API.get('/outreach/pipeline');
     const records = res.success ? (res.data.pipeline || res.data.records || []) : [];
     document.getElementById('pipelineCount').textContent = `${records.length} רשומות`;
+
+    // ── Mission Control: State → Insight → Next Action ──────────────────
+    const pending  = records.filter(r => r.status === 'pending').length;
+    const sent     = records.filter(r => r.status === 'sent').length;
+    const replied  = records.filter(r => r.status === 'replied').length;
+    const iChips   = [];
+    if (records.length) iChips.push({ icon: '⊳', text: `${records.length} בצנרת`,      cls: ''              });
+    if (pending > 0)    iChips.push({ icon: '○', text: `${pending} ממתינות`,             cls: 'insight-warn'  });
+    if (sent > 0)       iChips.push({ icon: '✉', text: `${sent} נשלחו`,                 cls: 'insight-good'  });
+    if (replied > 0)    iChips.push({ icon: '↩', text: `${replied} ענו`,                cls: 'insight-alert' });
+    if (!iChips.length) iChips.push({ icon: '✓', text: 'אין פניות בצנרת',              cls: 'insight-warn'  });
+    const iEl = document.getElementById('pipeInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    const naEl = document.getElementById('pipeNextAction');
+    const nextFu = records.filter(r => r.next_followup)
+      .sort((a, b) => (a.next_followup || '').localeCompare(b.next_followup || ''))[0];
+    if (naEl && nextFu) {
+      naEl.innerHTML = UI.nextAction(`follow-up: ${nextFu.contact_name || '—'} — ${(nextFu.next_followup || '').slice(0,10)}`);
+    } else if (naEl && pending > 0) {
+      naEl.innerHTML = UI.nextAction(`שלח פניות ל-${pending} ליד ממתין`, 'שלח', `document.getElementById('sendOutreachBtn')?.click()`);
+    } else if (naEl) { naEl.innerHTML = ''; }
     const tbody = records.length ? records.map(r => `
       <tr>
         <td>${r.contact_name || '—'}</td>

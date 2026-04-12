@@ -86,6 +86,37 @@ def normalize_telegram(message: dict, source: str = "telegram") -> IntakePayload
     if location:
         return _handle_location(location, sender, source, meta)
 
+    # ── video / animation / video_note ────────────────────────────────────────
+    video = message.get("video") or message.get("animation") or message.get("video_note")
+    if video:
+        file_id = video.get("file_id", "") if isinstance(video, dict) else ""
+        caption = (message.get("caption") or "").strip()
+        if caption:
+            payload = _classify_text(caption, sender, source, meta)
+            payload.attachments.append({"type": "video", "file_id": file_id})
+            return payload
+        return IntakePayload(
+            source=source, sender=sender, modality="video",
+            raw_content="[video received]", extracted_content="",
+            structured_fields={"file_id": file_id},
+            business_meaning="unknown", urgency="low", sensitivity="normal",
+            required_action="log_only",
+            attachments=[{"type": "video", "file_id": file_id}], metadata=meta,
+        )
+
+    # ── poll ──────────────────────────────────────────────────────────────────
+    poll = message.get("poll")
+    if poll:
+        question = poll.get("question", "")
+        return IntakePayload(
+            source=source, sender=sender, modality="poll",
+            raw_content=f"[poll: {question}]", extracted_content=question,
+            structured_fields={"question": question,
+                               "options": [o.get("text") for o in (poll.get("options") or [])]},
+            business_meaning="unknown", urgency="low", sensitivity="normal",
+            required_action="log_only", metadata=meta,
+        )
+
     # ── reaction (message_reaction) ───────────────────────────────────────────
     if message.get("reactions") or message.get("new_reaction"):
         return IntakePayload(
@@ -378,9 +409,20 @@ def _tg_sender(message: dict) -> str:
 
 
 def _tg_meta(message: dict) -> dict:
-    return {
+    meta: dict = {
         "message_id": message.get("message_id"),
         "chat_id":    (message.get("chat") or {}).get("id"),
         "date":       message.get("date"),
         "from_id":    (message.get("from") or {}).get("id"),
     }
+    # Capture reply and forward context
+    reply = message.get("reply_to_message")
+    if reply:
+        meta["reply_to_message_id"] = reply.get("message_id")
+        meta["reply_to_text"] = (reply.get("text") or reply.get("caption") or "")[:200]
+    fwd_from = message.get("forward_from") or message.get("forward_from_chat")
+    if fwd_from:
+        meta["forwarded"] = True
+        meta["forward_from"] = (fwd_from.get("username") or fwd_from.get("first_name")
+                                 or str(fwd_from.get("id", "")))
+    return meta

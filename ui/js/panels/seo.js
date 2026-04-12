@@ -26,6 +26,8 @@ const SEOPanel = (() => {
         </div>
       </div>
 
+      <div id="seoInsight" style="margin:8px 0 4px"></div>
+
       <div class="section-head">
         <div>
           <div class="section-title">SEO Engine — אשבל אלומיניום</div>
@@ -83,6 +85,15 @@ const SEOPanel = (() => {
     _setText('seowPosts',  posts.length);
     _setText('seowImages', images.length);
     _setText('seowMeta',   meta);
+
+    // ── Mission Control: State → Insight ────────────────────────────────
+    const iChips = [];
+    if (cities.length) iChips.push({ icon: '🏙', text: `${cities.length} עמודי עיר`,    cls: 'insight-good' });
+    if (posts.length)  iChips.push({ icon: '📝', text: `${posts.length} פוסטים`,          cls: 'insight-good' });
+    if (images.length) iChips.push({ icon: '🖼', text: `${images.length} פרומפטים`,        cls: ''             });
+    if (!iChips.length) iChips.push({ icon: '○', text: 'אין תוכן SEO עדיין',             cls: 'insight-warn' });
+    const iEl = document.getElementById('seoInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
 
     // ── Meta descriptions ─────────────────────────────────────────────────
     const metaEl = document.getElementById('seoMeta');

@@ -163,6 +163,18 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
                 res = execute_outreach(task)
                 if res.success:
                     record_outreach_sent(task, mode=res.mode)
+                    # ── Live learning: record template sent ───────────────
+                    try:
+                        from skills.learning_skills import record_template_outcome
+                        record_template_outcome(
+                            template_type="outreach",
+                            template_text=msg[:500],
+                            outcome="sent",
+                            segment=ot.get("audience"),
+                            channel=ot.get("channel"),
+                        )
+                    except Exception:
+                        pass
                     return f"✅ אושר ובוצע — {ot.get('lead_name','')} ({res.mode})"
                 else:
                     record_outreach_failed(task, error=res.error or "failed")

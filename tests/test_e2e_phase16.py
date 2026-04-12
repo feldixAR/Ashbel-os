@@ -771,5 +771,139 @@ class TestNoRegressions(unittest.TestCase):
                               f"Intent {intent!r} maps to action {action!r} not in _HANDLERS")
 
 
+class TestPhase17Additions(unittest.TestCase):
+    """Phase 17: Mission Control UI, learning loop, intake completeness, self-evolution."""
+
+    def setUp(self):
+        self.c = _client()
+
+    # ── Intake completeness ───────────────────────────────────────────────────
+
+    def test_video_normalizer(self):
+        """Video payload → log_only, modality=video."""
+        from services.intake.normalizer import normalize_telegram
+        msg = {"from": {"id": 1, "username": "u"},
+               "chat": {"id": 1}, "date": 0, "message_id": 9,
+               "video": {"file_id": "v123", "duration": 10,
+                         "width": 640, "height": 360}}
+        p = normalize_telegram(msg)
+        self.assertEqual(p.modality, "video")
+        self.assertEqual(p.required_action, "log_only")
+
+    def test_video_with_caption_routes_as_text(self):
+        """Video with caption → classify the caption as business text."""
+        from services.intake.normalizer import normalize_telegram
+        msg = {"from": {"id": 1, "username": "u"},
+               "chat": {"id": 1}, "date": 0, "message_id": 10,
+               "video": {"file_id": "v124"},
+               "caption": "רוצה לקנות חלונות לדירה"}
+        p = normalize_telegram(msg)
+        # caption classified as text (lead/command signal)
+        self.assertIn(p.required_action, ("execute_command", "process_lead"))
+
+    def test_poll_normalizer(self):
+        """Poll payload → log_only, modality=poll."""
+        from services.intake.normalizer import normalize_telegram
+        msg = {"from": {"id": 1, "username": "u"},
+               "chat": {"id": 1}, "date": 0, "message_id": 11,
+               "poll": {"id": "poll1", "question": "מה מעדיפים?",
+                        "options": [{"text": "חלונות"}, {"text": "דלתות"}]}}
+        p = normalize_telegram(msg)
+        self.assertEqual(p.modality, "poll")
+        self.assertEqual(p.required_action, "log_only")
+        self.assertEqual(p.structured_fields["question"], "מה מעדיפים?")
+
+    def test_reply_to_message_captured_in_meta(self):
+        """reply_to_message fields are captured in metadata."""
+        from services.intake.normalizer import normalize_telegram
+        msg = {"from": {"id": 1, "username": "u"},
+               "chat": {"id": 1}, "date": 0, "message_id": 12,
+               "text": "כן, אני מעוניין",
+               "reply_to_message": {"message_id": 5, "text": "האם מעוניין?"}}
+        p = normalize_telegram(msg)
+        self.assertEqual(p.metadata.get("reply_to_message_id"), 5)
+        self.assertIn("האם מעוניין?", p.metadata.get("reply_to_text", ""))
+
+    def test_forwarded_message_captured(self):
+        """Forwarded message origin captured in metadata."""
+        from services.intake.normalizer import normalize_telegram
+        msg = {"from": {"id": 1, "username": "u"},
+               "chat": {"id": 1}, "date": 0, "message_id": 13,
+               "text": "הודעה מועברת",
+               "forward_from": {"id": 99, "username": "originator"}}
+        p = normalize_telegram(msg)
+        self.assertTrue(p.metadata.get("forwarded"))
+        self.assertEqual(p.metadata.get("forward_from"), "originator")
+
+    # ── Learning loop ─────────────────────────────────────────────────────────
+
+    def test_learning_skills_importable(self):
+        """learning_skills module imports cleanly."""
+        import skills.learning_skills as ls
+        self.assertTrue(callable(ls.record_template_outcome))
+        self.assertTrue(callable(ls.record_source_outcome))
+        self.assertTrue(callable(ls.record_agent_outcome))
+        self.assertTrue(callable(ls.record_lead_conversion))
+
+    def test_score_lead_segment_aware_action(self):
+        """score_lead produces segment-aware next_action text."""
+        from skills.lead_intelligence import (
+            normalize, enrich, score_lead
+        )
+        raw = {"name": "קבלן", "segment": "contractor", "city": "תל אביב",
+               "is_inbound": True, "phone": "050-0000001"}
+        lead = normalize(raw)
+        enriched = enrich(lead)
+        scored = score_lead(enriched)
+        # Inbound lead should get the high-urgency action
+        self.assertGreater(scored.score, 0)
+        self.assertIsNotNone(scored.next_action)
+
+    # ── Self-evolution / pending changes endpoint ─────────────────────────────
+
+    def test_pending_changes_endpoint_returns_200(self):
+        """GET /api/system/pending_changes returns 200."""
+        r = self.c.get("/api/system/pending_changes", headers=_AUTH)
+        self.assertEqual(r.status_code, 200)
+        body = json.loads(r.data)
+        self.assertIn("pending_changes", body.get("data", body))
+
+    # ── Mission Control UI completeness ───────────────────────────────────────
+
+    def test_revenue_panel_has_insight_and_nextaction_ids(self):
+        """revenue.js contains revInsight and revNextAction element IDs."""
+        with open("ui/js/panels/revenue.js") as f:
+            src = f.read()
+        self.assertIn("revInsight", src)
+        self.assertIn("revNextAction", src)
+        self.assertIn("UI.insightStrip", src)
+        self.assertIn("UI.nextAction", src)
+
+    def test_calendar_panel_has_mission_control(self):
+        with open("ui/js/panels/calendar.js") as f:
+            src = f.read()
+        self.assertIn("calInsight", src)
+        self.assertIn("calNextAction", src)
+        self.assertIn("UI.insightStrip", src)
+
+    def test_pipeline_panel_has_mission_control(self):
+        with open("ui/js/panels/pipeline.js") as f:
+            src = f.read()
+        self.assertIn("pipeInsight", src)
+        self.assertIn("pipeNextAction", src)
+
+    def test_goals_panel_has_mission_control(self):
+        with open("ui/js/panels/goals.js") as f:
+            src = f.read()
+        self.assertIn("goalsInsight", src)
+        self.assertIn("goalsNextAction", src)
+
+    def test_seo_panel_has_mission_control(self):
+        with open("ui/js/panels/seo.js") as f:
+            src = f.read()
+        self.assertIn("seoInsight", src)
+        self.assertIn("UI.insightStrip", src)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

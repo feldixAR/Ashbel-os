@@ -93,6 +93,29 @@ def system_trace(trace_id: str):
     return ok({"trace_id": trace_id, "events": events})
 
 
+@bp.route("/system/pending_changes", methods=["GET"])
+@require_auth
+@log_request
+def pending_changes():
+    """
+    List all approved-but-not-yet-implemented system change plans.
+    Allows a new agent session to pick up the implementation work.
+    """
+    try:
+        from memory.memory_store import MemoryStore
+        all_keys = MemoryStore.list_namespace("global")
+        changes = [
+            v for k, v in all_keys.items()
+            if k.startswith("pending_change_")
+            and isinstance(v, dict)
+            and v.get("status") == "approved_pending_implementation"
+        ]
+        changes.sort(key=lambda c: c.get("approval_id", ""), reverse=True)
+        return ok({"pending_changes": changes, "count": len(changes)})
+    except Exception as e:
+        return ok({"pending_changes": [], "count": 0, "error": str(e)})
+
+
 def _scheduler_status() -> dict:
     try:
         from scheduler.revenue_scheduler import status
