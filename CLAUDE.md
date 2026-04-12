@@ -272,11 +272,11 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 
 ---
 
-## Session Updates — Phase 16: Channel-Native + Self-Evolution v5.0
+## Session Updates — Phase 17: Mission Control + Learning + Self-Evolution v5.1
 
-- **Date:** 2026-04-11
-- **Phases complete:** 3–16 + UI + SEO
-- **Test count:** 149 passing (all green)
+- **Date:** 2026-04-12
+- **Phases complete:** 3–17 + UI + SEO
+- **Test count:** 246 passing (all green)
 - **Phase 12 new components:**
   - `skills/` package: `source_discovery`, `lead_intelligence`, `outreach_intelligence`, `israeli_context`, `workflow_skills`, `website_growth` — all stateless, contract-based, multi-agent compatible
   - `engines/lead_acquisition_engine.py` — orchestrating pipeline (goal → plan → normalize → dedup → enrich → score → outreach → CRM → events)
@@ -308,7 +308,16 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `services/execution/executor.py` — `_handle_parse_document` (base64 → parse → process_inbound per record); `_handle_preview_system_change` (classify → preview → ApprovalModel → Telegram card)
   - `orchestration/intent_parser.py` — DOCUMENT_UPLOAD + SYSTEM_CHANGE intents
   - `orchestration/orchestrator.py` — DOCUMENT_UPLOAD → acquisition/parse_document; SYSTEM_CHANGE → executive/preview_system_change
-- **Status: PRODUCTION READY v5.0**
+- **Phase 17 additions:**
+  - `ui/js/panels/revenue.js` — Mission Control: State→Recommendation→Action added
+    `revInsight` (deals/hot leads/pipeline chips) + `revNextAction` (top priority item button)
+  - `skills/learning_skills.py` — stateless pattern tracking via MemoryStore
+    template outcome/promotion, source strategy (3-run qualification threshold),
+    agent success/latency tracking, lead conversion by score bucket, model routing overrides
+  - `api/routes/approvals.py` — system_change approval: auto-creates `feat/system-change-{id}` branch,
+    stores execution plan in MemoryStore `global.pending_change_{id}` for implementation pass
+  - `tests/test_learning_skills.py` — 21 unit tests for learning_skills (fake MemoryStore, no DB)
+- **Status: PRODUCTION READY v5.1**
 
 ---
 
