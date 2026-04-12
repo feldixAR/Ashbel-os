@@ -8,4 +8,5 @@ Skill groups (stateless, contract-based, multi-agent compatible):
   israeli_context      — Hebrew tone, timing, holidays, geo fit
   workflow_skills      — work queue, approval marking, CRM push
   website_growth       — site audit, SEO, content gaps, landing page
+  learning_skills      — pattern tracking: templates, sources, agents, conversions
 """

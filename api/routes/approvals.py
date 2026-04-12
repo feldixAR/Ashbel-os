@@ -198,6 +198,38 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
             except Exception as ex:
                 return f"✅ אושר אך רישום נכשל: {ex}"
 
+        # System change approval: create feature branch + store execution plan
+        change_type = details.get("change_type") if isinstance(details, dict) else None
+        if change_type:
+            try:
+                import subprocess
+                import os as _os
+                repo_root = _os.path.abspath(
+                    _os.path.join(_os.path.dirname(__file__), "..", "..")
+                )
+                branch = f"feat/system-change-{approval_id[:8]}"
+                r = subprocess.run(
+                    ["git", "checkout", "-b", branch],
+                    cwd=repo_root, capture_output=True, timeout=15, text=True,
+                )
+                from memory.memory_store import MemoryStore
+                MemoryStore.write("global", f"pending_change_{approval_id[:8]}", {
+                    "branch":        branch,
+                    "approval_id":   approval_id,
+                    "change_type":   change_type,
+                    "request":       details.get("request", ""),
+                    "plan":          details.get("implementation_plan", ""),
+                    "affected_files": details.get("affected_files", []),
+                    "status":        "approved_pending_implementation",
+                }, updated_by="approval_system")
+                if r.returncode == 0:
+                    return f"✅ שינוי מערכת אושר — ענף `{branch}` נוצר. ממתין לביצוע."
+                else:
+                    # Branch may already exist; still store the plan
+                    return f"✅ שינוי מערכת אושר. תוכנית שמורה (ענף: {branch})."
+            except Exception as ex:
+                return f"✅ אושר. שגיאה ביצירת ענף: {ex}"
+
         return f"✅ אישור {approval_id[:8]} אושר"
 
     return f"❌ אישור {approval_id[:8]} נדחה"

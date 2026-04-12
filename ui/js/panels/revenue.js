@@ -30,6 +30,9 @@ const RevenuePanel = (() => {
             </div>
           </div>
 
+          <!-- Mission Control: State insight strip -->
+          <div id="revInsight" style="margin-bottom:14px"></div>
+
           <!-- Priority list -->
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:16px">
             <div class="cell-title">
@@ -69,6 +72,9 @@ const RevenuePanel = (() => {
               <span class="skel skel-h12 skel-w60" style="display:block;margin-top:6px"></span>
             </div>
           </div>
+
+          <!-- Mission Control: Next action -->
+          <div id="revNextAction" style="margin:0 0 8px"></div>
 
           <!-- Revenue scoring queue -->
           <div class="ap-block">
@@ -125,6 +131,27 @@ const RevenuePanel = (() => {
     renderTopAction(plan.top_action || '');
     renderScoreQueue(revQueue);
     renderRightPipe(deals);
+
+    // ── Mission Control: State → Insight → Next Action ────────────────────
+    const hot = revQueue.filter(q => (q.score || q.priority_score || 0) >= 70);
+    const iChips = [];
+    if (plan.total_deals > 0)  iChips.push({ icon: '💼', text: `${plan.total_deals} עסקאות`,      cls: 'insight-good'  });
+    if (hot.length > 0)        iChips.push({ icon: '🔥', text: `${hot.length} לידים חמים`,         cls: 'insight-alert' });
+    if (plan.total_leads > 0)  iChips.push({ icon: '👥', text: `${plan.total_leads} לידים`,        cls: ''              });
+    if (!iChips.length)        iChips.push({ icon: '○',  text: 'אין נתוני pipeline',                cls: 'insight-warn'  });
+    const iEl = document.getElementById('revInsight');
+    if (iEl) iEl.innerHTML = UI.insightStrip(iChips);
+
+    const naEl = document.getElementById('revNextAction');
+    const topItem = (plan.priority_items || [])[0];
+    if (naEl && topItem) {
+      naEl.innerHTML = UI.nextAction(
+        `${topItem.title} — ציון ${Math.round(topItem.score || 0)}`,
+        'לידים חמים', `App.switchTo('leads')`
+      );
+    } else if (naEl && plan.top_action) {
+      naEl.innerHTML = UI.nextAction(plan.top_action);
+    } else if (naEl) { naEl.innerHTML = ''; }
   }
 
   function renderHeader(plan) {
