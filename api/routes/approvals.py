@@ -215,21 +215,39 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
             except Exception as ex:
                 return f"✅ אושר אך שגיאת ביצוע: {ex}"
 
-        # Lead ops approval format: {lead_id, lead_name, body, channel, action_type}
+        # Lead ops / DraftModal approval format:
+        #   outreach_intelligence path: {lead_id, lead_name, body, channel, action_type}
+        #   DraftModal path:            {lead_id, lead_name, draft_body, draft_subject, channel, action_type}
         lead_id   = details.get("lead_id") if isinstance(details, dict) else None
         lead_name = details.get("lead_name", "") if isinstance(details, dict) else ""
-        body      = details.get("body", "")      if isinstance(details, dict) else ""
+        body      = (details.get("draft_body") or details.get("body", "")) if isinstance(details, dict) else ""
         channel   = details.get("channel", "")   if isinstance(details, dict) else ""
+        action_type = details.get("action_type", "") if isinstance(details, dict) else ""
         if lead_id and body:
             try:
                 import datetime as _dt
                 from services.storage.db import get_session
                 from services.storage.models.activity import ActivityModel
+                from services.storage.repositories.lead_repo import LeadRepository
+
+                # Fetch lead phone for deep_link generation
+                phone = ""
+                deep_link = ""
+                try:
+                    lead_rec = LeadRepository().get(lead_id)
+                    if lead_rec:
+                        phone = getattr(lead_rec, "phone", "") or ""
+                    if phone and channel in ("whatsapp", ""):
+                        from engines.outreach_engine import _build_whatsapp_link
+                        deep_link = _build_whatsapp_link(phone, body)
+                except Exception:
+                    pass
+
                 with get_session() as s:
                     s.add(ActivityModel(
                         lead_id=lead_id,
                         activity_type="note",
-                        subject=f"הודעת פנייה אושרה — {channel}",
+                        subject=f"הודעת פנייה אושרה — {channel or 'whatsapp'} ({action_type})",
                         notes=body[:500],
                         outcome="completed",
                         performed_by=source,
@@ -237,9 +255,11 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
                 event_bus.publish(
                     ET.LEAD_OUTREACH_SENT,
                     payload={"lead_id": lead_id, "lead_name": lead_name,
-                             "channel": channel, "approval_id": approval_id},
+                             "channel": channel, "approval_id": approval_id,
+                             "deep_link": deep_link},
                 )
-                return f"✅ אושר ונרשם — {lead_name}"
+                suffix = f" — <a href='{deep_link}'>שלח WhatsApp</a>" if deep_link else ""
+                return f"✅ אושר ונרשם — {lead_name}{suffix}"
             except Exception as ex:
                 return f"✅ אושר אך רישום נכשל: {ex}"
 

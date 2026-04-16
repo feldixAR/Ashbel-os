@@ -111,19 +111,23 @@ const ApprovalsPanel = (() => {
 
   function _pendingCard(a) {
     const ot       = a.details?.outreach_task || {};
+    // Support both outreach_task shape and DraftModal shape
     const leadName = ot.lead_name || a.details?.lead_name || '—';
     const audience = ot.audience  || '—';
-    const channel  = ot.channel   || 'whatsapp';
-    const preview  = ot.message   || '';
+    const channel  = ot.channel   || a.details?.channel || 'whatsapp';
+    const preview  = ot.message   || a.details?.draft_body || a.details?.body || '';
+    const rationale = a.details?.rationale || '';
+    const actionType = a.details?.action_type || '';
     return `
       <div class="approval-card" id="appr-${a.id}">
         <div class="approval-info" style="flex:1">
-          <div class="approval-action">${a.action}</div>
+          <div class="approval-action">${a.action}${actionType ? ` — ${actionType}` : ''}</div>
           <div class="approval-detail">
-            👤 ${leadName} | 🎯 ${audience} | 📡 ${channel} | סיכון: ${a.risk_level}
+            👤 ${leadName} | 📡 ${channel} | סיכון: ${a.risk_level}
             ${a.created_at ? `| ${a.created_at.slice(0,16).replace('T',' ')}` : ''}
           </div>
-          ${preview ? `<div style="margin-top:6px;padding:8px;background:var(--surface-2,rgba(0,0,0,.06));border-radius:6px;font-size:11px;color:var(--muted);max-height:60px;overflow:hidden;direction:rtl">${preview.slice(0,200)}</div>` : ''}
+          ${rationale ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${rationale}</div>` : ''}
+          ${preview ? `<div style="margin-top:6px;padding:8px;background:var(--surface-2,rgba(0,0,0,.06));border-radius:6px;font-size:11px;color:var(--fg);max-height:80px;overflow:auto;direction:rtl;white-space:pre-wrap">${preview.slice(0,300)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;min-width:80px">
           <span class="approval-risk">רמה ${a.risk_level}</span>

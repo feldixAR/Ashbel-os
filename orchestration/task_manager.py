@@ -265,6 +265,7 @@ class TaskManager:
                 duration_ms=result.duration_ms,
                 trace_id=task.trace_id,
             )
+            _update_agent_stats(task.type, task.action)
         else:
             error_msg = result.output.get("error") or result.message
             self.mark_failed(task_id=task.id, error=error_msg,
@@ -273,6 +274,31 @@ class TaskManager:
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _update_agent_stats(task_type: str, action: str) -> None:
+    """
+    Increment tasks_done + write last_active_at for the agent that handles
+    this task_type/action combination.  Non-fatal — errors are swallowed.
+    """
+    try:
+        from agents.base.agent_registry import AgentRegistry
+        from services.storage.repositories.agent_repo import AgentRepository
+
+        reg = AgentRegistry()
+        reg.bootstrap()
+        agent = reg.find(task_type, action)
+        if agent is None:
+            return
+
+        db_repo = AgentRepository()
+        # Match by name (seeded via _seed_agents_to_db)
+        for db_agent in db_repo.get_active():
+            if db_agent.name == agent.name:
+                db_repo.increment_tasks(db_agent.id)
+                break
+    except Exception:
+        pass   # non-fatal
+
 
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()

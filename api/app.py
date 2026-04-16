@@ -7,6 +7,36 @@ from api.routes.whatsapp import whatsapp_bp
 
 log = logging.getLogger(__name__)
 
+
+def _seed_agents_to_db() -> None:
+    """
+    Seed the agent DB table from the in-memory registry — idempotent.
+    Runs only when the agents table is empty; skipped on subsequent startups.
+    """
+    from services.storage.repositories.agent_repo import AgentRepository
+    repo = AgentRepository()
+    if repo.get_active():          # already seeded
+        return
+    from agents.base.agent_registry import AgentRegistry
+    reg = AgentRegistry()
+    reg.bootstrap()
+    for agent in reg.list_agents():
+        try:
+            repo.create(
+                name=agent.name,
+                role=getattr(agent, "name", agent.agent_id),
+                department=agent.department,
+                capabilities=[],
+                model_preference="claude-haiku-4-5",
+                risk_tolerance=2,
+                system_prompt="",
+            )
+            log.info(f"[App] seeded agent '{agent.name}' ({agent.department})")
+        except Exception as exc:
+            log.warning(f"[App] could not seed agent '{agent.agent_id}': {exc}")
+    log.info(f"[App] agent seeding complete — {reg.count()} agents")
+
+
 def create_app() -> Flask:
     app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
@@ -113,6 +143,12 @@ def create_app() -> Flask:
         return {"status": "ok"}, 200
 
     log.info("[App] AshbalOS API ready")
+
+    # Seed agent registry into DB (idempotent — runs only if DB agents table is empty)
+    try:
+        _seed_agents_to_db()
+    except Exception as e:
+        log.warning(f"[App] agent seeding failed (non-fatal): {e}")
 
     # Start autonomous revenue scheduler
     try:
