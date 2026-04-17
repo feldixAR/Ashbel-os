@@ -2,7 +2,7 @@
 
 **Base URL:** `https://ashbel-os-production.up.railway.app`
 
-**Authentication:** `X-API-Key: <OS_API_KEY>` header required on all routes except `/api/health`, `/api/telegram/webhook`, and `/api/mcp`.
+**Authentication:** `X-API-Key: <OS_API_KEY>` header required on all routes except `/api/health`, `/api/version`, `/api/telegram/webhook`, and `/api/mcp`.
 
 ---
 
@@ -15,6 +15,7 @@
 | POST | `/api/command` | Yes | NLP command dispatcher → orchestrator |
 | GET | `/api/system/metrics` | Yes | Agent call metrics snapshot |
 | GET | `/api/system/traces/<trace_id>` | Yes | Trace chain for a trace ID |
+| GET | `/api/system/pending_changes` | Yes | Pending self-evolution system changes (from MemoryStore) |
 
 ### POST /api/command
 
@@ -25,7 +26,7 @@ Response: { "data": { "message": "...", "intent": "..." }, "success": true }
 
 ---
 
-## Lead Acquisition OS (Phase 12–14)
+## Lead Acquisition OS (Phases 12–14)
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
@@ -53,7 +54,7 @@ Response: { "data": { "message": "...", "intent": "..." }, "success": true }
 | GET | `/api/crm/leads/<id>/full` | Yes | Lead with activities + timeline |
 | GET | `/api/crm/leads/<id>/activities` | Yes | Activity log |
 | POST | `/api/crm/leads/<id>/activities` | Yes | Log activity |
-| GET | `/api/daily_revenue_queue` | Yes | Scored revenue priority queue |
+| GET | `/api/daily_revenue_queue` | Yes | Scored revenue priority queue (Phase 11 engine) |
 
 ---
 
@@ -71,8 +72,17 @@ Response: { "data": { "message": "...", "intent": "..." }, "success": true }
 |--------|------|------|---------|
 | GET | `/api/approvals` | Yes | List pending approvals |
 | POST | `/api/approvals/<id>` | Yes | Resolve approval (`action=approve\|deny`) |
+| POST | `/api/approvals/create` | Yes | Create UI-initiated approval request: `{lead_id, action_type, draft_text}` |
 
-Sensitive flow: every approval follows Intent → Preview → Approval → Execute → Audit Log.
+Sensitive flow: every approval follows **Intent → Preview → Approval → Execute → Audit Log**.
+All outreach drafts have `requires_approval: True`. No execution without an approval record.
+
+### POST /api/approvals/create (Phase 21)
+
+```json
+Request:  { "lead_id": 42, "action_type": "first_contact", "draft_text": "שלום..." }
+Response: { "data": { "approval_id": "...", "status": "pending" }, "success": true }
+```
 
 ---
 
@@ -116,8 +126,8 @@ POST /api/telegram/webhook
 Header: X-Telegram-Token: <WEBHOOK_VERIFY_TOKEN>
 ```
 
-Handles inbound text commands and inline keyboard callbacks (`approve:`, `deny:`, `edit:`).
-See `docs/TELEGRAM.md` for full flow.
+Handles: inbound text commands, inline keyboard callbacks (`approve:`, `deny:`, `edit:`), document uploads, voice messages, contact cards.
+See `docs/TELEGRAM.md` for full multi-modal flow.
 
 ---
 
@@ -144,6 +154,6 @@ All responses use this envelope:
   "data":    { ... },
   "error":   null,
   "success": true,
-  "ts":      "2026-04-10T13:42:09.542493+00:00"
+  "ts":      "2026-04-12T12:34:59.000000+00:00"
 }
 ```
