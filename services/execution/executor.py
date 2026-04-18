@@ -968,11 +968,23 @@ _HANDLERS = {
     "parse_document":          _handle_parse_document,
     "preview_system_change":   _handle_preview_system_change,
     # Full System Build: follow-up + compound
-    "schedule_followup":       _handle_followup_queue,
-    "batch_followup":          _handle_followup_queue,
-    "compound_analysis":       _handle_generate_report,
-    "kpi_snapshot":            _handle_generate_report,
-    "weekly_report":           _handle_generate_report,
+    "schedule_followup":        _handle_followup_queue,
+    "batch_followup":           _handle_followup_queue,
+    "compound_analysis":        _handle_generate_report,
+    "kpi_snapshot":             _handle_generate_report,
+    "weekly_report":            _handle_generate_report,
+    # Channel strategy (agents handle these; executor fallbacks for safety)
+    "select_channel":           _handle_generate_report,
+    "draft_for_channel":        _handle_generate_report,
+    "channel_status":           _handle_generate_report,
+    # Marketing + SEO (agents handle; fallbacks)
+    "weekly_recommendations":   _handle_generate_report,
+    "campaign_draft":           _handle_generate_report,
+    "marketing_analysis":       _handle_generate_report,
+    "post_draft":               _handle_generate_report,
+    "seo_report":               _handle_generate_report,
+    "analyze_website":          _handle_generate_report,
+    "generate_seo_content":     _handle_generate_report,
 }
 
 

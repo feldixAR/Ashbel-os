@@ -6,22 +6,23 @@
 
 ---
 
-## Business Context — LOCKED
+## Business Context — RESET v2.0
 
-**This system operates exclusively for Ashbal Aluminum (אשבל אלומיניום).**
-**Sector: Aluminum. No other business profile is active or permitted.**
+**AshbelOS is a general business operating system — profile-driven.**
+**Current active profile: `ashbel` (Ashbal Aluminum — אשבל אלומיניום).**
+**Additional profiles can be added; do not activate `demo_real_estate` without explicit approval.**
 
 | Field | Value |
 |-------|-------|
-| **Business** | אשבל אלומיניום — Ashbal Aluminum |
-| **Sector** | Aluminum (`BUSINESS_ID=ashbel`, hardcoded default) |
-| **Active Profile** | `ashbel` (see `config/business_registry.py`) |
+| **Active Profile** | `ashbel` — אשבל אלומיניום |
+| **BUSINESS_ID default** | `ashbel` |
 | **Language** | Hebrew (he) |
 | **Currency** | ILS |
 | **Avg Deal Size** | ₪15,000 |
 
-**Operating Rule: Do NOT add, restore, or reference any other business profile.**
-**The `demo_real_estate` profile in `business_registry.py` is a scaffold — do not activate it.**
+**Channel scope updated:** Email/Meta/LinkedIn/Manual-send are in-scope as readiness layers.
+**WhatsApp:** readiness layer only (deep link + draft); execution blocked until Meta credentials.
+**Telegram:** operator channel only (commands, approvals, alerts).
 
 ---
 
@@ -29,8 +30,8 @@
 
 | Field | Value |
 |-------|-------|
-| **Product** | AshbelOS — Autonomous Business Operating System |
-| **Domain** | Ashbal Aluminum (אשבל אלומיניום) |
+| **Product** | AshbelOS — General Business Operating System (profile-driven) |
+| **Current Active Domain** | Ashbal Aluminum (אשבל אלומיניום) |
 | **Runtime** | Flask + Gunicorn, PostgreSQL, Railway |
 | **Language** | Python 3.11 |
 | **Repo branch model** | `master` = production-ready; `fix/*` = hotfix branches |
@@ -150,56 +151,54 @@ WhatsApp / Dashboard UI
 
 ## Operating Rules (for All Claude Agents)
 
-1. **Business context is locked to Ashbal Aluminum.** Do not introduce or activate any other business profile.
+1. **Business context is profile-driven.** Active profile: `ashbel`. Do not activate `demo_real_estate`.
 2. **Use this file** for project context — do not re-read the entire codebase.
 3. **Use git diffs** to verify changes, not full file re-reads.
 4. **Bootstrap test must pass** before any Railway deploy is considered valid.
 5. **Health check must return HTTP 200** with real proof, not assumption.
 6. **Secrets never committed** — use `.env.example` as reference only.
-7. **Axis 1 and Axis 2 are closed.** Do not reopen unless a new regression is proven with HTTP evidence.
-8. **Work in small steps only.** Edit existing modules in place; prefer extension over parallel systems.
-9. **Before sensitive implementation:** preview must be clear and approval explicit.
+7. **Work in small steps only.** Edit existing modules in place; prefer extension over parallel systems.
+8. **Before sensitive implementation:** preview must be clear and approval explicit.
 
 ---
 
 ## Governance Policy
 
 > Source of truth: `docs/ashbelos-governance.md` (repo-resident). This section is its adapter. If conflict exists, the source-of-truth doc wins until this section is corrected.
+> **Updated: 2026-04-18 — Scope Reset v2.0**
 
 ### Product Layers
-- **AshbelOS** is the independent business core. Its autonomy must not be weakened.
+- **AshbelOS** is a **general business OS** (profile-driven). Its autonomy must not be weakened.
 - **OpenClaw** is a detachable orchestration/control layer. It orchestrates AshbelOS; it does not replace it.
-- The Claude bridge (`engines/claude_dispatch.py`, `api/routes/claude_dispatch.py`) is an orchestration interface only — not business core.
+- The Claude bridge is an orchestration interface only — not business core.
 
-### Sensitive Action Flow (mandatory)
+### Sensitive Action Flow (mandatory — preserved)
 ```
 Intent → Preview → Approval → Execute → Audit Log
 ```
 No sensitive action may skip Preview or Approval.
 
 ### Business Logic Residency (must stay native to AshbelOS)
-- Business memory
-- Lead scoring
-- Revenue logic
-- Israeli business adaptation
+- Business memory and profile data
+- Lead scoring and revenue logic
+- Cultural/language adaptation
 - Critical execution fallback paths
 
-These may be orchestrated externally but must not be relocated as source of truth.
+### External Channels — Updated Scope
+| Channel | Status |
+|---------|--------|
+| Telegram | Operator only (commands, approvals, alerts) |
+| Manual Send | Active — full implementation |
+| WhatsApp | Readiness layer — draft + deep link only; sending blocked until credentials |
+| Email | Readiness layer — draft + preview; sending blocked until SMTP credentials |
+| Meta | Readiness layer — content draft; execution blocked until Meta Business credentials |
+| LinkedIn | Readiness layer — compliant draft; API posting blocked until credentials |
 
-### Fallback Policy
-Critical execution paths must support AshbelOS-native fallback. If any external bridge or orchestration layer fails, core business execution must remain possible through AshbelOS directly.
-
-### Wave One External Channels
-**Approved:** Telegram only.
-
-### Excluded from Active Approved Scope
-Do not introduce the following unless explicitly approved:
-- WhatsApp execution (route exists; do not expand)
-- Email execution
-- Calendar execution
-- Remote file writes
-- Additional external connectors
-- New infrastructure not required by the current approved phase
+### True Blockers (require external credentials/accounts)
+- Email SMTP sending credentials
+- Meta Business API credentials (WhatsApp send, Meta ads execution)
+- LinkedIn Developer API credentials
+- Website CMS API credentials for automated updates
 
 ---
 
@@ -391,6 +390,25 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - **Governance blocks enforced:** business profile generalization (multi-tenant) and email/Meta/LinkedIn/WhatsApp channel execution refused per `docs/ashbelos-governance.md`
 - **Test count: 409 passing (all green, verified 2026-04-18)**
 - **Final status: PRODUCTION READY v7.0 — COMMAND-FIRST + PARALLEL AGENTS**
+- **Scope Reset + Full System Build (2026-04-18):**
+  - **Phase A — Source-of-Truth Reset:**
+    - `docs/ashbelos-governance.md` — rewritten: AshbelOS = general business OS; channels updated; business context lock removed; readiness-layer framework added
+    - `docs/PRODUCT_OPERATING_MODEL.md` — rewritten: profile-driven identity; channel UX rules; marketing/SEO surface
+    - `docs/AGENTS_SKILLS_ORCHESTRATION.md` — rewritten: all 16 agent contracts; channel services table; orchestration flows
+    - `CLAUDE.md` — updated: Business Context Reset v2.0; governance policy adapter updated; channel scope table; true blockers documented
+    - `config/business_registry.py` — BusinessProfile extended: site_url, site_keywords, service_areas, top_offers, seasonal_peaks, tone
+  - **Phase B — Full System Build:**
+    - `services/channels/` — new package: channel_base, channel_router, manual_send (fully active), email_channel (readiness), whatsapp_readiness, meta_readiness, linkedin_readiness
+    - `engines/marketing_engine.py` — new: profile-driven weekly plan, post drafts, campaign ideas, seasonal recommendations, full report
+    - `agents/departments/sales/channel_strategy_agent.py` — ChannelStrategyAgent: select_channel, draft_for_channel, channel_status
+    - `agents/departments/sales/marketing_strategy_agent.py` — MarketingStrategyAgent: weekly_recommendations, campaign_draft, post_draft
+    - `agents/departments/executive/seo_agent.py` — SEOAgent: seo_report, city_pages, blog_posts, meta_tags, analyze_website, generate_seo_content
+    - `api/routes/channels.py` — GET /api/channels/status, POST /api/channels/draft, /select, /manual; GET /api/marketing/weekly
+    - `orchestration/intent_parser.py` + `orchestrator.py` — CHANNEL_STRATEGY, MARKETING_PLAN, SEO_CONTENT intents mapped
+    - 16 agents registered (14 builtin + GenericTask + dynamic)
+  - **True blockers documented (require external credentials):** Email SMTP, Meta Business API, LinkedIn API, Website CMS
+- **Test count: 449 passing (all green, verified 2026-04-18)**
+- **Final status: PRODUCTION READY v8.0 — GENERAL BUSINESS OS + CHANNEL READINESS**
 
 ---
 

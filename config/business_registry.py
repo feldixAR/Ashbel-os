@@ -1,8 +1,8 @@
 
 """
-business_registry.py — Multi-Business Registry (Batch 10)
-Supports multiple business profiles — each with its own domain, scoring, and channels.
+business_registry.py — General Business OS — Profile-Driven Registry
 The active business is set via BUSINESS_ID env var (default: ashbel).
+All engines, agents, and skills read the active profile at runtime.
 """
 import os, logging
 from dataclasses import dataclass, field
@@ -12,19 +12,29 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class BusinessProfile:
-    business_id:    str
-    name:           str
-    domain:         str
-    products:       str
-    target_clients: str
-    market:         str
+    business_id:      str
+    name:             str
+    domain:           str
+    products:         str
+    target_clients:   str
+    market:           str
     competitive_edge: str
-    primary_channel: str
+    primary_channel:  str
     lead_score_weights: dict
     outreach_channels: List[str]
-    avg_deal_size:  int
-    currency:       str = "ILS"
-    language:       str = "he"
+    avg_deal_size:    int
+    currency:         str = "ILS"
+    language:         str = "he"
+    # SEO + website context
+    site_url:         str = ""
+    site_keywords:    List[str] = field(default_factory=list)
+    service_areas:    List[str] = field(default_factory=list)
+    # Marketing playbook
+    top_offers:       List[str] = field(default_factory=list)
+    seasonal_peaks:   List[str] = field(default_factory=list)
+    # Tone
+    tone:             str = "professional"
+    greeting_style:   str = "formal"
 
 BUSINESS_PROFILES: Dict[str, BusinessProfile] = {
     "ashbel": BusinessProfile(
@@ -43,6 +53,13 @@ BUSINESS_PROFILES: Dict[str, BusinessProfile] = {
         },
         outreach_channels=["whatsapp","email","sms"],
         avg_deal_size=15000,
+        site_url="https://ashbel-aluminum.co.il",
+        site_keywords=["אלומיניום","חלונות אלומיניום","דלתות אלומיניום","פרגולה אלומיניום","קבלן אלומיניום"],
+        service_areas=["תל אביב","רמת גן","הרצליה","נתניה","ירושלים","חיפה","ראשון לציון","רחובות","נס ציונה"],
+        top_offers=["ייעוץ חינם","מדידה ללא עלות","אחריות 5 שנים","התקנה מקצועית כלולה"],
+        seasonal_peaks=["אביב-מרץ-מאי","לפני הקיץ","ינואר-שיפוצים"],
+        tone="professional",
+        greeting_style="warm_formal",
     ),
     "demo_real_estate": BusinessProfile(
         business_id="demo_real_estate",

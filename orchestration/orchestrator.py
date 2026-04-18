@@ -128,6 +128,11 @@ _INTENT_TASK_MAP = {
     # Phase 16: Channel-native + self-evolution
     Intent.DOCUMENT_UPLOAD:          ("acquisition",  "parse_document"),
     Intent.SYSTEM_CHANGE:            ("executive",    "preview_system_change"),
+
+    # Full System Build: channels + marketing + SEO
+    Intent.CHANNEL_STRATEGY:         ("channel",      "select_channel"),
+    Intent.MARKETING_PLAN:           ("marketing",    "weekly_recommendations"),
+    Intent.SEO_CONTENT:              ("seo",          "seo_report"),
 }
 
 

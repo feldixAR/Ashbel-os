@@ -94,6 +94,11 @@ class Intent(str, Enum):
     DOCUMENT_UPLOAD           = "document_upload"
     SYSTEM_CHANGE             = "system_change"
 
+    # Full System Build: channels + marketing + SEO
+    CHANNEL_STRATEGY          = "channel_strategy"
+    MARKETING_PLAN            = "marketing_plan"
+    SEO_CONTENT               = "seo_content"
+
 
 @dataclass
 class IntentResult:
@@ -205,6 +210,27 @@ class IntentParser:
             "מה יש בתור", "מה הלידים ממתינים", "כל הלידים הממתינים",
         ]):
             return Intent.LEAD_OPS_QUEUE, 0.9
+
+        # Full System Build: channels, marketing, SEO
+        if any(w in tl for w in [
+            "ערוץ", "בחר ערוץ", "select channel", "channel strategy",
+            "איזה ערוץ", "הכי טוב לשלוח", "איך לשלוח",
+        ]):
+            return Intent.CHANNEL_STRATEGY, 0.9
+
+        if any(w in tl for w in [
+            "שיווק", "קמפיין", "marketing", "campaign",
+            "המלצות שיווק", "תוכנית שיווק", "פוסט", "פרסום",
+            "marketing plan", "weekly recommendations",
+        ]):
+            return Intent.MARKETING_PLAN, 0.9
+
+        if any(w in tl for w in [
+            "seo", "מילות מפתח", "keywords", "דפי עיר", "city pages",
+            "בלוג", "blog", "תגי meta", "meta tags", "תוכן seo",
+            "דוח seo", "אתר", "site",
+        ]):
+            return Intent.SEO_CONTENT, 0.9
 
         # Leads
         if any(w in tl for w in ["לידים חמים", "hot leads"]):
