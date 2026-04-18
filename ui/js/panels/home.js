@@ -21,6 +21,15 @@ const HomePanel = (() => {
     </div>
   </div>
 
+  <!-- Inline command bar — command-first surface -->
+  <div class="home-cmd-bar" id="homeCmdBar">
+    <input class="home-cmd-input" id="homeCmdInput"
+      placeholder="הקלד פקודה: לידים חמים / דוח הכנסות / מה הצעד הבא..."
+      autocomplete="off" spellcheck="false" dir="rtl" />
+    <button class="home-cmd-btn" id="homeCmdSubmit">↵</button>
+  </div>
+  <div class="home-cmd-result hidden" id="homeCmdResult"></div>
+
   <div class="home-primary-actions">
     <button class="home-action-btn home-upload-btn" onclick="UploadModal.open()">
       <span class="home-action-icon">📂</span>
@@ -120,6 +129,7 @@ const HomePanel = (() => {
 
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
+    _initCmdBar();
     await Promise.all([
       _loadUrgent(),
       _loadApprovals(),
@@ -256,6 +266,50 @@ const HomePanel = (() => {
                 professional_blog:'📝', whatsapp_group:'📱', pinterest:'📌',
                 yad2:'🏠', company_site:'🌐' };
     return m[t] || '🔎';
+  }
+
+  // ── Inline command bar ────────────────────────────────────────────────────
+  function _initCmdBar() {
+    const input  = document.getElementById('homeCmdInput');
+    const btn    = document.getElementById('homeCmdSubmit');
+    const resEl  = document.getElementById('homeCmdResult');
+    if (!input || !btn) return;
+
+    async function _submit() {
+      const cmd = input.value.trim();
+      if (!cmd) return;
+      btn.disabled = true;
+      btn.textContent = '⏳';
+      resEl.className = 'home-cmd-result';
+      resEl.textContent = 'מעבד...';
+
+      try {
+        const res = await API.command(cmd);
+        const d   = res.data || {};
+        const msg = d.message || (res.success ? '✅ בוצע' : '❌ שגיאה');
+        resEl.textContent = msg;
+        resEl.className   = res.success ? 'home-cmd-result home-cmd-ok' : 'home-cmd-result home-cmd-err';
+        if (res.success) {
+          input.value = '';
+          Toast.success(msg.slice(0, 80));
+          // Reload relevant cards after command
+          setTimeout(() => {
+            _loadUrgent();
+            _loadApprovals();
+            _loadHotLeads();
+          }, 600);
+        }
+      } catch(e) {
+        resEl.textContent = `שגיאה: ${e.message || e}`;
+        resEl.className   = 'home-cmd-result home-cmd-err';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '↵';
+      }
+    }
+
+    btn.addEventListener('click', _submit);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') _submit(); });
   }
 
   // ── Data loaders ──────────────────────────────────────────────────────────

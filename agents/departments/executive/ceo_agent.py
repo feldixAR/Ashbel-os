@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 
 _HANDLED = {
     ("strategy",      "complex_reasoning"),
+    ("strategy",      "compound_analysis"),
     ("analysis",      "analyze_market"),
     ("summarization", "generate_report"),
     ("agent_build",   "create_agent"),
@@ -58,6 +59,8 @@ class CEOAgent(BaseAgent):
             return self._revenue_action(task)
         if task.type == "development":
             return self._dev_action(task)
+        if task.action == "compound_analysis":
+            return self._compound_analysis(task)
         return self._strategic_analysis(task)
 
     # ── Report ────────────────────────────────────────────────────────────────
@@ -225,6 +228,46 @@ class CEOAgent(BaseAgent):
                 "6. 🔮 Advanced Autonomy"
             )
         return ExecutionResult(success=True, message=msg, output={"status": msg})
+
+    # ── Compound parallel analysis ────────────────────────────────────────────
+
+    def _compound_analysis(self, task: TaskModel) -> ExecutionResult:
+        """
+        Run revenue insights + bottleneck analysis + next_best_action in parallel
+        and merge into a unified strategic summary.
+        """
+        from orchestration.task_manager import task_manager
+        import uuid as _uuid
+
+        sub_specs = [
+            ("revenue", "revenue_insights"),
+            ("revenue", "bottleneck_analysis"),
+            ("revenue", "next_best_action"),
+        ]
+        input_data = {"command": (task.input_data or {}).get("command", "")}
+        sub_tasks  = []
+        for t_type, action in sub_specs:
+            st = task_manager.create_task(
+                type=t_type, action=action,
+                input_data=input_data, priority=task.priority or 5,
+            )
+            task_manager.transition(st.id, "queued")
+            sub_tasks.append(st)
+
+        results = task_manager.parallel_dispatch(sub_tasks)
+
+        sections = []
+        for (_, action), res in zip(sub_specs, results):
+            msg = res.get("message", "") if isinstance(res, dict) else ""
+            if msg:
+                sections.append(msg)
+
+        combined = "\n\n".join(sections) or "אין נתונים לניתוח"
+        return ExecutionResult(
+            success=True,
+            message=combined,
+            output={"compound": True, "sub_results": results},
+        )
 
     # ── Strategic analysis ────────────────────────────────────────────────────
 

@@ -271,6 +271,35 @@ class TaskManager:
                               trace_id=task.trace_id)
         return result.to_dict()
 
+    def parallel_dispatch(self, tasks: list) -> list:
+        """
+        Dispatch multiple independent tasks concurrently.
+        Returns list of result dicts in same order as input tasks.
+        Each task must already be created and in 'queued' state.
+        """
+        import concurrent.futures
+
+        if not tasks:
+            return []
+        if len(tasks) == 1:
+            return [self.dispatch(tasks[0])]
+
+        results = [None] * len(tasks)
+
+        def _run(idx: int, task: TaskModel):
+            try:
+                results[idx] = self.dispatch(task)
+            except Exception as e:
+                log.error(f"[parallel_dispatch] task={task.id} error: {e}")
+                results[idx] = {"success": False, "error": str(e), "task_id": task.id}
+
+        max_workers = min(len(tasks), 8)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futs = [pool.submit(_run, i, t) for i, t in enumerate(tasks)]
+            concurrent.futures.wait(futs)
+
+        return results
+
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 

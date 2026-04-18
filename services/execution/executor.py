@@ -967,6 +967,12 @@ _HANDLERS = {
     # Phase 16: Document + system self-evolution
     "parse_document":          _handle_parse_document,
     "preview_system_change":   _handle_preview_system_change,
+    # Full System Build: follow-up + compound
+    "schedule_followup":       _handle_followup_queue,
+    "batch_followup":          _handle_followup_queue,
+    "compound_analysis":       _handle_generate_report,
+    "kpi_snapshot":            _handle_generate_report,
+    "weekly_report":           _handle_generate_report,
 }
 
 

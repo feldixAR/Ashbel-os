@@ -2656,3 +2656,132 @@ tr:hover .lead-action-row { opacity: 1; }
 .com-item-meta { font-size: 10px; color: var(--muted); }
 .com-item-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .com-item-actions .btn { font-size: 10px; padding: 3px 10px; min-height: 28px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Full System Build — Command Bar + Mobile Closure
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Inline command bar (home panel) ───────────────────────────────────────── */
+.home-cmd-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.home-cmd-bar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+.home-cmd-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--text);
+  font-family: var(--font);
+  direction: rtl;
+  text-align: right;
+}
+.home-cmd-input::placeholder { color: var(--muted); font-size: 12px; }
+.home-cmd-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  min-height: 32px;
+  min-width: 44px;
+}
+.home-cmd-btn:hover { background: var(--chrome-dim); }
+.home-cmd-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.home-cmd-result {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  margin-bottom: 10px;
+  direction: rtl;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.home-cmd-result.hidden { display: none; }
+.home-cmd-ok  { background: rgba(5,150,105,0.10); color: var(--green); border: 1px solid rgba(5,150,105,0.20); }
+.home-cmd-err { background: rgba(220,38,38,0.08); color: var(--red);   border: 1px solid rgba(220,38,38,0.15); }
+
+/* ── Mobile closure: bottom nav bar ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Reserve space at bottom for nav bar */
+  .main { padding-bottom: 64px; }
+
+  /* Bottom navigation */
+  .os-shell::after { display: none; }
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--surface2);
+    border-top: 1px solid var(--border2);
+    z-index: 200;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px;
+  }
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    transition: color .15s;
+  }
+  .bottom-nav-item.active { color: var(--accent); }
+  .bottom-nav-item .bnav-icon { font-size: 18px; line-height: 1; }
+  .bottom-nav-item .bnav-label { font-size: 9px; font-weight: 500; letter-spacing: .3px; white-space: nowrap; overflow: hidden; }
+
+  /* Command bar full-width on mobile */
+  .home-cmd-bar { margin: 0 0 10px; }
+  .home-cmd-input { font-size: 16px; } /* prevent zoom on iOS */
+  .home-cmd-btn { min-height: 44px; min-width: 48px; font-size: 16px; }
+
+  /* Cards min readable height */
+  .home-card { min-height: 100px; }
+
+  /* Better touch targets for all buttons on mobile */
+  .btn { min-height: 40px; }
+  .home-action-btn { min-height: 56px; }
+
+  /* KPI cards 2-col on mobile */
+  .kpi-bar { grid-template-columns: repeat(2,1fr); }
+
+  /* Section title bigger on mobile for readability */
+  .section-title { font-size: 15px; }
+  .section-sub   { font-size: 11px; }
+
+  /* Pipeline / lead cards full-bleed */
+  .lead-row, .pipeline-row { border-radius: 0; }
+
+  /* Revenue queue card on mobile — readable */
+  .rev-item { padding: 10px 12px; }
+  .rev-item-name { font-size: 14px; }
+}
+
+/* Show bottom nav only on mobile */
+.bottom-nav { display: none; }

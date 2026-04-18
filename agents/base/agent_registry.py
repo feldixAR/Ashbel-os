@@ -63,18 +63,22 @@ class AgentRegistry:
         from agents.departments.executive.executive_assistant_agent import ExecutiveAssistantAgent
         from agents.departments.executive.github_writer_agent import GitHubWriterAgent
         from agents.departments.executive.chief_of_staff_agent import ChiefOfStaffAgent
+        from agents.departments.executive.reporting_agent import ReportingAgent
+        from agents.departments.sales.followup_agent import FollowUpAgent
         from agents.departments.generic.task_agent import GenericTaskAgent
 
         for agent in [
             LeadAcquisitionAgent(),
             LeadQualifierAgent(),
             MessagingAgent(),
+            FollowUpAgent(),
             CEOAgent(),
             BuildManagerAgent(),
             CodeBuilderAgent(),
             ExecutiveAssistantAgent(),
             GitHubWriterAgent(),
             ChiefOfStaffAgent(),
+            ReportingAgent(),
         ]:
             self.register(agent)
 

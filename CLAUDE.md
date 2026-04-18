@@ -379,6 +379,18 @@ Always optimize for maximum token efficiency without reducing code quality, corr
     - `tests/test_preview_system_change.py` — 12 tests: preview handler creates approval, system_change→MemoryStore via HTTP+Telegram, execute_change all change types, implemented excluded from pending list, agent dispatch → terminal DB status
 - **Test count: 409 passing (all green, verified 2026-04-18)**
 - **Final status: PRODUCTION READY v6.0 — CAPABILITY COMPLETE**
+- **Full System Build — Governance-Allowed Additions (2026-04-18):**
+  - **Command-first UI:** `ui/js/panels/home.js` — inline command bar above primary actions; submits to `/api/command`; shows result inline + toast; reloads urgent/approvals/hot cards on success
+  - **Specialized agents registered:**
+    - `agents/departments/sales/followup_agent.py` — FollowUpAgent handles `(followup, schedule_followup)`, `(followup, followup_queue)`, `(outreach, followup_queue)`, `(followup, batch_followup)`; learning-aware: uses `get_best_template()` for batch drafts; writes ActivityModel on schedule
+    - `agents/departments/executive/reporting_agent.py` — ReportingAgent handles `(reporting, *)`: daily_report, kpi_snapshot, weekly_report, performance_report
+  - **Parallel dispatch:** `orchestration/task_manager.py` — `parallel_dispatch(tasks)` runs up to 8 tasks concurrently via `ThreadPoolExecutor`; returns results in input order; used by CEOAgent compound analysis
+  - **CEOAgent compound analysis:** `(strategy, compound_analysis)` dispatches revenue_insights + bottleneck_analysis + next_best_action in parallel and merges into unified strategic summary
+  - **Mobile closure:** `ui/css/app.css` — bottom nav bar (5 items: home/leads/approvals/revenue/commands) shown only on ≤640px; command bar 44px touch targets on mobile; all `.btn` min-height 40px on mobile; iOS font-size 16px on command input (prevents zoom)
+  - **Agent registry:** `agents/base/agent_registry.py` — registers FollowUpAgent + ReportingAgent in bootstrap; total 13 registered agents
+  - **Governance blocks enforced:** business profile generalization (multi-tenant) and email/Meta/LinkedIn/WhatsApp channel execution refused per `docs/ashbelos-governance.md`
+- **Test count: 409 passing (all green, verified 2026-04-18)**
+- **Final status: PRODUCTION READY v7.0 — COMMAND-FIRST + PARALLEL AGENTS**
 
 ---
 
