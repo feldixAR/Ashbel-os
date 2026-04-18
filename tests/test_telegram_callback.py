@@ -211,9 +211,117 @@ class TestTelegramApprovalLoop(unittest.TestCase):
         """Second approval callback for already-resolved approval returns gracefully."""
         aid = _create_approval()
         _client().post("/api/telegram/webhook", json=_cbq("approve", aid))
-        # Second attempt — should not crash, should return handled with not-found message
         r2 = _client().post("/api/telegram/webhook", json=_cbq("approve", aid))
         self.assertEqual(r2.status_code, 200)
+
+
+class TestTelegramEditFlow(unittest.TestCase):
+    """Edit callback → stores pending context → follow-up text applies edit."""
+
+    def _cbq_with_sender(self, action: str, approval_id: str, sender_id: int = 42) -> dict:
+        return {"callback_query": {
+            "id": "cbq-edit-1",
+            "from": {"username": "editor", "id": sender_id},
+            "data": f"{action}:{approval_id}",
+            "message": {"chat": {"id": 1}, "message_id": 10},
+        }}
+
+    def _text_with_sender(self, text: str, sender_id: int = 42) -> dict:
+        return {"message": {
+            "from": {"username": "editor", "id": sender_id},
+            "chat": {"id": 1}, "date": 0,
+            "text": text, "message_id": 99,
+        }}
+
+    def test_edit_callback_stores_pending_context(self):
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        from memory.memory_store import MemoryStore
+        a = ApprovalRepository().create(
+            action="send_outreach",
+            details={"lead_id": "le-1", "lead_name": "Edit Lead",
+                     "body": "original body", "channel": "whatsapp"},
+            risk_level=2, requested_by="test",
+        )
+        _client().post("/api/telegram/webhook",
+                       json=self._cbq_with_sender("edit", a.id, sender_id=999))
+        stored = MemoryStore.read("telegram", "pending_edit_999")
+        self.assertIsNotNone(stored, "pending_edit context not stored after edit callback")
+        self.assertEqual(stored.get("approval_id"), a.id)
+
+    def test_follow_up_text_applies_edit(self):
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        from services.storage.db import get_session
+        from services.storage.models.approval import ApprovalModel
+        a = ApprovalRepository().create(
+            action="send_outreach",
+            details={"lead_id": "le-2", "lead_name": "Edit Flow",
+                     "body": "old draft", "channel": "whatsapp"},
+            risk_level=2, requested_by="test",
+        )
+        # Step 1: click Edit
+        _client().post("/api/telegram/webhook",
+                       json=self._cbq_with_sender("edit", a.id, sender_id=888))
+        # Step 2: send edited text
+        r = _client().post("/api/telegram/webhook",
+                           json=self._text_with_sender("new improved draft text", sender_id=888))
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertEqual(d.get("data", {}).get("status"), "edit_applied",
+                         f"Expected edit_applied, got: {d}")
+
+        # Verify approval details updated
+        with get_session() as s:
+            approval = s.get(ApprovalModel, a.id)
+            details = approval.details or {}
+            self.assertEqual(details.get("body"), "new improved draft text")
+
+    def test_follow_up_clears_pending_context(self):
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        from memory.memory_store import MemoryStore
+        a = ApprovalRepository().create(
+            action="send_outreach",
+            details={"lead_id": "le-3", "lead_name": "Clear Test",
+                     "body": "draft", "channel": "whatsapp"},
+            risk_level=2, requested_by="test",
+        )
+        sender_id = 777
+        _client().post("/api/telegram/webhook",
+                       json=self._cbq_with_sender("edit", a.id, sender_id=sender_id))
+        _client().post("/api/telegram/webhook",
+                       json=self._text_with_sender("edited text", sender_id=sender_id))
+        # Context should be cleared after edit applied
+        stored = MemoryStore.read("telegram", f"pending_edit_{sender_id}")
+        self.assertIsNone(stored, "pending_edit context should be cleared after apply")
+
+    def test_text_without_pending_edit_goes_to_orchestrator(self):
+        """Normal text with no pending context routes to orchestrator, not edit handler."""
+        r = _client().post("/api/telegram/webhook",
+                           json=self._text_with_sender("הצג לידים", sender_id=111))
+        d = r.get_json()
+        self.assertEqual(d.get("data", {}).get("status"), "ok",
+                         "Normal text should route to orchestrator")
+
+    def test_edit_on_already_resolved_approval_returns_gracefully(self):
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        from memory.memory_store import MemoryStore
+        a = ApprovalRepository().create(
+            action="send_outreach",
+            details={"lead_id": "le-4", "body": "draft", "channel": "whatsapp"},
+            risk_level=2, requested_by="test",
+        )
+        # Resolve the approval first
+        ApprovalRepository().resolve(a.id, "approved", resolved_by="test")
+        # Store pending edit context manually
+        MemoryStore.write("telegram", "pending_edit_666",
+                          {"approval_id": a.id}, updated_by="test")
+        # Send edited text — should handle gracefully (not_applicable)
+        r = _client().post("/api/telegram/webhook",
+                           json=self._text_with_sender("edited text", sender_id=666))
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertIn(d.get("data", {}).get("status"),
+                      ("edit_not_applicable", "edit_error", "ok"),
+                      "Should not crash on resolved approval edit")
 
 
 if __name__ == "__main__":

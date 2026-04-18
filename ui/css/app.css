@@ -2622,6 +2622,12 @@ tr:hover .lead-action-row { opacity: 1; }
   /* Section heads */
   .section-head { gap: 8px; }
   .section-title { font-size: 13px; }
+
+  /* Lead action row: override desktop 24px to meet 40px touch-target rule */
+  .lead-action-row .btn { min-height: 40px; font-size: 10px; padding: 4px 8px; }
+
+  /* Leads table: ensure horizontal scroll on narrow screens */
+  .leads-tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
