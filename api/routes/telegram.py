@@ -88,16 +88,33 @@ def telegram_webhook():
 
     # execute_command or preview_system_change → orchestrator dispatch
     if payload.extracted_content or payload.raw_content:
-        return _dispatch_text(payload.extracted_content or payload.raw_content)
+        return _dispatch_text(
+            payload.extracted_content or payload.raw_content,
+            sender_id=str(message.get("from", {}).get("id", "")),
+        )
 
     return ok({"status": "ignored", "reason": "empty content"})
 
 
 # ── Sub-handlers ──────────────────────────────────────────────────────────────
 
-def _dispatch_text(text: str):
-    """Send text through the orchestrator and reply."""
-    log.info(f"[Telegram] dispatch text={text!r}")
+def _dispatch_text(text: str, sender_id: str = ""):
+    """
+    Send text through the orchestrator and reply.
+    If sender has a pending edit context, apply edited body to approval first.
+    """
+    log.info(f"[Telegram] dispatch text={text!r} sender={sender_id!r}")
+
+    # ── Check for pending edit context ────────────────────────────────────
+    if sender_id:
+        try:
+            from memory.memory_store import MemoryStore
+            pending = MemoryStore.read("telegram", f"pending_edit_{sender_id}")
+            if pending and isinstance(pending, dict) and pending.get("approval_id"):
+                return _apply_edit(pending["approval_id"], text, sender_id)
+        except Exception as _e:
+            log.debug(f"[Telegram] pending edit check error: {_e}")
+
     try:
         result = orchestrator.handle_command(text)
         reply  = result.message if result.success else (result.message or "שגיאה פנימית")
@@ -177,6 +194,61 @@ def _handle_document_payload(payload):
     return ok({"status": "ok", "reply": reply})
 
 
+def _apply_edit(approval_id: str, edited_body: str, sender_id: str):
+    """
+    Apply edited draft text to a pending approval.
+    Called when user sends follow-up message after clicking Edit on an approval card.
+    Clears the pending edit context, updates approval details, sends preview.
+    """
+    import json as _json
+    try:
+        from memory.memory_store import MemoryStore
+        from services.storage.db import get_session
+        from services.storage.models.approval import ApprovalModel
+
+        # Clear pending edit context immediately
+        MemoryStore.delete("telegram", f"pending_edit_{sender_id}")
+
+        with get_session() as s:
+            approval = s.get(ApprovalModel, approval_id)
+            if not approval or approval.status != "pending":
+                telegram_service.send(
+                    f"❌ הפנייה `{approval_id[:8]}` לא נמצאה או כבר טופלה.\n"
+                    f"הנוסח לא עודכן."
+                )
+                return ok({"status": "edit_not_applicable", "approval_id": approval_id})
+
+            raw = approval.details or {}
+            if isinstance(raw, str):
+                try:    raw = _json.loads(raw)
+                except Exception: raw = {}
+            # Build a new dict so SQLAlchemy detects the JSON column change
+            details = dict(raw)
+            details["body"]       = edited_body
+            details["draft_body"] = edited_body
+            approval.details = details
+            try:
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(approval, "details")
+            except Exception:
+                pass
+            lead_name = details.get("lead_name", "")
+            channel   = details.get("channel", "")
+
+        log.info(f"[Telegram] edit applied approval={approval_id[:8]} sender={sender_id}")
+        telegram_service.send(
+            f"✅ הנוסח עודכן — {lead_name}\n\n"
+            f"📝 *נוסח:*\n{edited_body[:500]}\n\n"
+            f"ניתן לאשר את הפנייה כעת."
+        )
+        return ok({"status": "edit_applied", "approval_id": approval_id})
+
+    except Exception as e:
+        log.error(f"[Telegram] _apply_edit error: {e}", exc_info=True)
+        telegram_service.send(f"❌ שגיאה בעדכון הנוסח: {e}")
+        return ok({"status": "edit_error"})
+
+
 def _handle_lead_payload(payload):
     """Process a contact-based or text-based inbound lead directly."""
     fields  = payload.structured_fields or {}
@@ -200,9 +272,22 @@ def _handle_callback(cbq: dict):
     action, approval_id = data.split(":", 1)
 
     if action == "edit":
+        # Store pending edit context so the follow-up message is captured
+        try:
+            from memory.memory_store import MemoryStore
+            sender_id = str(cbq.get("from", {}).get("id", ""))
+            if sender_id:
+                MemoryStore.write(
+                    "telegram", f"pending_edit_{sender_id}",
+                    {"approval_id": approval_id},
+                    updated_by="telegram",
+                )
+        except Exception as _e:
+            log.debug(f"[Telegram] edit context store error: {_e}")
+
         telegram_service.answer_callback(cbq_id, "שלח את הנוסח המתוקן בהודעה הבאה")
         telegram_service.send(
-            f"✏️ לעריכת פנייה `{approval_id}`:\n"
+            f"✏️ לעריכת פנייה `{approval_id[:8]}`:\n"
             f"שלח את הנוסח המתוקן בהודעה הבאה והמערכת תעדכן."
         )
         return ok({"status": "edit_requested", "approval_id": approval_id})

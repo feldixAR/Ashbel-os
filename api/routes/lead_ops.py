@@ -428,7 +428,9 @@ def batch_score_leads():
 def execute_outreach(approval_id: str):
     """
     Execute an approved outreach action.
-    Marks the approval as approved, logs to activity, publishes LEAD_OUTREACH_SENT.
+    Delegates to ApprovalRepository.resolve() for DB update, then emits
+    APPROVAL_GRANTED/DENIED, logs activity, publishes LEAD_OUTREACH_SENT,
+    and records learning outcome.
     Body: { "action": "approve" | "deny", "note": "..." }
     """
     data   = request.get_json(silent=True) or {}
@@ -439,42 +441,42 @@ def execute_outreach(approval_id: str):
         return jsonify({"success": False, "error": "action must be approve or deny"}), 400
 
     try:
-        from services.storage.db import get_session
-        from services.storage.models.approval import ApprovalModel
-        from services.storage.models.activity import ActivityModel
+        from services.storage.repositories.approval_repo import ApprovalRepository
         from events.event_bus import event_bus
         import events.event_types as ET
-        import datetime, json
+        import json as _json
 
-        with get_session() as s:
-            approval = s.get(ApprovalModel, approval_id)
-            if not approval:
-                return jsonify({"success": False, "error": "approval not found"}), 404
-            if approval.status not in ("pending",):
-                return jsonify({
-                    "success": False,
-                    "error": f"approval already {approval.status}",
-                }), 409
+        repo   = ApprovalRepository()
+        status = "approved" if action == "approve" else "denied"
+        result = repo.resolve(approval_id, status=status,
+                               resolved_by="lead_ops_api", note=note)
 
-            approval.status      = action + "d"   # "approved" | "denied"
-            approval.resolved_by = "api"
-            approval.resolved_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            approval.note        = note
+        if not result:
+            return jsonify({"success": False,
+                            "error": "approval not found or already resolved"}), 404
 
-            # Extract lead info from details
-            details = approval.details or {}
-            if isinstance(details, str):
-                try:
-                    details = json.loads(details)
-                except Exception:
-                    details = {}
-            lead_id   = details.get("lead_id") or ""
-            lead_name = details.get("lead_name") or ""
-            channel   = details.get("channel") or ""
-            body      = details.get("body") or ""
+        # Emit APPROVAL_GRANTED/DENIED (canonical event for audit trail)
+        event_type = ET.APPROVAL_GRANTED if action == "approve" else ET.APPROVAL_DENIED
+        event_bus.publish(event_type, payload={
+            "approval_id": approval_id,
+            "action":      result.action,
+            "resolved_by": "lead_ops_api",
+            "task_id":     result.task_id,
+        })
 
-            if action == "approve" and lead_id:
-                # Log activity
+        details = result.details or {}
+        if isinstance(details, str):
+            try:    details = _json.loads(details)
+            except Exception: details = {}
+        lead_id   = details.get("lead_id") or ""
+        lead_name = details.get("lead_name") or ""
+        channel   = details.get("channel") or ""
+        body      = details.get("body") or details.get("draft_body") or ""
+
+        if action == "approve" and lead_id:
+            from services.storage.db import get_session
+            from services.storage.models.activity import ActivityModel
+            with get_session() as s:
                 s.add(ActivityModel(
                     lead_id=lead_id,
                     activity_type="note",
@@ -483,23 +485,28 @@ def execute_outreach(approval_id: str):
                     outcome="completed",
                     performed_by="lead_ops_api",
                 ))
-
-        # Publish event (outside session)
-        if action == "approve" and lead_id:
             event_bus.publish(
                 ET.LEAD_OUTREACH_SENT,
-                payload={
-                    "lead_id":   lead_id,
-                    "lead_name": lead_name,
-                    "channel":   channel,
-                    "approval_id": approval_id,
-                },
+                payload={"lead_id": lead_id, "lead_name": lead_name,
+                         "channel": channel, "approval_id": approval_id},
             )
+            try:
+                from skills.learning_skills import record_template_outcome
+                if body:
+                    record_template_outcome(
+                        template_type="outreach",
+                        template_text=body[:500],
+                        outcome="sent",
+                        segment=details.get("action_type"),
+                        channel=channel,
+                    )
+            except Exception:
+                pass
 
         return jsonify({
             "success":     True,
             "approval_id": approval_id,
-            "status":      action + "d",
+            "status":      status,
             "lead_id":     lead_id,
             "lead_name":   lead_name,
         })

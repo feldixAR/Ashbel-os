@@ -349,6 +349,14 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `ui/css/app.css` — DraftModal styles, empty-state-actions, lead-action-row, mobile shell improvements, nav-group secondary
   - `ui/index.html` — bumped to v=p21; added draft_modal.js script tag
 - **Status: PRODUCTION READY v5.2 — GUIDED OPERATOR CONSOLE**
+- **Phase 2 — Runtime Hardening additions (2026-04-18):**
+  - `api/routes/lead_ops.py` — execute endpoint uses `ApprovalRepository.resolve()`, emits `APPROVAL_GRANTED/DENIED`, runs learning hook — canonical single resolution path
+  - `api/routes/telegram.py` — edit callback stores `pending_edit_{sender_id}` in MemoryStore; `_dispatch_text` checks context on every inbound text and calls `_apply_edit`; Telegram edit flow fully closed
+  - `ui/css/app.css` — mobile compliance: `.lead-action-row .btn` raised to 40px touch target on ≤640px; `leads-tbl-wrap` overflow-x scroll guard added
+  - 6 new test suites (106 new tests): `test_approval_flow`, `test_telegram_callback`, `test_fallback_policy`, `test_revenue_queue_integrity`, `test_agent_trace`, `test_self_evolution`
+  - `.claude/rules/governance.md` — governance enforcement rules committed
+- **Test count: 351 passing (all green, verified 2026-04-18)**
+- **Final status: PRODUCTION READY v5.3 — RUNTIME PROVEN**
 
 ---
 

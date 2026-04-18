@@ -247,16 +247,22 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
         change_type = details.get("change_type") if isinstance(details, dict) else None
         if change_type:
             try:
-                import subprocess
                 import os as _os
-                repo_root = _os.path.abspath(
-                    _os.path.join(_os.path.dirname(__file__), "..", "..")
-                )
                 branch = f"feat/system-change-{approval_id[:8]}"
-                r = subprocess.run(
-                    ["git", "checkout", "-b", branch],
-                    cwd=repo_root, capture_output=True, timeout=15, text=True,
-                )
+                branch_created = False
+
+                # Skip git subprocess in test environments to prevent branch switching
+                if _os.getenv("ENV") not in ("test", "testing"):
+                    import subprocess
+                    repo_root = _os.path.abspath(
+                        _os.path.join(_os.path.dirname(__file__), "..", "..")
+                    )
+                    r = subprocess.run(
+                        ["git", "checkout", "-b", branch],
+                        cwd=repo_root, capture_output=True, timeout=15, text=True,
+                    )
+                    branch_created = (r.returncode == 0)
+
                 from memory.memory_store import MemoryStore
                 MemoryStore.write("global", f"pending_change_{approval_id[:8]}", {
                     "branch":        branch,
@@ -267,10 +273,9 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
                     "affected_files": details.get("affected_files", []),
                     "status":        "approved_pending_implementation",
                 }, updated_by="approval_system")
-                if r.returncode == 0:
+                if branch_created:
                     return f"✅ שינוי מערכת אושר — ענף `{branch}` נוצר. ממתין לביצוע."
                 else:
-                    # Branch may already exist; still store the plan
                     return f"✅ שינוי מערכת אושר. תוכנית שמורה (ענף: {branch})."
             except Exception as ex:
                 return f"✅ אושר. שגיאה ביצירת ענף: {ex}"
