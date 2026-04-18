@@ -26,6 +26,26 @@ _scheduler = None
 _started   = False
 _lock      = threading.Lock()
 
+_JOB_IDS = [
+    "followup", "daily_plan", "learning_cycle", "telegram_delivery",
+    "daily_learning_report", "maintenance", "gmail_scan",
+    "maps_scan", "lead_followup_proposals",
+]
+
+
+def _record_last_run(job_id: str) -> None:
+    """Store last-run timestamp in MemoryStore for runtime visibility."""
+    try:
+        from memory.memory_store import MemoryStore
+        MemoryStore.write(
+            "scheduler", f"last_run_{job_id}",
+            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            updated_by="scheduler",
+        )
+    except Exception:
+        pass
+
+
 # ── Job implementations ───────────────────────────────────────────────────────
 
 def _job_followup():
@@ -59,8 +79,10 @@ def _job_followup():
                          "ts": datetime.datetime.now(datetime.timezone.utc).isoformat()},
             )
         log.info(f"[Scheduler] followup_job complete — total sent: {total_sent}")
+        _record_last_run("followup")
     except Exception as e:
         log.error(f"[Scheduler] followup_job crashed: {e}", exc_info=True)
+        _record_last_run("followup")
 
 
 def _job_daily_plan():
@@ -84,8 +106,10 @@ def _job_daily_plan():
         }
         event_bus.publish(ET.SCHEDULER_JOB_RAN, payload=payload)
         log.info(f"[Scheduler] daily_plan_job: due={payload['due_today']} hot={payload['hot_leads']}")
+        _record_last_run("daily_plan")
     except Exception as e:
         log.error(f"[Scheduler] daily_plan_job crashed: {e}", exc_info=True)
+        _record_last_run("daily_plan")
 
 
 def _job_daily_learning_report():
@@ -126,8 +150,10 @@ def _job_learning_cycle():
                      "ts": datetime.datetime.now(datetime.timezone.utc).isoformat()},
         )
         log.info(f"[Scheduler] learning_job: {summary}")
+        _record_last_run("learning_cycle")
     except Exception as e:
         log.error(f"[Scheduler] learning_job crashed: {e}", exc_info=True)
+        _record_last_run("learning_cycle")
 
 
 def _job_telegram_delivery(force: bool = False) -> dict:
@@ -241,6 +267,8 @@ def _job_telegram_delivery(force: bool = False) -> dict:
     except Exception as e:
         log.error(f"[Scheduler] telegram_delivery_job crashed pid={pid}: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
+    finally:
+        _record_last_run("telegram_delivery")
 
 
 def _job_maintenance():
@@ -255,8 +283,10 @@ def _job_maintenance():
         from services.telegram_service import telegram_service
         telegram_service.send(report)
         log.info("[Scheduler] maintenance_job: done")
+        _record_last_run("maintenance")
     except Exception as e:
         log.error(f"[Scheduler] maintenance_job crashed: {e}", exc_info=True)
+        _record_last_run("maintenance")
 
 
 def _job_gmail_scan():
@@ -265,8 +295,10 @@ def _job_gmail_scan():
         from services.integrations.gmail_listener import scan_inbox
         result = scan_inbox(max_results=20)
         log.info(f"[Scheduler] gmail_scan: {result}")
+        _record_last_run("gmail_scan")
     except Exception as e:
         log.error(f"[Scheduler] gmail_scan crashed: {e}", exc_info=True)
+        _record_last_run("gmail_scan")
 
 
 def _job_maps_scan():
@@ -525,8 +557,27 @@ def stop():
 
 
 def status() -> dict:
-    """Return scheduler status for health endpoint."""
+    """Return scheduler status with job list, next-run times, and last-run history."""
+    jobs_info = []
+    if _scheduler and _started:
+        for j in _scheduler.get_jobs():
+            jobs_info.append({
+                "id":       j.id,
+                "next_run": j.next_run_time.isoformat() if j.next_run_time else None,
+            })
+
+    last_runs: dict = {}
+    try:
+        from memory.memory_store import MemoryStore
+        for job_id in _JOB_IDS:
+            v = MemoryStore.read("scheduler", f"last_run_{job_id}")
+            if v:
+                last_runs[job_id] = v
+    except Exception:
+        pass
+
     return {
-        "running": _started,
-        "jobs": [j.id for j in _scheduler.get_jobs()] if _scheduler and _started else [],
+        "running":   _started,
+        "jobs":      jobs_info,
+        "last_runs": last_runs,
     }

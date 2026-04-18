@@ -355,8 +355,30 @@ Always optimize for maximum token efficiency without reducing code quality, corr
   - `ui/css/app.css` — mobile compliance: `.lead-action-row .btn` raised to 40px touch target on ≤640px; `leads-tbl-wrap` overflow-x scroll guard added
   - 6 new test suites (106 new tests): `test_approval_flow`, `test_telegram_callback`, `test_fallback_policy`, `test_revenue_queue_integrity`, `test_agent_trace`, `test_self_evolution`
   - `.claude/rules/governance.md` — governance enforcement rules committed
-- **Test count: 351 passing (all green, verified 2026-04-18)**
+- **Test count: 356 passing (all green, verified 2026-04-18)**
 - **Final status: PRODUCTION READY v5.3 — RUNTIME PROVEN**
+- **Phase 3 — System Completion additions (2026-04-18):**
+  - **Learning feedback loop closed:**
+    - `skills/outreach_intelligence.py` — `draft_first_contact()` + `draft_followup()` now call `get_best_template()` before generating; learned template replaces default when available
+    - `engines/lead_acquisition_engine.py` — `run_acquisition()` calls `get_best_source()` at start (recommended_source in AcquisitionResult); calls `record_source_outcome()` after CRM push per source type
+    - `routing/model_router.py` — already reads MemoryStore routing overrides via `_get_learning_override()`; `promote_model()` now proven to change live model selection
+  - **Unified operator command center:**
+    - `ui/js/panels/home.js` — two new cards: "תור הכנסות היום" (top 3 from revenue queue) + "אותות למידה" (learning signals: routing overrides, best sources, hot conversion rate, top agent)
+    - `api/routes/learning.py` — `GET /api/learning/snapshot` returns current learned patterns: best templates, sources, model overrides, agent summary, conversion stats
+  - **Self-evolution bounded execution:**
+    - `api/routes/system.py` — `POST /api/system/execute_change/<id>`: applies approved plans bounded to: routing_override (promote_model), template_update (MemoryStore best_*), scoring_weight; marks plan as implemented + emits TASK_COMPLETED audit event; unknown types return plan_only
+    - `api/routes/system.py` — `GET /api/system/scheduler`: detailed scheduler status with job list + next_run + last_run history
+  - **Scheduler production truth:**
+    - `scheduler/revenue_scheduler.py` — `_record_last_run(job_id)` helper writes to MemoryStore on each job completion; `status()` enhanced to return jobs with next_run + last_runs dict; `_JOB_IDS` list defines all 9 registered jobs
+  - **HTTP approval endpoint — gap closed:**
+    - `api/routes/approvals.py` — HTTP `resolve_approval` now also: logs ActivityModel + emits LEAD_OUTREACH_SENT for lead_id+body approvals; stores system_change plans in MemoryStore (same as Telegram path) — both channels now produce identical outcomes
+  - **4 new test suites (53 tests):**
+    - `tests/test_learning_feedback.py` — 18 tests: template feedback loop, model routing override proven to change live decisions, source strategy accumulation + recommendation, snapshot endpoint
+    - `tests/test_cross_surface_truth.py` — 10 tests: lead→CRM, lead→revenue queue, lead→approval→activity, lead→briefing, full operator loop end-to-end
+    - `tests/test_scheduler_truth.py` — 13 tests: status structure, _record_last_run writes/reads, endpoint, job IDs
+    - `tests/test_preview_system_change.py` — 12 tests: preview handler creates approval, system_change→MemoryStore via HTTP+Telegram, execute_change all change types, implemented excluded from pending list, agent dispatch → terminal DB status
+- **Test count: 409 passing (all green, verified 2026-04-18)**
+- **Final status: PRODUCTION READY v6.0 — CAPABILITY COMPLETE**
 
 ---
 

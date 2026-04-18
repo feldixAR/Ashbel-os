@@ -67,3 +67,45 @@ def get_roi_report():
         from engines.learning_engine import build_roi_report
         return jsonify({"success":True,"report":build_roi_report()})
     except Exception as e: return jsonify({"success":False,"error":str(e)}),500
+
+
+@bp.route("/snapshot", methods=["GET"])
+def learning_snapshot():
+    """
+    Return current learned patterns for operator visibility.
+    Covers: best templates, best sources, model routing overrides,
+    agent performance summary, and conversion rates by score bucket.
+    """
+    try:
+        from memory.memory_store import MemoryStore
+        from skills.learning_skills import get_conversion_stats
+
+        templates: dict = {}
+        for t_type in ("first_contact", "follow_up", "meeting_request", "outreach"):
+            v = MemoryStore.read("messaging", f"best_{t_type}")
+            if v:
+                templates[t_type] = str(v)[:120]
+
+        sources: dict = {}
+        for goal_key in ("residential", "commercial", "renovation", "general",
+                         "אדריכלים", "קבלנים"):
+            v = MemoryStore.read("leads", f"best_source_{goal_key}")
+            if v:
+                sources[goal_key] = v
+
+        # Routing overrides stored as single dict under ("routing", "overrides")
+        overrides: dict = MemoryStore.read("routing", "overrides", {})
+
+        agent_summary = MemoryStore.read("global", "agent_summary", {})
+        conversion    = get_conversion_stats()
+
+        return jsonify({"success": True, "snapshot": {
+            "best_templates":  templates,
+            "best_sources":    sources,
+            "model_overrides": overrides,
+            "agent_summary":   agent_summary,
+            "conversion":      conversion,
+        }})
+    except Exception as e:
+        log.error(f"[learning/snapshot] {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500

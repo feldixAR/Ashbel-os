@@ -24,14 +24,15 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class AcquisitionResult:
-    goal:              str
-    total_discovered:  int
-    new_leads:         int
-    duplicates:        int
-    work_queue:        list[dict]   = field(default_factory=list)
-    discovery_plan:    dict         = field(default_factory=dict)
-    session_id:        str          = ""
-    errors:            list[str]    = field(default_factory=list)
+    goal:               str
+    total_discovered:   int
+    new_leads:          int
+    duplicates:         int
+    work_queue:         list[dict]        = field(default_factory=list)
+    discovery_plan:     dict              = field(default_factory=dict)
+    session_id:         str               = ""
+    errors:             list[str]         = field(default_factory=list)
+    recommended_source: str | None        = None
 
 
 @dataclass
@@ -72,6 +73,17 @@ def run_acquisition(
 
     session_id = _session_id()
     errors: list[str] = []
+
+    # Learning: get best source recommendation for this goal type
+    recommended_source: str | None = None
+    try:
+        from skills.learning_skills import get_best_source
+        _goal_key = goal.lower().replace(" ", "_")[:30]
+        recommended_source = get_best_source(_goal_key)
+        if recommended_source:
+            log.info(f"[Acquisition] learning recommends source: {recommended_source} for goal: {goal}")
+    except Exception:
+        pass
 
     # 1. Discovery plan (always)
     plan = discover_sources(goal, business_profile)
@@ -143,6 +155,21 @@ def run_acquisition(
         except Exception as e:
             errors.append(f"crm: {e}")
 
+    # Learning: record source outcomes for future recommendations
+    try:
+        from skills.learning_skills import record_source_outcome
+        src_map: dict[str, list] = {}
+        for ld in leads_for_queue:
+            st = ld.get("source_type") or "unknown"
+            src_map.setdefault(st, []).append(ld)
+        for st, leads_list in src_map.items():
+            found     = len(leads_list)
+            qualified = sum(1 for l in leads_list if l.get("score", 0) >= 60)
+            record_source_outcome(source_type=st, goal_type=_goal_key,
+                                  leads_found=found, leads_qualified=qualified)
+    except Exception:
+        pass
+
     # 7. Persist discovery session
     _save_discovery_session(session_id, goal, plan, len(leads_for_queue))
 
@@ -155,6 +182,7 @@ def run_acquisition(
         discovery_plan=_plan_to_dict(plan),
         session_id=session_id,
         errors=errors,
+        recommended_source=recommended_source,
     )
 
 

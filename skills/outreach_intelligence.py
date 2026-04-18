@@ -133,6 +133,7 @@ def draft_first_contact(lead: dict[str, Any], profile: dict[str, Any] | None = N
     biz     = p.get("name") or "אשבל אלומיניום"
     segment = lead.get("segment") or ""
     tone    = get_hebrew_tone(segment)
+    channel = choose_channel(lead)
 
     location_note = f" ב{city}" if city else ""
     company_note  = f" מ{company}" if company else ""
@@ -150,6 +151,16 @@ def draft_first_contact(lead: dict[str, Any], profile: dict[str, Any] | None = N
         f"האם יהיה לך נוח להחליף כמה מילים? 5 דקות שיחה יכולות להוביל לפתרון נכון.\n\n"
         f"תודה,\n[שם]\n{biz}"
     )
+
+    # Learning: use best proven template if available (feedback loop)
+    try:
+        from skills.learning_skills import get_best_template
+        learned = get_best_template("first_contact", segment, channel)
+        if learned:
+            body = learned
+    except Exception:
+        pass
+
     return MessageDraft(
         subject=f"היי {name} — פנייה מ{biz}",
         body=body,
@@ -166,6 +177,8 @@ def draft_followup(lead: dict[str, Any], previous: dict[str, Any] | None = None)
     name    = lead.get("name") or "שלום"
     days    = previous.get("days_since") or 3 if previous else 3
     biz     = "אשבל אלומיניום"
+    segment = lead.get("segment") or ""
+    channel = choose_channel(lead)
     body = (
         f"שלום {name},\n\n"
         f"חזרתי אליך בנוגע לפנייה שלי לפני {days} ימים.\n"
@@ -173,6 +186,16 @@ def draft_followup(lead: dict[str, Any], previous: dict[str, Any] | None = None)
         f"אם עדיין רלוונטי לך, אשמח לשמוע — גם 'לא עכשיו' תשובה בסדר גמור.\n\n"
         f"תודה,\n[שם]\n{biz}"
     )
+
+    # Learning: use best proven follow-up template if available
+    try:
+        from skills.learning_skills import get_best_template
+        learned = get_best_template("follow_up", segment, channel)
+        if learned:
+            body = learned
+    except Exception:
+        pass
+
     return MessageDraft(
         subject=f"מעקב — {name}",
         body=body,

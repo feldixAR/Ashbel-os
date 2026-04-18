@@ -77,6 +77,24 @@ const HomePanel = (() => {
       <div id="homeSysStatus"><div class="home-loading">טוען...</div></div>
       <button class="home-card-more" onclick="App.switchTo('dashboard')">מרכז שליטה →</button>
     </div>
+
+    <div class="home-card">
+      <div class="home-card-hd">
+        <span class="home-card-icon">💰</span>
+        <span>תור הכנסות היום</span>
+        <span class="home-card-badge home-badge-green" id="homeQueueCount">—</span>
+      </div>
+      <div id="homeQueueList"><div class="home-loading">טוען...</div></div>
+      <button class="home-card-more" onclick="App.switchTo('revenue')">תור מלא →</button>
+    </div>
+
+    <div class="home-card">
+      <div class="home-card-hd">
+        <span class="home-card-icon">🧠</span>
+        <span>אותות למידה</span>
+      </div>
+      <div id="homeLearningSignals"><div class="home-loading">טוען...</div></div>
+    </div>
   </div>
 
 </div>
@@ -107,6 +125,8 @@ const HomePanel = (() => {
       _loadApprovals(),
       _loadHotLeads(),
       _loadSysStatus(),
+      _loadRevenueQueue(),
+      _loadLearningSignals(),
     ]);
 
     document.getElementById('homeDiscoverRun')?.addEventListener('click', _runDiscover);
@@ -308,6 +328,69 @@ const HomePanel = (() => {
         <div class="home-sys-row"><span>לידים סה"כ</span>
           <span class="home-val">${plan.total_leads||0}</span></div>`;
     } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון מצב</div>'; }
+  }
+
+  async function _loadRevenueQueue() {
+    const el      = document.getElementById('homeQueueList');
+    const countEl = document.getElementById('homeQueueCount');
+    try {
+      const res   = await API.get('/daily_revenue_queue');
+      const items = res.data?.queue || res.queue || [];
+      countEl.textContent = items.length || '0';
+      if (!items.length) {
+        el.innerHTML = '<div class="home-empty">תור ריק — הוסף לידים להפעלה</div>';
+        return;
+      }
+      el.innerHTML = items.slice(0, 3).map(it => `
+        <div class="home-item" onclick="App.switchTo('leads')">
+          <div class="home-item-title">${it.lead_name || it.name || '—'}</div>
+          <div class="home-item-sub">${it.next_best_action || '—'}</div>
+          <span class="score ${(it.priority_score||0)>=70?'score-hot':(it.priority_score||0)>=40?'score-warm':'score-cold'}"
+                style="font-size:9px">${Math.round(it.priority_score||0)}</span>
+        </div>`).join('');
+    } catch(e) {
+      el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>';
+    }
+  }
+
+  async function _loadLearningSignals() {
+    const el = document.getElementById('homeLearningSignals');
+    try {
+      const res  = await API.get('/learning/snapshot');
+      const snap = res.snapshot || res.data?.snapshot || {};
+      const overrides = snap.model_overrides || {};
+      const sources   = snap.best_sources   || {};
+      const conv      = snap.conversion     || {};
+
+      let html = '';
+
+      const ovKeys = Object.keys(overrides);
+      if (ovKeys.length) {
+        html += `<div class="home-sys-row"><span>🔀 מודל מותאם</span>
+          <span class="home-val">${ovKeys.map(k => `${k}:${overrides[k]}`).join(', ')}</span></div>`;
+      }
+      const srcKeys = Object.keys(sources);
+      if (srcKeys.length) {
+        html += `<div class="home-sys-row"><span>📍 מקור מוביל</span>
+          <span class="home-val">${Object.entries(sources).map(([k,v])=>`${k}→${v}`).slice(0,2).join(', ')}</span></div>`;
+      }
+      const hot = conv.hot;
+      if (hot?.rate != null) {
+        html += `<div class="home-sys-row"><span>🔥 המרה חמה</span>
+          <span class="home-val">${Math.round((hot.rate||0)*100)}% (${hot.total||0} לידים)</span></div>`;
+      }
+      const agentSummary = snap.agent_summary || {};
+      const agentList    = Object.entries(agentSummary);
+      if (agentList.length) {
+        const best = agentList.sort((a,b)=>(b[1].success_rate||0)-(a[1].success_rate||0))[0];
+        html += `<div class="home-sys-row"><span>🤖 סוכן מוביל</span>
+          <span class="home-val">${best[0]} (${Math.round((best[1].success_rate||0)*100)}%)</span></div>`;
+      }
+      if (!html) html = '<div class="home-empty">אין מספיק נתוני למידה עדיין</div>';
+      el.innerHTML = html;
+    } catch(e) {
+      el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>';
+    }
   }
 
   function _pill(status) {

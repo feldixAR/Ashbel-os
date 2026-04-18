@@ -137,6 +137,72 @@ def resolve_approval(approval_id: str):
                 log.error(f"[Approvals] post-approval execution error: {ex}")
                 exec_result = {"executed": False, "error": str(ex)}
 
+    # ── Lead outreach approval: log activity + emit LEAD_OUTREACH_SENT ───────
+    # Handles the lead_id+body format (DraftModal / lead_ops surface).
+    if action == "approve" and not exec_result:
+        _details = result.details or {}
+        _lead_id = _details.get("lead_id") if isinstance(_details, dict) else None
+        _body    = _details.get("body") or _details.get("draft_body", "") if isinstance(_details, dict) else ""
+        _channel = _details.get("channel", "") if isinstance(_details, dict) else ""
+        if _lead_id and _body:
+            try:
+                import datetime as _dt
+                from services.storage.db import get_session as _gs
+                from services.storage.models.activity import ActivityModel as _AM
+                with _gs() as _s:
+                    _s.add(_AM(
+                        lead_id=_lead_id,
+                        activity_type="note",
+                        subject=f"הודעת פנייה אושרה — {_channel}",
+                        notes=_body[:500],
+                        outcome="completed",
+                        performed_by="owner",
+                    ))
+                event_bus.publish(
+                    ET.LEAD_OUTREACH_SENT,
+                    payload={"lead_id": _lead_id, "approval_id": approval_id,
+                             "channel": _channel},
+                )
+            except Exception as _e:
+                log.error(f"[Approvals] lead outreach activity log error: {_e}")
+
+    # ── System change: store approved plan in MemoryStore ────────────────────
+    if action == "approve" and not exec_result:
+        details = result.details or {}
+        change_type = details.get("change_type") if isinstance(details, dict) else None
+        if change_type:
+            try:
+                import os as _os
+                branch = f"feat/system-change-{approval_id[:8]}"
+                if _os.getenv("ENV") not in ("test", "testing"):
+                    import subprocess
+                    repo_root = _os.path.abspath(
+                        _os.path.join(_os.path.dirname(__file__), "..", "..")
+                    )
+                    subprocess.run(
+                        ["git", "checkout", "-b", branch],
+                        cwd=repo_root, capture_output=True, timeout=15, text=True,
+                    )
+                from memory.memory_store import MemoryStore
+                MemoryStore.write("global", f"pending_change_{approval_id[:8]}", {
+                    "branch":        branch,
+                    "approval_id":   approval_id,
+                    "change_type":   change_type,
+                    "request":       details.get("request", ""),
+                    "plan":          details.get("implementation_plan", ""),
+                    "affected_files": details.get("affected_files", []),
+                    "task_type":     details.get("task_type", ""),
+                    "model_key":     details.get("model_key", ""),
+                    "template_type": details.get("template_type", ""),
+                    "template_text": details.get("template_text", ""),
+                    "weight_key":    details.get("weight_key", ""),
+                    "weight_value":  details.get("weight_value"),
+                    "status":        "approved_pending_implementation",
+                }, updated_by="approval_system")
+                log.info(f"[Approvals] system_change plan stored: {approval_id[:8]}")
+            except Exception as _e:
+                log.error(f"[Approvals] system_change store error: {_e}")
+
     resp = {"approval": _serialize(result)}
     if exec_result:
         resp["outreach_execution"] = exec_result

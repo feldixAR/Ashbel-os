@@ -1,11 +1,12 @@
 """
-system.py — GET /api/health, GET /api/status, GET /api/version
+system.py — GET /api/health, GET /api/status, GET /api/version,
+            GET /api/system/scheduler, POST /api/system/execute_change/<id>
 """
 import logging
 import os
 from pathlib import Path
-from flask import Blueprint
-from api.middleware import require_auth, log_request, ok
+from flask import Blueprint, request
+from api.middleware import require_auth, log_request, ok, _error
 
 log = logging.getLogger(__name__)
 bp  = Blueprint("system", __name__)
@@ -116,10 +117,113 @@ def pending_changes():
         return ok({"pending_changes": [], "count": 0, "error": str(e)})
 
 
+@bp.route("/system/scheduler", methods=["GET"])
+@require_auth
+@log_request
+def scheduler_status_endpoint():
+    """Return detailed scheduler status: running flag, job list with next-run, last-run history."""
+    return ok(_scheduler_status())
+
+
+@bp.route("/system/execute_change/<change_id>", methods=["POST"])
+@require_auth
+@log_request
+def execute_change(change_id: str):
+    """
+    Bounded self-evolution implementation pass.
+    Applies safe, reversible changes based on the approved plan's change_type:
+      - routing_override  → promote_model(task_type, model_key)
+      - template_update   → set best template in MemoryStore
+      - scoring_weight    → update scoring weight in MemoryStore
+      - other             → mark plan_only (manual required)
+    Marks the plan as implemented + records audit event.
+    """
+    import datetime
+    from memory.memory_store import MemoryStore
+
+    plan = MemoryStore.read("global", f"pending_change_{change_id}")
+    if not plan:
+        return _error(f"change '{change_id}' not found", 404)
+    if plan.get("status") != "approved_pending_implementation":
+        return _error(
+            f"change '{change_id}' is not pending (status: {plan.get('status')})", 400
+        )
+
+    change_type = plan.get("change_type", "")
+    result_msg  = ""
+    applied     = False
+
+    try:
+        if change_type == "routing_override":
+            task_type = plan.get("task_type") or "sales"
+            model_key = plan.get("model_key") or "sonnet"
+            from skills.learning_skills import promote_model
+            promote_model(task_type, model_key, reason=f"system_change_{change_id}")
+            result_msg = f"routing override applied: {task_type} → {model_key}"
+            applied    = True
+
+        elif change_type == "template_update":
+            t_type = plan.get("template_type") or "first_contact"
+            t_text = plan.get("template_text") or plan.get("plan", "")
+            if t_text:
+                MemoryStore.write("messaging", f"best_{t_type}", t_text,
+                                  updated_by=f"system_change_{change_id}")
+                result_msg = f"template updated: {t_type}"
+                applied    = True
+            else:
+                result_msg = "template_text missing in plan"
+
+        elif change_type == "scoring_weight":
+            key   = plan.get("weight_key") or "default"
+            value = plan.get("weight_value")
+            if value is not None:
+                MemoryStore.write("scoring", f"weight_{key}", value,
+                                  updated_by=f"system_change_{change_id}")
+                result_msg = f"scoring weight updated: {key} = {value}"
+                applied    = True
+            else:
+                result_msg = "weight_value missing in plan"
+
+        else:
+            result_msg = f"change_type '{change_type}' requires manual implementation"
+            applied    = False
+
+        updated = dict(plan)
+        updated["status"]         = "implemented" if applied else "plan_only"
+        updated["implemented_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        updated["result"]         = result_msg
+        MemoryStore.write("global", f"pending_change_{change_id}", updated,
+                          updated_by="execute_change")
+
+        try:
+            from events.event_bus import event_bus
+            import events.event_types as ET
+            event_bus.publish(ET.TASK_COMPLETED, payload={
+                "change_id":   change_id,
+                "change_type": change_type,
+                "applied":     applied,
+                "result":      result_msg,
+            })
+        except Exception:
+            pass
+
+        return ok({
+            "change_id":   change_id,
+            "change_type": change_type,
+            "applied":     applied,
+            "result":      result_msg,
+            "status":      "implemented" if applied else "plan_only",
+        })
+
+    except Exception as e:
+        log.error(f"[execute_change] {e}", exc_info=True)
+        return _error(str(e), 500)
+
+
 def _scheduler_status() -> dict:
     try:
         from scheduler.revenue_scheduler import status
         return status()
     except Exception:
-        return {"running": False, "jobs": []}
+        return {"running": False, "jobs": [], "last_runs": {}}
 
