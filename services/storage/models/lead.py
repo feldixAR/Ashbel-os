@@ -21,7 +21,7 @@ class LeadModel(Base, TimestampMixin):
     sector        = Column(String(80),   nullable=True, index=True)
     domain        = Column(String(100),  nullable=True)    # Batch 7: business domain
     source        = Column(String(60),   nullable=False, default="manual", index=True)
-    status        = Column(String(60),   nullable=False, default="חדש", index=True)
+    status        = Column(String(60),   nullable=False, default="new", index=True)
     score         = Column(Integer,      nullable=False, default=0, index=True)
     attempts      = Column(Integer,      nullable=False, default=0)
     last_contact  = Column(String(40),   nullable=True)

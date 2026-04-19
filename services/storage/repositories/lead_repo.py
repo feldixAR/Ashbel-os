@@ -18,7 +18,7 @@ class LeadRepository(BaseRepository[LeadModel]):
             phone=phone, email=email or None,
             source=source, notes=notes,
             sector=sector or None,
-            status="חדש", score=0, attempts=0,
+            status="new", score=0, attempts=0,
         )
         with get_session() as s:
             s.add(lead)
@@ -71,7 +71,7 @@ class LeadRepository(BaseRepository[LeadModel]):
         with get_session() as s:
             return (s.query(LeadModel)
                     .filter(LeadModel.score >= min_score,
-                            LeadModel.status.notin_(["סגור_זכה", "סגור_הפסיד"]))
+                            LeadModel.status.notin_(["closed_won", "closed_lost"]))
                     .order_by(LeadModel.score.desc())
                     .all())
 
@@ -79,7 +79,7 @@ class LeadRepository(BaseRepository[LeadModel]):
         with get_session() as s:
             return (s.query(LeadModel)
                     .filter(LeadModel.attempts < max_attempts,
-                            LeadModel.status.in_(["ניסיון קשר", "חדש", "מתעניין"]))
+                            LeadModel.status.in_(["contacted", "new", "hot"]))
                     .order_by(LeadModel.score.desc())
                     .all())
 
