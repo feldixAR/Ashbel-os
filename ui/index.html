@@ -4,42 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>AshbalOS — אשבל אלומיניום</title>
-  <link rel="stylesheet" href="/ui/css/app.css?v=p22" />
+  <title>AshbelOS — Operating Console</title>
+  <link rel="stylesheet" href="/ui/css/app.css?v=p23" />
 </head>
 <body>
 
-<!-- ── API Key Modal ──────────────────────────────────────────────────── -->
+<!-- ── API Key Modal ──────────────────────────────────────────────── -->
 <div class="modal-overlay hidden" id="apiModal">
   <div class="modal">
-    <h2>AshbalOS</h2>
-    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.5px">
-      SECURE ACCESS — API KEY REQUIRED
-    </p>
-    <input class="modal-input" id="apiKeyInput" type="password"
-           placeholder="Enter API key..." autocomplete="off" />
+    <h2>AshbelOS</h2>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.5px">SECURE ACCESS — API KEY REQUIRED</p>
+    <input class="modal-input" id="apiKeyInput" type="password" placeholder="Enter API key..." autocomplete="off" />
     <button class="btn btn-primary" id="apiKeySubmit" style="width:100%">CONNECT</button>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:var(--muted);cursor:pointer;user-select:none">
-      <input type="checkbox" id="apiRemember" style="cursor:pointer" />
-      זכור במכשיר זה
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="apiRemember" /> זכור במכשיר זה
     </label>
-    <div class="modal-note">
-      ⓘ  Set <code>OS_API_KEY</code> environment variable on Railway.
-    </div>
+    <div class="modal-note">ⓘ Set <code>OS_API_KEY</code> on Railway.</div>
   </div>
 </div>
 
-<!-- ── Upload / Import Modal ──────────────────────────────────────────── -->
+<!-- ── Upload Modal ───────────────────────────────────────────────── -->
 <div class="modal-overlay hidden" id="uploadModal">
   <div class="um-modal">
     <div class="um-header">
       <div style="font-size:15px;font-weight:700">📂 העלה קובץ / יבוא לידים</div>
       <button class="btn btn-ghost" style="font-size:12px" onclick="UploadModal.close()">✕</button>
     </div>
-
-    <!-- Stage: Drop zone -->
     <div id="umStage-drop">
       <div class="um-dropzone" id="umDropZone">
         <div class="um-dz-icon">📂</div>
@@ -50,17 +40,7 @@
       </div>
       <div class="um-drop-error" id="umDropError"></div>
     </div>
-
-    <!-- Stage: Parsing -->
-    <div id="umStage-parsing" style="display:none">
-      <div class="um-loading-block">
-        <div class="um-spinner"></div>
-        <div class="um-parsing-title">מנתח קובץ...</div>
-        <div class="um-parsing-name" id="umParsingName"></div>
-      </div>
-    </div>
-
-    <!-- Stage: Review -->
+    <div id="umStage-parsing" style="display:none"><div class="um-loading-block"><div class="um-spinner"></div><div class="um-parsing-title">מנתח קובץ...</div><div id="umParsingName"></div></div></div>
     <div id="umStage-review" style="display:none">
       <div class="um-review-header">
         <div id="umReviewTitle" class="um-review-title">נמצאו רשומות</div>
@@ -73,177 +53,164 @@
       <div class="um-group-summary" id="umGroupSummary"></div>
       <div class="um-records-container" id="umRecordsContainer"></div>
     </div>
-
-    <!-- Stage: Committing -->
-    <div id="umStage-committing" style="display:none">
-      <div class="um-loading-block">
-        <div class="um-spinner"></div>
-        <div id="umCommittingCount" class="um-parsing-title">מייבא...</div>
-      </div>
-    </div>
-
-    <!-- Stage: Results -->
-    <div id="umStage-results" style="display:none">
-      <div id="umResultMsg"></div>
-      <button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="UploadModal.close()">סגור</button>
-    </div>
-
+    <div id="umStage-committing" style="display:none"><div class="um-loading-block"><div class="um-spinner"></div><div id="umCommittingCount" class="um-parsing-title">מייבא...</div></div></div>
+    <div id="umStage-results" style="display:none"><div id="umResultMsg"></div><button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="UploadModal.close()">סגור</button></div>
   </div>
 </div>
 
-<!-- ── Shell ──────────────────────────────────────────────────────────── -->
-<div class="os-shell">
-
-  <!-- Header -->
-  <header class="header">
-    <!-- Mobile hamburger -->
-    <button class="sidebar-toggle-btn" id="sidebarToggle" title="תפריט" aria-label="פתח תפריט">☰</button>
-
-    <a class="logo" href="#">
-      <div class="logo-hex"></div>
-      <span class="logo-name">Ashbal<span>OS</span></span>
-    </a>
-
-    <!-- Upload button — visible on all screens -->
-    <button class="header-upload-btn" onclick="UploadModal.open()" title="העלה קובץ / יבוא לידים">
-      <span>📂</span>
-      <span class="header-upload-label">יבוא</span>
-    </button>
-
-    <div class="header-meta">
-      <!-- Live KPI strip -->
-      <div class="header-kpi-group" id="headerKpis" style="display:none">
-        <div class="hkpi">
-          <span class="hkpi-val hkpi-ils" id="hkPipeline">—</span>
-          <span class="hkpi-label">PIPELINE</span>
-        </div>
-        <div class="hkpi-sep"></div>
-        <div class="hkpi">
-          <span class="hkpi-val" id="hkDeals">—</span>
-          <span class="hkpi-label">DEALS</span>
-        </div>
-        <div class="hkpi-sep"></div>
-        <div class="hkpi">
-          <span class="hkpi-val hkpi-good" id="hkHot">—</span>
-          <span class="hkpi-label">HOT</span>
-        </div>
-      </div>
-
-      <div class="header-live">
-        <div class="pulse"></div>
-        <span style="font-family:var(--mono);font-size:10px;letter-spacing:.5px">LIVE</span>
-      </div>
+<!-- ── Draft Modal ────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="draftModal">
+  <div class="dm-modal">
+    <div class="dm-header">
+      <div class="dm-title" id="dmTitle">טיוטת פנייה</div>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="DraftModal.close()">✕</button>
     </div>
+    <div class="dm-body" id="dmBody">
+      <div class="dm-loading" id="dmLoading" style="display:none"><div class="um-spinner"></div><div>מכין טיוטה...</div></div>
+      <div class="dm-content" id="dmContent"></div>
+    </div>
+    <div class="dm-footer" id="dmFooter"></div>
+  </div>
+</div>
 
-    <button class="bell-btn" id="bellBtn">
-      <span>⚑</span>
-      <span id="bellTxt">אישורים</span>
-      <span class="bell-badge hidden" id="bellBadge">0</span>
-    </button>
+<!-- ── Operating Console Shell ────────────────────────────────────── -->
+<div class="os-shell" id="osShell">
+
+  <!-- 1. Shell Header: logo | profile | command bar | actions -->
+  <header class="shell-header">
+    <div class="sh-logo">
+      <div class="sh-hex"></div>
+      <span class="sh-brand">Ashbel<span>OS</span></span>
+    </div>
+    <div class="sh-profile-badge" id="shProfileBadge" title="פרופיל עסקי פעיל">
+      <span class="sh-profile-dot"></span>
+      <span class="sh-profile-name" id="shProfileName">טוען...</span>
+    </div>
+    <div class="sh-cmd-wrap">
+      <input class="sh-cmd-input" id="shCmdInput"
+        placeholder="מה תרצה לעשות? לדוגמה: תביא לידים / נסח פנייה ללידים חמים / תוכנית שיווק לשבוע"
+        dir="rtl" autocomplete="off" spellcheck="false" />
+      <button class="sh-cmd-btn" id="shCmdRun" title="הפעל פקודה">↵</button>
+    </div>
+    <div class="sh-header-actions">
+      <button class="sh-action-btn" onclick="UploadModal.open()" title="יבוא קובץ">📂</button>
+      <button class="sh-action-btn sh-bell" id="shBell" title="אישורים ממתינים">
+        <span>⚑</span>
+        <span class="sh-bell-badge hidden" id="shBellBadge">0</span>
+      </button>
+    </div>
   </header>
 
-  <!-- Mobile sidebar overlay -->
-  <div class="sidebar-overlay hidden" id="sidebarOverlay"></div>
+  <!-- 2. Today Strip: 5 live metrics -->
+  <div class="today-strip" id="todayStrip">
+    <div class="ts-item ts-clickable" id="tsNewLeads" onclick="Shell.switchTab('leads')" title="לידים חדשים">
+      <span class="ts-val" id="tsNewLeadsVal">—</span>
+      <span class="ts-label">לידים חדשים</span>
+    </div>
+    <div class="ts-sep"></div>
+    <div class="ts-item ts-clickable ts-amber" id="tsApprovals" onclick="Shell.switchTab('approvals')" title="ממתין לאישור">
+      <span class="ts-val" id="tsApprovalsVal">—</span>
+      <span class="ts-label">ממתין אישור</span>
+    </div>
+    <div class="ts-sep"></div>
+    <div class="ts-item ts-clickable ts-blue" id="tsManualQueue" onclick="Shell.switchTab('queue')" title="שליחה ידנית">
+      <span class="ts-val" id="tsManualVal">—</span>
+      <span class="ts-label">לשליחה ידנית</span>
+    </div>
+    <div class="ts-sep"></div>
+    <div class="ts-item ts-clickable" id="tsFollowup" onclick="Shell.switchTab('queue')" title="מעקב דחוף">
+      <span class="ts-val" id="tsFollowupVal">—</span>
+      <span class="ts-label">מעקב ממתין</span>
+    </div>
+    <div class="ts-sep"></div>
+    <div class="ts-item ts-green" id="tsPipeline" title="שווי צנרת">
+      <span class="ts-val" id="tsPipelineVal">—</span>
+      <span class="ts-label">צנרת</span>
+    </div>
+  </div>
 
-  <!-- Sidebar -->
-  <nav class="sidebar">
-    <div id="sideNav"></div>
-  </nav>
+  <!-- 3. Command Result Bar (appears after command runs) -->
+  <div class="cmd-result-bar hidden" id="cmdResultBar">
+    <span class="cmd-result-icon" id="cmdResultIcon">✅</span>
+    <span class="cmd-result-text" id="cmdResultText"></span>
+    <button class="cmd-result-close" onclick="Shell.closeCmdResult()">✕</button>
+  </div>
 
-  <!-- Main content area -->
-  <main class="main">
-    <!-- Home (daily work surface) -->
-    <div id="panel-home"          class="panel"></div>
+  <!-- 4. Console Body: work surface + intel rail -->
+  <div class="console-body">
 
-    <!-- CRM & Revenue screens -->
-    <div id="panel-dashboard"       class="panel"></div>
-    <div id="panel-leads"           class="panel"></div>
-    <div id="panel-crm"             class="panel"></div>
-    <div id="panel-clients"         class="panel"></div>
-    <div id="panel-revenue"         class="panel"></div>
-    <div id="panel-calendar"        class="panel"></div>
-    <div id="panel-briefing"        class="panel"></div>
+    <!-- Main work surface -->
+    <section class="work-surface">
+      <div class="work-tabs" id="workTabs">
+        <button class="wt active" data-tab="leads">👥 לידים</button>
+        <button class="wt" data-tab="approvals">⚑ אישורים</button>
+        <button class="wt" data-tab="queue">📤 תור שליחה</button>
+        <button class="wt" data-tab="growth">📣 צמיחה</button>
+      </div>
+      <div class="work-pane" id="workPane">
+        <div class="work-loading">טוען...</div>
+      </div>
+    </section>
 
-    <!-- Operations screens -->
-    <div id="panel-tasks"           class="panel"></div>
-    <div id="panel-communications"  class="panel"></div>
-    <div id="panel-approvals"       class="panel"></div>
-    <div id="panel-pipeline"        class="panel"></div>
+    <!-- Intelligence rail (desktop only) -->
+    <aside class="intel-rail" id="intelRail">
+      <div class="ir-section">
+        <div class="ir-title">⚡ פעילות סוכנים</div>
+        <div id="irAgents"><div class="ir-loading">טוען...</div></div>
+      </div>
+      <div class="ir-section">
+        <div class="ir-title">🧠 אותות למידה</div>
+        <div id="irLearning"><div class="ir-loading">טוען...</div></div>
+      </div>
+      <div class="ir-section">
+        <div class="ir-title">📡 ערוצי תקשורת</div>
+        <div id="irChannels"><div class="ir-loading">טוען...</div></div>
+      </div>
+    </aside>
 
-    <!-- System screens -->
-    <div id="panel-agents"          class="panel"></div>
-    <div id="panel-goals"           class="panel"></div>
-    <div id="panel-reports"         class="panel"></div>
-    <div id="panel-seo"             class="panel"></div>
-    <div id="panel-settings"        class="panel"></div>
+  </div>
 
-    <!-- Lead Acquisition OS -->
-    <div id="panel-lead-ops"        class="panel"></div>
+  <!-- 5. Mobile intel bottom sheet -->
+  <div class="intel-sheet hidden" id="intelSheet">
+    <div class="is-handle" onclick="Shell.closeIntelSheet()"></div>
+    <div class="is-content">
+      <div class="ir-section"><div class="ir-title">⚡ פעילות</div><div id="isAgents"></div></div>
+      <div class="ir-section"><div class="ir-title">🧠 למידה</div><div id="isLearning"></div></div>
+      <div class="ir-section"><div class="ir-title">📡 ערוצים</div><div id="isChannels"></div></div>
+    </div>
+  </div>
 
-    <!-- Legacy screens kept for compatibility -->
-    <div id="panel-cmd"             class="panel"></div>
-  </main>
-
-  <!-- Mobile bottom navigation (hidden on desktop via CSS) -->
+  <!-- 6. Bottom navigation (mobile only) -->
   <nav class="bottom-nav" id="bottomNav">
-    <button class="bottom-nav-item active" id="bnavHome" onclick="App.switchTo('home')">
-      <span class="bnav-icon">🏠</span><span class="bnav-label">בית</span>
+    <button class="bn-item active" data-tab="leads" onclick="Shell.switchTab('leads')">
+      <span class="bn-icon">👥</span><span class="bn-label">לידים</span>
     </button>
-    <button class="bottom-nav-item" id="bnavLeads" onclick="App.switchTo('leads')">
-      <span class="bnav-icon">👥</span><span class="bnav-label">לידים</span>
+    <button class="bn-item" data-tab="approvals" onclick="Shell.switchTab('approvals')">
+      <span class="bn-icon">⚑</span>
+      <span class="bn-badge hidden" id="bnBadge">0</span>
+      <span class="bn-label">אישורים</span>
     </button>
-    <button class="bottom-nav-item" id="bnavApprovals" onclick="App.switchTo('approvals')">
-      <span class="bnav-icon">⚑</span><span class="bnav-label">אישורים</span>
+    <button class="bn-item" data-tab="queue" onclick="Shell.switchTab('queue')">
+      <span class="bn-icon">📤</span><span class="bn-label">תור</span>
     </button>
-    <button class="bottom-nav-item" id="bnavRevenue" onclick="App.switchTo('revenue')">
-      <span class="bnav-icon">💰</span><span class="bnav-label">הכנסות</span>
+    <button class="bn-item" data-tab="growth" onclick="Shell.switchTab('growth')">
+      <span class="bn-icon">📣</span><span class="bn-label">צמיחה</span>
     </button>
-    <button class="bottom-nav-item" id="bnavCmd" onclick="App.switchTo('cmd')">
-      <span class="bnav-icon">⌨</span><span class="bnav-label">פקודות</span>
+    <button class="bn-item" id="bnIntel" onclick="Shell.toggleIntelSheet()">
+      <span class="bn-icon">🧠</span><span class="bn-label">מודיעין</span>
     </button>
   </nav>
 
 </div>
 
-<!-- ── Scripts ────────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=p22"></script>
-<script src="/ui/js/components/toast.js?v=p22"></script>
-<script src="/ui/js/components/ui.js?v=p22"></script>
-<script src="/ui/js/components/upload_modal.js?v=p22"></script>
-<script src="/ui/js/components/draft_modal.js?v=p22"></script>
-
-<!-- Home panel (first) -->
-<script src="/ui/js/panels/home.js?v=p22"></script>
-
-<!-- CRM & Revenue panels -->
-<script src="/ui/js/panels/dashboard.js?v=p22"></script>
-<script src="/ui/js/panels/leads.js?v=p22"></script>
-<script src="/ui/js/panels/crm.js?v=p22"></script>
-<script src="/ui/js/panels/clients.js?v=p22"></script>
-<script src="/ui/js/panels/revenue.js?v=p22"></script>
-<script src="/ui/js/panels/calendar.js?v=p22"></script>
-<script src="/ui/js/panels/briefing.js?v=p22"></script>
-
-<!-- Operations panels -->
-<script src="/ui/js/panels/tasks.js?v=p22"></script>
-<script src="/ui/js/panels/communications.js?v=p22"></script>
-<script src="/ui/js/panels/approvals.js?v=p22"></script>
-<script src="/ui/js/panels/pipeline.js?v=p22"></script>
-
-<!-- System panels -->
-<script src="/ui/js/panels/agents.js?v=p22"></script>
-<script src="/ui/js/panels/goals.js?v=p22"></script>
-<script src="/ui/js/panels/reports.js?v=p22"></script>
-<script src="/ui/js/panels/seo.js?v=p22"></script>
-<script src="/ui/js/panels/settings.js?v=p22"></script>
-
-<!-- Lead Acquisition OS panel -->
-<script src="/ui/js/panels/lead_ops.js?v=p22"></script>
-
-<!-- Legacy panels -->
-<script src="/ui/js/panels/command.js?v=p22"></script>
-
-<script src="/ui/js/app.js?v=p22"></script>
+<!-- ── Scripts ────────────────────────────────────────────────────── -->
+<script src="/ui/js/api.js?v=p23"></script>
+<script src="/ui/js/components/toast.js?v=p23"></script>
+<script src="/ui/js/components/ui.js?v=p23"></script>
+<script src="/ui/js/components/upload_modal.js?v=p23"></script>
+<script src="/ui/js/components/draft_modal.js?v=p23"></script>
+<script src="/ui/js/shell.js?v=p23"></script>
+<script src="/ui/js/panels/console.js?v=p23"></script>
 
 </body>
 </html>
