@@ -19,7 +19,7 @@ const Console = (() => {
     const el = _el();
     if (!el) return;
     el.innerHTML = `<div class="work-loading"><div class="wl-spinner"></div></div>`;
-    const fn = { leads: _leads, approvals: _approvals, queue: _queue, growth: _growth }[tabId];
+    const fn = { leads: _leads, approvals: _approvals, queue: _queue, growth: _growth, meetings: _meetings }[tabId];
     if (fn) fn(el);
   }
 
@@ -255,8 +255,8 @@ const Console = (() => {
                 onclick="DraftModal && DraftModal.open({id:'${esc(l.id)}',name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}',score:${score}},null)"
                 title="נסח ושלח">✉</button>
               <button class="btn btn-xs btn-ghost"
-                onclick="Console._setStatus('${esc(l.id)}','contacted')"
-                title="סמן כנשלח">✓</button>
+                onclick="Console._markSent('${esc(l.id)}','${esc(l.name)}')"
+                title="סמן כנשלח + קבע מעקב">✓</button>
             </div>`;
           }).join('')
         : _empty('תור שליחה ריק — יבוא לידים כדי להתחיל');
@@ -415,6 +415,124 @@ const Console = (() => {
     }
   }
 
+  // ── TAB 5: Meetings / Calendar ────────────────────────────────────────────
+  async function _meetings(el) {
+    el.innerHTML = `<div class="work-loading"><div class="wl-spinner"></div></div>`;
+    try {
+      const [planRes, weekRes] = await Promise.all([
+        API.dailyPlan().catch(() => ({ success: false })),
+        API.weeklyCalendar().catch(() => ({ success: false })),
+      ]);
+
+      const plan        = planRes.success ? (planRes.data || {}) : {};
+      const items       = plan.priority_items || [];
+      const todayEvents = plan.todays_events  || [];
+      const pipeline    = plan.pipeline_value  || 0;
+      const week        = weekRes.success ? (weekRes.data || {}) : {};
+      const days        = week.days            || [];
+
+      // Today's priority actions
+      const priorityHtml = items.length
+        ? items.slice(0, 6).map(it => `
+          <div class="meet-item">
+            <div class="meet-item-info">
+              <div class="meet-name">${esc(it.lead_name || it.title || '—')}</div>
+              <div class="meet-meta muted">${esc(it.action || it.reason || '')} ${it.deal_value ? '· ' + ils(it.deal_value) : ''}</div>
+            </div>
+            <div class="meet-actions">
+              <button class="btn btn-xs btn-primary"
+                onclick="DraftModal && DraftModal.open({id:'${esc(it.lead_id||'')}',name:'${esc(it.lead_name||it.title||'')}'},'meeting_request')"
+                title="בקש פגישה">📅</button>
+              <button class="btn btn-xs btn-ghost"
+                onclick="Console._logCall('${esc(it.lead_id||'')}','${esc(it.lead_name||it.title||'')}')"
+                title="רשום שיחה">📞</button>
+            </div>
+          </div>`).join('')
+        : _empty('אין פריטי עדיפות להיום',
+            `<button class="btn btn-ghost btn-sm" onclick="Shell.switchTab('queue')">📤 עבור לתור שליחה</button>`);
+
+      // Today's calendar events
+      const eventsHtml = todayEvents.length
+        ? todayEvents.map(ev => `
+          <div class="meet-event">
+            <span class="meet-event-time">${esc(ev.starts_at_il || ev.time || '')}</span>
+            <span class="meet-event-title">${esc(ev.title || ev.event_type || '—')}</span>
+            ${ev.location ? `<span class="muted meet-event-loc">· ${esc(ev.location)}</span>` : ''}
+          </div>`).join('')
+        : '<div class="muted" style="font-size:11px;padding:8px 0">אין אירועים מתוכננים להיום</div>';
+
+      // Weekly overview
+      const weekHtml = days.filter(d => d.events?.length).slice(0, 5).map(d => `
+        <div class="week-day">
+          <div class="week-day-label">${esc(d.weekday || d.date || '')}</div>
+          <div class="week-day-events">
+            ${(d.events || []).map(ev => `<div class="week-event">${esc(ev.title || ev.event_type || '—')}</div>`).join('')}
+          </div>
+        </div>`).join('') || '<div class="muted" style="font-size:11px">אין אירועים השבוע</div>';
+
+      // Schedule meeting form
+      const scheduleHtml = `
+        <div class="meet-schedule-form">
+          <div class="gd-label">➕ קבע מפגש</div>
+          <div class="meet-form-row">
+            <input class="gd-input" id="meetLeadId"   placeholder="מזהה ליד" dir="rtl" />
+            <input class="gd-input" id="meetTitle"    placeholder="נושא הפגישה" dir="rtl" />
+            <input class="gd-input" id="meetDate"     placeholder="תאריך ושעה (2026-04-20 10:00)" dir="ltr" />
+            <button class="btn btn-primary btn-sm" onclick="Console._scheduleMeeting()">קבע ✓</button>
+          </div>
+          <div id="meetScheduleResult" style="margin-top:6px"></div>
+        </div>`;
+
+      el.innerHTML = `
+        <div class="meetings-layout">
+          <div class="meetings-main">
+            <div class="ws-section-hd" style="margin-bottom:10px">
+              <span class="ws-section-title">📋 עדיפות היום</span>
+              ${pipeline ? `<span class="ls-chip ls-hot">צנרת ${ils(pipeline)}</span>` : ''}
+            </div>
+            <div class="meet-list">${priorityHtml}</div>
+            <div class="ws-section-title" style="margin:16px 0 8px">📅 יומן היום</div>
+            <div class="meet-events">${eventsHtml}</div>
+            ${scheduleHtml}
+          </div>
+          <div class="meetings-side">
+            <div class="ws-section-title" style="margin-bottom:8px">📆 השבוע</div>
+            <div class="week-overview">${weekHtml}</div>
+          </div>
+        </div>`;
+    } catch (e) {
+      el.innerHTML = _section('מפגשים', _empty(`שגיאה: ${e.message || e}`));
+    }
+  }
+
+  async function _scheduleMeeting() {
+    const leadId  = document.getElementById('meetLeadId')?.value.trim();
+    const title   = document.getElementById('meetTitle')?.value.trim();
+    const date    = document.getElementById('meetDate')?.value.trim();
+    const res_el  = document.getElementById('meetScheduleResult');
+    if (!leadId || !title || !date) { if (res_el) res_el.innerHTML = '<span class="muted">נא למלא כל השדות</span>'; return; }
+    try {
+      const res = await API.createCalEvent({ lead_id: leadId, title, starts_at_il: date, event_type: 'meeting' });
+      if (res.success || res.data?.event_id) {
+        Toast.success('מפגש נקבע ✓');
+        if (res_el) res_el.innerHTML = '<span style="color:var(--green)">✓ נשמר</span>';
+        document.getElementById('meetLeadId').value = '';
+        document.getElementById('meetTitle').value  = '';
+        document.getElementById('meetDate').value   = '';
+      } else {
+        if (res_el) res_el.innerHTML = `<span style="color:var(--red)">${esc(res.error || 'שגיאה')}</span>`;
+      }
+    } catch (e) { if (res_el) res_el.innerHTML = `<span style="color:var(--red)">${esc(e.message || String(e))}</span>`; }
+  }
+
+  async function _logCall(leadId, leadName) {
+    if (!leadId) { Toast.error('חסר מזהה ליד'); return; }
+    try {
+      await API.logActivity(leadId, { activity_type: 'call', subject: `שיחה עם ${leadName}`, outcome: 'completed', performed_by: 'owner' });
+      Toast.success('שיחה נרשמה ✓');
+    } catch (e) { Toast.error('שגיאה ברישום שיחה'); }
+  }
+
   async function _analyzeWebsite() {
     const input  = document.getElementById('growthWebsiteInput');
     const btn    = document.getElementById('growthWebsiteBtn');
@@ -496,6 +614,27 @@ const Console = (() => {
     setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 50);
   }
 
+  async function _markSent(id, name) {
+    try {
+      await API.updateLead(id, { status: 'contacted' });
+      Toast.success(`${name || 'ליד'} — סומן כנשלח ✓`);
+      Console.reload('queue');
+      Console.reload('leads');
+      // Prompt: schedule follow-up
+      if (id) {
+        setTimeout(() => {
+          if (confirm(`לקבוע מעקב עם ${name || 'הליד'}?`)) {
+            Shell.switchTab('meetings');
+            setTimeout(() => {
+              const el = document.getElementById('meetLeadId');
+              if (el) { el.value = id; el.focus(); }
+            }, 400);
+          }
+        }, 300);
+      }
+    } catch (e) { Toast.error(`שגיאה: ${e.message || e}`); }
+  }
+
   async function _setStatus(id, status) {
     try {
       const res = await API.updateLead(id, { status });
@@ -507,5 +646,5 @@ const Console = (() => {
     } catch (e) { Toast.error(`שגיאה: ${e.message || e}`); }
   }
 
-  return { render, reload, _approve, _deny, _discover, _analyzeWebsite, _showLeadMenu, _setStatus };
+  return { render, reload, _approve, _deny, _discover, _analyzeWebsite, _scheduleMeeting, _logCall, _markSent, _showLeadMenu, _setStatus };
 })();

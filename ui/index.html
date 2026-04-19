@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>AshbelOS — Operating Console</title>
-  <link rel="stylesheet" href="/ui/css/app.css?v=p24" />
+  <link rel="stylesheet" href="/ui/css/app.css?v=p25" />
 </head>
 <body>
 
@@ -58,21 +58,6 @@
   </div>
 </div>
 
-<!-- ── Draft Modal ────────────────────────────────────────────────── -->
-<div class="modal-overlay hidden" id="draftModal">
-  <div class="dm-modal">
-    <div class="dm-header">
-      <div class="dm-title" id="dmTitle">טיוטת פנייה</div>
-      <button class="btn btn-ghost" style="font-size:12px" onclick="DraftModal.close()">✕</button>
-    </div>
-    <div class="dm-body" id="dmBody">
-      <div class="dm-loading" id="dmLoading" style="display:none"><div class="um-spinner"></div><div>מכין טיוטה...</div></div>
-      <div class="dm-content" id="dmContent"></div>
-    </div>
-    <div class="dm-footer" id="dmFooter"></div>
-  </div>
-</div>
-
 <!-- ── Operating Console Shell ────────────────────────────────────── -->
 <div class="os-shell" id="osShell">
 
@@ -93,7 +78,7 @@
       <button class="sh-cmd-btn" id="shCmdRun" title="הפעל פקודה">↵</button>
     </div>
     <div class="sh-header-actions">
-      <button class="sh-action-btn" onclick="UploadModal.open()" title="יבוא קובץ">📂</button>
+      <button class="sh-action-btn" onclick="UploadModal.open()" title="יבוא קובץ / מסמך">📂</button>
       <button class="sh-action-btn sh-bell" id="shBell" title="אישורים ממתינים">
         <span>⚑</span>
         <span class="sh-bell-badge hidden" id="shBellBadge">0</span>
@@ -101,7 +86,17 @@
     </div>
   </header>
 
-  <!-- 2. Today Strip: 5 live metrics -->
+  <!-- 2. Quick command chips -->
+  <div class="cmd-chips" id="cmdChips">
+    <button class="cmd-chip" onclick="Shell.runChip('לידים חמים')">🔥 לידים חמים</button>
+    <button class="cmd-chip" onclick="Shell.switchTab('queue')">📤 תור שליחה</button>
+    <button class="cmd-chip" onclick="Shell.switchTab('meetings')">📅 מפגשים היום</button>
+    <button class="cmd-chip" onclick="Shell.switchTab('approvals')">⚑ אישורים</button>
+    <button class="cmd-chip" onclick="Shell.runChip('תוכנית שיווק שבועית')">📣 שיווק</button>
+    <button class="cmd-chip" onclick="UploadModal.open()">📂 יבוא מסמך</button>
+  </div>
+
+  <!-- 3. Today Strip: 5 live metrics -->
   <div class="today-strip" id="todayStrip">
     <div class="ts-item ts-clickable" id="tsNewLeads" onclick="Shell.switchTab('leads')" title="לידים חדשים">
       <span class="ts-val" id="tsNewLeadsVal">—</span>
@@ -118,25 +113,25 @@
       <span class="ts-label">לשליחה ידנית</span>
     </div>
     <div class="ts-sep"></div>
-    <div class="ts-item ts-clickable" id="tsFollowup" onclick="Shell.switchTab('queue')" title="מעקב דחוף">
+    <div class="ts-item ts-clickable" id="tsFollowup" onclick="Shell.switchTab('meetings')" title="מפגשים היום">
       <span class="ts-val" id="tsFollowupVal">—</span>
-      <span class="ts-label">מעקב ממתין</span>
+      <span class="ts-label">מפגשים</span>
     </div>
     <div class="ts-sep"></div>
-    <div class="ts-item ts-green" id="tsPipeline" title="שווי צנרת">
+    <div class="ts-item ts-green" id="tsPipeline" onclick="Shell.switchTab('meetings')" style="cursor:pointer" title="שווי צנרת">
       <span class="ts-val" id="tsPipelineVal">—</span>
       <span class="ts-label">צנרת</span>
     </div>
   </div>
 
-  <!-- 3. Command Result Bar (appears after command runs) -->
+  <!-- 4. Command Result Bar (appears after command runs) -->
   <div class="cmd-result-bar hidden" id="cmdResultBar">
     <span class="cmd-result-icon" id="cmdResultIcon">✅</span>
     <span class="cmd-result-text" id="cmdResultText"></span>
     <button class="cmd-result-close" onclick="Shell.closeCmdResult()">✕</button>
   </div>
 
-  <!-- 4. Console Body: work surface + intel rail -->
+  <!-- 5. Console Body: work surface + intel rail -->
   <div class="console-body">
 
     <!-- Main work surface -->
@@ -145,6 +140,7 @@
         <button class="wt active" data-tab="leads">👥 לידים</button>
         <button class="wt" data-tab="approvals">⚑ אישורים</button>
         <button class="wt" data-tab="queue">📤 תור שליחה</button>
+        <button class="wt" data-tab="meetings">📅 מפגשים</button>
         <button class="wt" data-tab="growth">📣 צמיחה</button>
       </div>
       <div class="work-pane" id="workPane">
@@ -159,8 +155,12 @@
         <div id="irAgents"><div class="ir-loading">טוען...</div></div>
       </div>
       <div class="ir-section">
-        <div class="ir-title">🧠 אותות למידה</div>
+        <div class="ir-title">🧠 עדיפות + למידה</div>
         <div id="irLearning"><div class="ir-loading">טוען...</div></div>
+      </div>
+      <div class="ir-section">
+        <div class="ir-title">📱 פעילות טלגרם</div>
+        <div id="irTelegram"><div class="ir-loading">טוען...</div></div>
       </div>
       <div class="ir-section">
         <div class="ir-title">📡 ערוצי תקשורת</div>
@@ -174,17 +174,18 @@
 
   </div>
 
-  <!-- 5. Mobile intel bottom sheet -->
+  <!-- 6. Mobile intel bottom sheet -->
   <div class="intel-sheet hidden" id="intelSheet">
     <div class="is-handle" onclick="Shell.closeIntelSheet()"></div>
     <div class="is-content">
+      <div class="ir-section"><div class="ir-title">⭐ עדיפות + למידה</div><div id="isLearning"></div></div>
       <div class="ir-section"><div class="ir-title">⚡ פעילות</div><div id="isAgents"></div></div>
-      <div class="ir-section"><div class="ir-title">🧠 למידה</div><div id="isLearning"></div></div>
+      <div class="ir-section"><div class="ir-title">📱 טלגרם</div><div id="isTelegram"></div></div>
       <div class="ir-section"><div class="ir-title">📡 ערוצים</div><div id="isChannels"></div></div>
     </div>
   </div>
 
-  <!-- 6. Bottom navigation (mobile only) -->
+  <!-- 7. Bottom navigation (mobile only) -->
   <nav class="bottom-nav" id="bottomNav">
     <button class="bn-item active" data-tab="leads" onclick="Shell.switchTab('leads')">
       <span class="bn-icon">👥</span><span class="bn-label">לידים</span>
@@ -197,8 +198,8 @@
     <button class="bn-item" data-tab="queue" onclick="Shell.switchTab('queue')">
       <span class="bn-icon">📤</span><span class="bn-label">תור</span>
     </button>
-    <button class="bn-item" data-tab="growth" onclick="Shell.switchTab('growth')">
-      <span class="bn-icon">📣</span><span class="bn-label">צמיחה</span>
+    <button class="bn-item" data-tab="meetings" onclick="Shell.switchTab('meetings')">
+      <span class="bn-icon">📅</span><span class="bn-label">מפגשים</span>
     </button>
     <button class="bn-item" id="bnIntel" onclick="Shell.toggleIntelSheet()">
       <span class="bn-icon">🧠</span><span class="bn-label">מודיעין</span>
@@ -208,13 +209,13 @@
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=p24"></script>
-<script src="/ui/js/components/toast.js?v=p24"></script>
-<script src="/ui/js/components/ui.js?v=p24"></script>
-<script src="/ui/js/components/upload_modal.js?v=p24"></script>
-<script src="/ui/js/components/draft_modal.js?v=p24"></script>
-<script src="/ui/js/shell.js?v=p24"></script>
-<script src="/ui/js/panels/console.js?v=p24"></script>
+<script src="/ui/js/api.js?v=p25"></script>
+<script src="/ui/js/components/toast.js?v=p25"></script>
+<script src="/ui/js/components/ui.js?v=p25"></script>
+<script src="/ui/js/components/upload_modal.js?v=p25"></script>
+<script src="/ui/js/components/draft_modal.js?v=p25"></script>
+<script src="/ui/js/shell.js?v=p25"></script>
+<script src="/ui/js/panels/console.js?v=p25"></script>
 
 </body>
 </html>

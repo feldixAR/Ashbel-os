@@ -97,6 +97,17 @@ const Shell = (() => {
     btn.addEventListener('click', _run);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') _run(); });
     bell.addEventListener('click', () => switchTab('approvals'));
+
+    // Expose runChip for quick-command chips
+    window._shellRunCmd = _run;
+  }
+
+  async function runChip(cmd) {
+    const input = document.getElementById('shCmdInput');
+    if (!input) return;
+    input.value = cmd;
+    input.focus();
+    if (window._shellRunCmd) window._shellRunCmd();
   }
 
   function _showCmdResult(type, msg) {
@@ -195,6 +206,7 @@ const Shell = (() => {
     await Promise.all([
       _loadIntelAgents(),
       _loadIntelLearning(),
+      _loadTelegramActivity(),
       _loadIntelChannels(),
       _loadSystemChanges(),
     ]);
@@ -277,6 +289,25 @@ const Shell = (() => {
     } catch (_) {}
   }
 
+  async function _loadTelegramActivity() {
+    const elDesktop = document.getElementById('irTelegram');
+    const elMobile  = document.getElementById('isTelegram');
+    try {
+      const res   = await API.get('/admin/usage');
+      const usage = res.data || res.usage || {};
+      const rows  = [];
+      if (usage.telegram_inbound != null)
+        rows.push(`<div class="ir-item"><span class="ir-item-icon">📥</span><div class="ir-item-text"><div class="ir-item-title">הודעות נכנסות</div><div class="ir-item-sub">${usage.telegram_inbound} היום</div></div></div>`);
+      if (usage.leads_created != null)
+        rows.push(`<div class="ir-item"><span class="ir-item-icon">👤</span><div class="ir-item-text"><div class="ir-item-title">לידים נוצרו</div><div class="ir-item-sub">${usage.leads_created} היום</div></div></div>`);
+      if (usage.approvals_resolved != null)
+        rows.push(`<div class="ir-item"><span class="ir-item-icon">✓</span><div class="ir-item-text"><div class="ir-item-title">אישורים טופלו</div><div class="ir-item-sub">${usage.approvals_resolved} היום</div></div></div>`);
+      const html = rows.length ? rows.join('') : '<div class="ir-empty">אין פעילות טלגרם היום</div>';
+      if (elDesktop) elDesktop.innerHTML = html;
+      if (elMobile)  elMobile.innerHTML  = html;
+    } catch (_) {}
+  }
+
   async function _loadSystemChanges() {
     const elDesktop = document.getElementById('irChanges');
     if (!elDesktop) return;
@@ -320,7 +351,7 @@ const Shell = (() => {
   // Expose strip refresh for external callers (DraftModal, Console post-approve)
   function refreshTodayStrip() { return _refreshTodayStrip(); }
 
-  return { init, switchTab, currentTab, closeCmdResult, toggleIntelSheet, closeIntelSheet, refreshTodayStrip };
+  return { init, switchTab, currentTab, closeCmdResult, toggleIntelSheet, closeIntelSheet, refreshTodayStrip, runChip };
 })();
 
 document.addEventListener('DOMContentLoaded', Shell.init);

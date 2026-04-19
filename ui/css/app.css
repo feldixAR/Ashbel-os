@@ -3822,3 +3822,132 @@ tr:hover .lead-action-row { opacity: 1; }
   .leads-stats-row { gap: 6px; }
   .ls-chip { font-size: 10px; padding: 2px 8px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   p25 — Meetings, Telegram, Quick Chips, Profile Badge Mobile
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Quick command chips ─────────────────────────────────────────── */
+.cmd-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--base);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cmd-chips::-webkit-scrollbar { display: none; }
+.cmd-chip {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, border-color .15s;
+  font-family: var(--sans);
+}
+.cmd-chip:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ── Meetings / Calendar surface ─────────────────────────────────── */
+.meetings-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  padding: 16px;
+}
+@media (max-width: 900px) { .meetings-layout { grid-template-columns: 1fr; } }
+
+.meetings-main { min-width: 0; }
+.meetings-side { min-width: 0; }
+
+.meet-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.meet-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.meet-item:hover { border-color: var(--accent); }
+.meet-item-info { flex: 1; min-width: 0; }
+.meet-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meet-meta { font-size: 11px; margin-top: 2px; }
+.meet-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.meet-events { display: flex; flex-direction: column; gap: 6px; }
+.meet-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-right: 3px solid var(--accent);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.meet-event-time { font-family: var(--mono); font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.meet-event-title { font-weight: 600; flex: 1; }
+.meet-event-loc { font-size: 10px; }
+
+.meet-schedule-form {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.meet-form-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.meet-form-row .gd-input { flex: 1; min-width: 140px; }
+
+.week-overview { display: flex; flex-direction: column; gap: 10px; }
+.week-day { }
+.week-day-label { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.week-day-events { display: flex; flex-direction: column; gap: 3px; }
+.week-event {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Profile badge: restore on mobile (smaller) ──────────────────── */
+@media (max-width: 640px) {
+  .sh-profile-badge {
+    display: flex !important;
+    padding: 0 6px;
+  }
+  .sh-profile-name { font-size: 10px; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sh-profile-dot { width: 5px; height: 5px; }
+
+  /* Meetings surface: single col on mobile */
+  .meetings-layout { padding: 10px; gap: 12px; }
+  .meet-form-row { flex-direction: column; }
+  .meet-form-row .gd-input { min-width: unset; }
+
+  /* Quick chips: tighter on mobile */
+  .cmd-chips { padding: 5px 10px; gap: 5px; }
+  .cmd-chip { padding: 4px 10px; font-size: 10px; }
+}
