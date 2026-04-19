@@ -294,14 +294,18 @@ const Shell = (() => {
     const elMobile  = document.getElementById('isTelegram');
     try {
       const res   = await API.get('/admin/usage');
-      const usage = res.data || res.usage || {};
+      const usage = res.data || {};
       const rows  = [];
-      if (usage.telegram_inbound != null)
-        rows.push(`<div class="ir-item"><span class="ir-item-icon">📥</span><div class="ir-item-text"><div class="ir-item-title">הודעות נכנסות</div><div class="ir-item-sub">${usage.telegram_inbound} היום</div></div></div>`);
-      if (usage.leads_created != null)
-        rows.push(`<div class="ir-item"><span class="ir-item-icon">👤</span><div class="ir-item-text"><div class="ir-item-title">לידים נוצרו</div><div class="ir-item-sub">${usage.leads_created} היום</div></div></div>`);
+      if (usage.total_actions != null)
+        rows.push(`<div class="ir-item"><span class="ir-item-icon">⚡</span><div class="ir-item-text"><div class="ir-item-title">פעולות סה"כ</div><div class="ir-item-sub">${usage.total_actions} היום</div></div></div>`);
       if (usage.approvals_resolved != null)
         rows.push(`<div class="ir-item"><span class="ir-item-icon">✓</span><div class="ir-item-text"><div class="ir-item-title">אישורים טופלו</div><div class="ir-item-sub">${usage.approvals_resolved} היום</div></div></div>`);
+      const outCh = Object.keys(usage.outreach || {});
+      if (outCh.length)
+        rows.push(`<div class="ir-item"><span class="ir-item-icon">📤</span><div class="ir-item-text"><div class="ir-item-title">פנייה יצאה</div><div class="ir-item-sub">${outCh.join(', ')}</div></div></div>`);
+      const actTypes = Object.keys(usage.activities || {});
+      if (actTypes.length)
+        rows.push(`<div class="ir-item"><span class="ir-item-icon">📞</span><div class="ir-item-text"><div class="ir-item-title">פעילות CRM</div><div class="ir-item-sub">${actTypes.join(', ')}</div></div></div>`);
       const html = rows.length ? rows.join('') : '<div class="ir-empty">אין פעילות טלגרם היום</div>';
       if (elDesktop) elDesktop.innerHTML = html;
       if (elMobile)  elMobile.innerHTML  = html;

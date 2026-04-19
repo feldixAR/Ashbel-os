@@ -319,8 +319,8 @@ const Console = (() => {
       const recs     = mktRes.success ? (mktRes.data?.recommendations || []) : [];
       const drafts   = mktRes.success ? (mktRes.data?.post_drafts || []) : [];
       const channels = chanRes.success ? (chanRes.data?.channels || []) : [];
-      const seoMeta  = seoMetaRes.success ? (seoMetaRes.data?.meta_descriptions || seoMetaRes.data || {}) : {};
-      const seoCities= seoCitiesRes.success ? (seoCitiesRes.data?.city_pages || seoCitiesRes.data || []) : [];
+      const seoMeta  = seoMetaRes.success ? (seoMetaRes.data?.meta || seoMetaRes.data?.meta_descriptions || {}) : {};
+      const seoCities= seoCitiesRes.success ? (seoCitiesRes.data?.pages || seoCitiesRes.data?.city_pages || []) : [];
 
       // Marketing recommendations
       const recsHtml = recs.length
@@ -550,8 +550,15 @@ const Console = (() => {
         return;
       }
       const d = res.data || res;
-      const insights = d.insights || d.analysis || d.message || 'הניתוח הושלם';
-      res_el.innerHTML = `<div class="appr-preview" style="font-size:11px">${esc(String(insights).slice(0, 400))}</div>`;
+      const plan = d.priority_plan || [];
+      const seoRecs = d.seo?.recommendations || d.seo?.issues || [];
+      const score = d.audit_score != null ? `ציון: ${d.audit_score}/100` : '';
+      const planHtml = Array.isArray(plan) && plan.length
+        ? plan.slice(0, 4).map(p => `<div>· ${esc(typeof p === 'string' ? p : p.action || p.title || JSON.stringify(p))}</div>`).join('')
+        : (Array.isArray(seoRecs) && seoRecs.length
+          ? seoRecs.slice(0, 4).map(r => `<div>· ${esc(typeof r === 'string' ? r : r.recommendation || JSON.stringify(r))}</div>`).join('')
+          : '<div>הניתוח הושלם — פרטים מלאים זמינים</div>');
+      res_el.innerHTML = `<div class="appr-preview" style="font-size:11px">${score ? `<strong>${esc(score)}</strong><br>` : ''}${planHtml}</div>`;
     } catch (e) {
       res_el.innerHTML = `<div class="ws-empty">שגיאה: ${esc(e.message || String(e))}</div>`;
     } finally {

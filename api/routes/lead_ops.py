@@ -314,7 +314,7 @@ def lead_brief(lead_id: str):
             "tone":         tone,
             "good_time_now": good_time,
             "best_send_window": send_window,
-            "timing_notes": timing.notes,
+            "timing_notes": timing.reason,
             "ai_summary":   ai_summary,
         })
     except Exception as e:
@@ -550,6 +550,9 @@ def refine_draft():
             priority="balanced",
             max_tokens=500,
         )
+        from routing.fallback_policy import FALLBACK_RESPONSE
+        if refined.strip().startswith("[שגיאה") or refined.strip() == FALLBACK_RESPONSE.strip():
+            return jsonify({"success": False, "error": "המודל אינו זמין כרגע — נסה שוב"}), 503
         return jsonify({"success": True, "body": refined.strip()})
     except Exception as e:
         log.error(f"[draft_refine] {e}", exc_info=True)
