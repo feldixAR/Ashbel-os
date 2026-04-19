@@ -23,6 +23,28 @@ from typing import Any
 from skills.israeli_context import get_hebrew_tone, is_good_timing, compliance_hints
 
 
+def _active_biz() -> str:
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business().name
+    except Exception:
+        return "החברה שלנו"
+
+def _active_domain() -> str:
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business().domain
+    except Exception:
+        return "עסק"
+
+def _active_products() -> str:
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business().products
+    except Exception:
+        return "מוצרים ושירותים"
+
+
 # ── Data contracts ────────────────────────────────────────────────────────────
 
 @dataclass
@@ -130,7 +152,9 @@ def draft_first_contact(lead: dict[str, Any], profile: dict[str, Any] | None = N
     name    = lead.get("name") or "שלום"
     company = lead.get("company") or ""
     city    = lead.get("city") or ""
-    biz     = p.get("name") or "אשבל אלומיניום"
+    biz     = p.get("name") or _active_biz()
+    domain  = _active_domain()
+    products = _active_products()
     segment = lead.get("segment") or ""
     tone    = get_hebrew_tone(segment)
     channel = choose_channel(lead)
@@ -141,13 +165,12 @@ def draft_first_contact(lead: dict[str, Any], profile: dict[str, Any] | None = N
     body = (
         f"שלום {name},\n\n"
         f"שמי [שם] מ{biz}.\n"
-        f"ראיתי את הפרויקטים שלך{company_note}{location_note} — "
+        f"ראיתי את הפעילות שלך{company_note}{location_note} — "
         f"מרשים מאוד!\n\n"
-        f"אנחנו מתמחים בפתרונות אלומיניום מותאמים אישית "
-        f"לאדריכלים וקבלנים{location_note}:\n"
-        f"✓ חלונות, דלתות ופרגולות\n"
-        f"✓ עיצוב על-פי הדרישות הספציפיות שלך\n"
-        f"✓ ניסיון של שנים עם פרויקטים בסדר גודל דומה\n\n"
+        f"אנחנו מתמחים ב{domain}{location_note}:\n"
+        f"✓ {products.split(',')[0].strip() if ',' in products else products}\n"
+        f"✓ שירות מותאם אישית לדרישות הספציפיות שלך\n"
+        f"✓ ניסיון עם לקוחות בסדר גודל דומה\n\n"
         f"האם יהיה לך נוח להחליף כמה מילים? 5 דקות שיחה יכולות להוביל לפתרון נכון.\n\n"
         f"תודה,\n[שם]\n{biz}"
     )
@@ -176,7 +199,7 @@ def draft_first_contact(lead: dict[str, Any], profile: dict[str, Any] | None = N
 def draft_followup(lead: dict[str, Any], previous: dict[str, Any] | None = None) -> MessageDraft:
     name    = lead.get("name") or "שלום"
     days    = previous.get("days_since") or 3 if previous else 3
-    biz     = "אשבל אלומיניום"
+    biz     = _active_biz()
     segment = lead.get("segment") or ""
     channel = choose_channel(lead)
     body = (
@@ -215,7 +238,7 @@ def draft_comment_reply(comment: dict[str, Any], lead: dict[str, Any] | None = N
     body = (
         f"היי {name},\n"
         f"ראיתי את הפוסט שלך — \"{short_post}\"\n\n"
-        f"זה בדיוק הסוג של פרויקטים שאנחנו ב-אשבל אלומיניום מתמחים בהם.\n"
+        f"זה בדיוק הסוג של עניינים ש{_active_biz()} מתמחה בהם.\n"
         f"אפשר לשלוח לך פרטים? (ת'עונה בפרטי אם נוח)"
     )
     return MessageDraft(
@@ -232,7 +255,7 @@ def draft_comment_reply(comment: dict[str, Any], lead: dict[str, Any] | None = N
 
 def draft_meeting_request(lead: dict[str, Any], profile: dict[str, Any] | None = None) -> MessageDraft:
     name = lead.get("name") or "שלום"
-    biz  = (profile or {}).get("name") or "אשבל אלומיניום"
+    biz  = (profile or {}).get("name") or _active_biz()
     timing = choose_timing(lead)
     body = (
         f"שלום {name},\n\n"

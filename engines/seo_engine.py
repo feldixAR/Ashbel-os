@@ -14,55 +14,71 @@ New class SEOEngine (Phase 9):
 """
 
 import logging
+import re
 from typing import List
-from config.settings import COMPANY_NAME
 
 log = logging.getLogger(__name__)
+
+
+def _p():
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business()
+    except Exception:
+        return None
+
+def _biz():
+    p = _p(); return p.name if p else "החברה שלנו"
+def _domain():
+    p = _p(); return p.domain if p else "עסק"
+def _products():
+    p = _p(); return p.products if p else "מוצרים ושירותים"
+def _targets():
+    p = _p(); return p.target_clients if p else "לקוחות"
+def _edge():
+    p = _p(); return p.competitive_edge if p else "איכות ומקצועיות"
+def _areas():
+    p = _p(); return p.service_areas if p else []
+def _keywords():
+    p = _p(); return p.site_keywords if p else []
+def _company_name():
+    try:
+        from config.settings import COMPANY_NAME
+        return COMPANY_NAME
+    except Exception:
+        return _biz()
 
 
 class SEOEngine:
 
     def generate_meta_descriptions(self) -> dict:
+        biz = _biz(); domain = _domain(); products = _products()
+        targets = _targets(); edge = _edge()
         return {
-            "home":     "אשבל אלומיניום – מפעל לייצור והתקנה של חלונות, דלתות ופרגולות. עובדים עם קבלנים ואדריכלים בכל הארץ.",
-            "products": "מערכות אלומיניום מקצועיות: חלונות בלגיים, מערכות הזזה, פרגולות וחיפויים. פתרונות לבנייה פרטית ומסחרית.",
-            "about":    "אשבל אלומיניום – מפעל בניצני עוז. ניסיון של שנים בביצוע פרויקטים מורכבים עם אדריכלים וקבלנים.",
-            "process":  "תהליך העבודה של אשבל אלומיניום: ממדידה ותכנון ועד ייצור, התקנה ומסירה. שירות מקצועי ואמין.",
-            "knowledge":"מרכז הידע של אשבל אלומיניום: מדריכים לבחירת חלונות, טיפים לתחזוקה ומידע מקצועי.",
-            "contact":  "צרו קשר עם אשבל אלומיניום לייעוץ טכני, הצעת מחיר או תיאום פגישה. זמינים לקבלנים ואדריכלים.",
+            "home":     f"{biz} – מתמחים ב{domain}. עובדים עם {targets} בכל הארץ.",
+            "products": f"מוצרי {domain}: {products}. פתרונות לבנייה פרטית ומסחרית.",
+            "about":    f"{biz} – {edge}. ניסיון של שנים בביצוע פרויקטים מורכבים.",
+            "process":  f"תהליך העבודה של {biz}: ממדידה ותכנון ועד ביצוע ומסירה. שירות מקצועי ואמין.",
+            "knowledge":f"מרכז הידע של {biz}: מדריכים, טיפים ומידע מקצועי על {domain}.",
+            "contact":  f"צרו קשר עם {biz} לייעוץ, הצעת מחיר או תיאום פגישה. זמינים ל{targets}.",
         }
 
     def generate_city_pages(self) -> list:
-        return [
-            {
-                "slug":     "aluminium-nes-ziona",
-                "title":    "אלומיניום נס ציונה | אשבל אלומיניום",
-                "h1":       "חלונות ודלתות אלומיניום בנס ציונה",
-                "content":  "אשבל אלומיניום מספק שירותי ייצור והתקנה של מערכות אלומיניום בנס ציונה והסביבה. עובדים עם קבלנים, אדריכלים ובונים פרטיים.",
-                "keywords": ["אלומיניום נס ציונה", "חלונות נס ציונה", "קבלן אלומיניום נס ציונה"],
-            },
-            {
-                "slug":     "aluminium-rehovot",
-                "title":    "אלומיניום רחובות | אשבל אלומיניום",
-                "h1":       "חלונות ודלתות אלומיניום ברחובות",
-                "content":  "אשבל אלומיניום – ספק מוביל למערכות אלומיניום באזור רחובות. חלונות בלגיים, מערכות הזזה ופרגולות.",
-                "keywords": ["אלומיניום רחובות", "חלונות רחובות", "פרגולה אלומיניום רחובות"],
-            },
-            {
-                "slug":     "aluminium-beer-sheva",
-                "title":    "אלומיניום באר שבע | אשבל אלומיניום",
-                "h1":       "מערכות אלומיניום בבאר שבע והנגב",
-                "content":  "פתרונות אלומיניום מקצועיים לאזור הדרום. אשבל אלומיניום מספק שירות לקבלנים ואדריכלים בבאר שבע וסביבתה.",
-                "keywords": ["אלומיניום באר שבע", "חלונות באר שבע", "קבלן אלומיניום דרום"],
-            },
-            {
-                "slug":     "aluminium-tel-aviv",
-                "title":    "אלומיניום תל אביב | אשבל אלומיניום",
-                "h1":       "חלונות ומערכות אלומיניום בתל אביב",
-                "content":  "אשבל אלומיניום מבצע פרויקטי אלומיניום בתל אביב והמרכז. מתמחים בבנייה מסחרית ופרטית.",
-                "keywords": ["אלומיניום תל אביב", "חלונות בלגיים תל אביב", "מערכות הזזה תל אביב"],
-            },
-        ]
+        biz = _biz(); domain = _domain()
+        areas = _areas() or ["תל אביב", "ירושלים", "חיפה"]
+        kws = _keywords()
+        pages = []
+        for city in areas[:8]:
+            slug = re.sub(r"[^\w]", "-", city.lower())
+            kw_local = [f"{k} {city}" for k in (kws[:2] if kws else [domain])]
+            pages.append({
+                "slug":     f"{slug}",
+                "title":    f"{domain} {city} | {biz}",
+                "h1":       f"שירותי {domain} ב{city}",
+                "content":  f"{biz} מספק שירותי {domain} ב{city} והסביבה. עובדים עם {_targets()}.",
+                "keywords": kw_local + [f"קבלן {domain} {city}"],
+            })
+        return pages
 
     def generate_blog_posts(self) -> list:
         return [
@@ -85,7 +101,7 @@ class SEOEngine:
                     "**טיפים לקבלת הצעת מחיר:**\n"
                     "בקשו הצעה הכוללת ייצור, התקנה ואחריות. "
                     "השוו בין ספקים שמציגים מפרט טכני מלא. "
-                    "אשבל אלומיניום מספק הצעות מחיר ללא התחייבות."
+                    f"{_biz()} מספק הצעות מחיר ללא התחייבות."
                 ),
             },
             {
@@ -105,7 +121,7 @@ class SEOEngine:
                     "**מה לבחור?**\n"
                     "לחדרי שינה וחדרי ילדים — חלון בלגי. "
                     "לסלון עם מרפסת או נוף — מערכת הזזה. "
-                    "אשבל אלומיניום ממליץ בהתאם לפתח ולצרכי המשפחה."
+                    f"{_biz()} ממליץ בהתאם לצרכים הספציפיים שלך."
                 ),
             },
             {
@@ -123,7 +139,7 @@ class SEOEngine:
                     "5. **יכולת ייצור מקומית** — ספק שמייצר בעצמו שולט באיכות\n"
                     "6. **תגובה מהירה** — ספק שלא עונה לפני חתימה לא יענה אחריה\n"
                     "7. **מחיר כולל** — ייצור + התקנה + פינוי פסולת\n\n"
-                    "אשבל אלומיניום: מפעל עצמאי, ניסיון בפרויקטים מורכבים, אחריות מלאה."
+                    f"{_biz()}: {_edge()}. אחריות מלאה."
                 ),
             },
         ]
@@ -221,52 +237,52 @@ def suggest_keywords(topic: str) -> List[str]:
         if category in topic_lower or topic_lower in category:
             base = kws.copy()
             base.append(f"{topic} ישראל")
-            base.append(f"{COMPANY_NAME}")
+            base.append(_biz())
             return base
 
     # Generic fallback
     return [
-        f"{topic} אלומיניום",
+        f"{topic} {_domain()}",
         f"{topic} לבית פרטי",
         f"{topic} ישראל",
-        "אלומיניום איכותי",
-        COMPANY_NAME,
+        _domain(),
+        _biz(),
     ]
 
 
 # ── Private builders ──────────────────────────────────────────────────────────
 
 def _build_title(topic: str, primary_kw: str) -> str:
-    title = f"{primary_kw} — {COMPANY_NAME} | מומחים לאלומיניום"
+    title = f"{primary_kw} — {_biz()} | מומחים ב{_domain()}"
     return title[:60] if len(title) > 60 else title
 
 
 def _build_meta_desc(topic: str, primary_kw: str) -> str:
-    desc = (f"{COMPANY_NAME} מתמחה ב{primary_kw}. "
-            f"חומרים איכותיים, ביצוע מקצועי, מחירים תחרותיים. "
+    desc = (f"{_biz()} מתמחה ב{primary_kw}. "
+            f"{_edge()}. "
             f"קבלו הצעת מחיר ללא התחייבות.")
     return desc[:155] if len(desc) > 155 else desc
 
 
 def _build_h1(topic: str) -> str:
-    return f"{topic} — {COMPANY_NAME}"
+    return f"{topic} — {_biz()}"
 
 
 def _build_outline(topic: str) -> list:
     return [
-        f"מהו {topic} ולמה זה חשוב לבית שלכם?",
+        f"מהו {topic} ולמה זה חשוב?",
         f"סוגי {topic} — מה ההבדלים?",
-        f"יתרונות אלומיניום על פני חומרים אחרים",
+        f"יתרונות {_domain()} על פני חומרים אחרים",
         f"כיצד בוחרים {topic} מקצועי?",
-        f"אשבל אלומיניום — הניסיון שלנו ב{topic}",
+        f"{_biz()} — הניסיון שלנו ב{topic}",
     ]
 
 
 def _build_intro(topic: str, primary_kw: str, kw_str: str) -> str:
     return (
         f"בחירת {primary_kw} היא החלטה חשובה שמשפיעה על המראה, "
-        f"הבידוד והערך של הנכס שלכם. "
-        f"ב-{COMPANY_NAME}, אנחנו מתמחים ב{kw_str} ומביאים ניסיון רב שנים "
+        f"האיכות והערך של הנכס שלכם. "
+        f"ב-{_biz()}, אנחנו מתמחים ב{kw_str} ומביאים ניסיון רב שנים "
         f"בביצוע פרויקטים מכל הסוגים — מבתים פרטיים ועד מבני מסחר. "
         f"במאמר זה נעזור לכם להבין מה חשוב לדעת לפני שמתחילים."
     )

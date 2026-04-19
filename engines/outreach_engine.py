@@ -151,7 +151,7 @@ def _send_email(task: OutreachTask) -> OutreachResult:
     if host and user and pwd and "@" in (to or ""):
         try:
             msg = MIMEMultipart("alternative")
-            msg["Subject"] = f"אשבל אלומיניום — {task.lead_name}"
+            msg["Subject"] = f"{_biz_name()} — {task.lead_name}"
             msg["From"]    = user
             msg["To"]      = to
             msg.attach(MIMEText(task.message, "plain", "utf-8"))

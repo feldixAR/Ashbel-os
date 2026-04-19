@@ -167,7 +167,7 @@ def build_ai_analysis(summary: dict) -> str:
         agents = summary.get("agents", {})
         tasks  = summary.get("tasks", {})
         user_prompt = (
-            f"נתח את נתוני המערכת הבאים של חברת אשבל אלומיניום:\n"
+            f"נתח את נתוני המערכת הבאים:\n"
             f"לידים: סה\"כ={leads.get('total',0)}, חמים={leads.get('hot',0)}, "
             f"ציון ממוצע={leads.get('avg_score',0)}\n"
             f"סוכנים פעילים: {agents.get('total',0)}\n"
