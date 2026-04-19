@@ -50,6 +50,11 @@ const Console = (() => {
     return `<span class="pill ${cls}">${lbl}</span>`;
   }
 
+  function _waPhone(phone) {
+    const digits = (phone || '').replace(/\D/g, '');
+    return digits.startsWith('0') ? '972' + digits.slice(1) : digits;
+  }
+
   function _section(title, content, actionHtml = '') {
     return `<div class="ws-section">
       <div class="ws-section-hd">
@@ -228,15 +233,19 @@ const Console = (() => {
             const score = Math.round(l.score || 0);
             const phone = l.phone || l.email || '';
             const ch    = l.phone ? 'WhatsApp' : l.email ? 'Email' : 'ידני';
+            const waBtnHtml = l.phone
+              ? `<a class="btn btn-xs btn-ghost" href="https://wa.me/${_waPhone(l.phone)}" target="_blank" title="פתח WhatsApp">💬</a>`
+              : '';
             return `<div class="q-item">
               <div class="q-item-info">
                 <div class="q-name">${esc(l.name || '—')}</div>
                 <div class="q-meta muted">${esc(phone)} · ${ch}</div>
               </div>
               <span class="score ${_scoreCls(score)}">${score}</span>
+              ${waBtnHtml}
               <button class="btn btn-xs btn-primary"
-                onclick="DraftModal && DraftModal.open({lead_id:'${esc(l.id)}',lead_name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}'},null)"
-                title="נסח ושלח">✉ שלח</button>
+                onclick="DraftModal && DraftModal.open({id:'${esc(l.id)}',name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}',score:${score}},null)"
+                title="נסח ושלח">✉</button>
             </div>`;
           }).join('')
         : _empty('תור שליחה ריק — יבוא לידים כדי להתחיל');
@@ -246,15 +255,19 @@ const Console = (() => {
             const score   = Math.round(l.score || 0);
             const urgency = l.status === 'hot' ? 'pill-green' : 'pill-amber';
             const urgLbl  = l.status === 'hot' ? '🔥 חם' : 'מעקב';
+            const waBtnHtml = l.phone
+              ? `<a class="btn btn-xs btn-ghost" href="https://wa.me/${_waPhone(l.phone)}" target="_blank" title="פתח WhatsApp">💬</a>`
+              : '';
             return `<div class="q-item">
               <div class="q-item-info">
                 <div class="q-name">${esc(l.name || '—')}</div>
                 <div class="q-meta muted">${esc(l.phone || l.email || '')} · ${esc(l.city || '')}</div>
               </div>
               <span class="pill ${urgency}">${urgLbl}</span>
+              ${waBtnHtml}
               <button class="btn btn-xs btn-primary"
-                onclick="DraftModal && DraftModal.open({lead_id:'${esc(l.id)}',lead_name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}'},'follow_up')"
-                title="נסח מעקב">↩ מעקב</button>
+                onclick="DraftModal && DraftModal.open({id:'${esc(l.id)}',name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}',score:${score}},'follow_up')"
+                title="נסח מעקב">↩</button>
             </div>`;
           }).join('')
         : _empty('אין מעקב פתוח כרגע ✓');
@@ -285,14 +298,18 @@ const Console = (() => {
   async function _growth(el) {
     el.innerHTML = `<div class="work-loading"><div class="wl-spinner"></div></div>`;
     try {
-      const [mktRes, chanRes] = await Promise.all([
+      const [mktRes, chanRes, seoMetaRes, seoCitiesRes] = await Promise.all([
         API.get('/marketing/weekly').catch(() => ({ success: false })),
         API.get('/channels/status').catch(() => ({ success: false })),
+        API.seoMeta().catch(() => ({ success: false })),
+        API.seoCities().catch(() => ({ success: false })),
       ]);
 
       const recs     = mktRes.success ? (mktRes.data?.recommendations || []) : [];
       const drafts   = mktRes.success ? (mktRes.data?.post_drafts || []) : [];
       const channels = chanRes.success ? (chanRes.data?.channels || []) : [];
+      const seoMeta  = seoMetaRes.success ? (seoMetaRes.data?.meta_descriptions || seoMetaRes.data || {}) : {};
+      const seoCities= seoCitiesRes.success ? (seoCitiesRes.data?.city_pages || seoCitiesRes.data || []) : [];
 
       // Marketing recommendations
       const recsHtml = recs.length
@@ -334,6 +351,32 @@ const Console = (() => {
           <div id="growthDiscoverResult" style="margin-top:8px"></div>
         </div>`;
 
+      // SEO workbench
+      const seoMetaHtml = Object.keys(seoMeta).length
+        ? Object.entries(seoMeta).slice(0, 6).map(([k, v]) =>
+            `<div class="seo-meta-row"><span class="seo-meta-key">${esc(k)}</span>: ${esc(String(v).slice(0, 120))}</div>`
+          ).join('')
+        : '<div class="muted" style="font-size:11px">META descriptions יוצרו לפי פרופיל העסק</div>';
+
+      const seoCitiesHtml = Array.isArray(seoCities) && seoCities.length
+        ? seoCities.slice(0, 6).map(c =>
+            `<div class="seo-city-row">
+              <span>${esc(c.title || c.h1 || c.city || '—')}</span>
+              <span class="muted" style="font-size:10px">${esc(c.slug || '')}</span>
+            </div>`
+          ).join('')
+        : '<div class="muted" style="font-size:11px">דפי ערים יוצרו לפי פרופיל העסק</div>';
+
+      const seoHtml = `
+        <div class="seo-block">
+          <div class="seo-block-title">🔍 META Descriptions</div>
+          ${seoMetaHtml}
+        </div>
+        <div class="seo-block">
+          <div class="seo-block-title">📍 דפי ערים מומלצים</div>
+          ${seoCitiesHtml}
+        </div>`;
+
       el.innerHTML = `
         <div class="growth-layout">
           <div class="growth-main">
@@ -343,8 +386,10 @@ const Console = (() => {
             ${discoverHtml}
           </div>
           <div class="growth-side">
-            <div class="ws-section-title" style="margin-bottom:8px">📡 סטטוס ערוצים</div>
+            <div class="ws-section-title" style="margin-bottom:8px">📡 ערוצים</div>
             <div class="ch-list">${chHtml}</div>
+            <div class="ws-section-title" style="margin:16px 0 8px">🌐 SEO & תוכן</div>
+            ${seoHtml}
           </div>
         </div>`;
     } catch (e) {
@@ -384,5 +429,38 @@ const Console = (() => {
     }
   }
 
-  return { render, reload, _approve, _deny, _discover };
+  // ── Lead context menu ─────────────────────────────────────────────────────
+  function _showLeadMenu(id, name) {
+    // Close any existing menu
+    document.querySelectorAll('.lead-ctx-menu').forEach(m => m.remove());
+
+    const menu = document.createElement('div');
+    menu.className = 'lead-ctx-menu';
+    menu.innerHTML = `
+      <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','contacted')">📞 סמן: ביצירת קשר</div>
+      <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','hot')">🔥 סמן: חם</div>
+      <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','closed')">✓ סמן: סגור</div>
+    `;
+    // Position near the clicked button
+    const btn = event?.target?.closest('button');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      menu.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left}px;`;
+    }
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 50);
+  }
+
+  async function _setStatus(id, status) {
+    try {
+      const res = await API.updateLead(id, { status });
+      if (res.success) {
+        Toast.success('סטטוס עודכן');
+        Console.reload('leads');
+        Console.reload('queue');
+      } else { Toast.error(res.error || 'שגיאה'); }
+    } catch (e) { Toast.error(`שגיאה: ${e.message || e}`); }
+  }
+
+  return { render, reload, _approve, _deny, _discover, _showLeadMenu, _setStatus };
 })();

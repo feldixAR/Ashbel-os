@@ -93,9 +93,9 @@ const API = (() => {
     },
 
     // Tasks
-    tasks:   (status) => {
-      const qs = status ? `?status=${status}` : '';
-      return request('GET', `/tasks${qs}`);
+    tasks:   (params = {}) => {
+      const qs = typeof params === 'string' ? `?status=${params}` : new URLSearchParams(params).toString();
+      return request('GET', `/tasks${qs ? '?' + qs : ''}`);
     },
     task:    (id) => request('GET', `/tasks/${id}`),
 
@@ -180,5 +180,9 @@ const API = (() => {
     seoCities: () => request('GET', '/seo/cities'),
     seoBlog:   () => request('GET', '/seo/blog'),
     seoImages: () => request('GET', '/seo/images'),
+
+    // ── Draft studio ─────────────────────────────────────────────────────────
+    draftRefine: (body, instruction, lead = {}) =>
+      request('POST', '/lead_ops/draft_refine', { body, instruction, lead }),
   };
 })();

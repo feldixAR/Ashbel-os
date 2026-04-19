@@ -513,3 +513,44 @@ def execute_outreach(approval_id: str):
     except Exception as e:
         log.error(f"[lead_ops/execute] {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route("/lead_ops/draft_refine", methods=["POST"])
+@require_api_key
+def refine_draft():
+    """Refine an existing draft body with a natural language instruction (Haiku-speed)."""
+    data        = request.get_json(silent=True) or {}
+    body        = (data.get("body") or "").strip()
+    instruction = (data.get("instruction") or "").strip()
+    lead        = data.get("lead") or {}
+
+    if not body or not instruction:
+        return jsonify({"success": False, "error": "body and instruction required"}), 400
+
+    try:
+        from routing.model_router import model_router
+        from config.business_registry import get_active_business
+        profile = get_active_business()
+
+        system = (
+            f"אתה עוזר לעריכת טיוטות פניות עסקיות עבור {profile.name} — {profile.domain}. "
+            "ענה בעברית בלבד. החזר רק את הטיוטה המעודכנת, ללא כותרות, ללא הסברים."
+        )
+        user = (
+            f"ערוך את הפנייה לפי ההנחיה הבאה.\n\n"
+            f"הנחיה: {instruction}\n\n"
+            f"שם הלקוח: {lead.get('name', 'לקוח')}\n\n"
+            f"פנייה מקורית:\n{body}"
+        )
+
+        refined = model_router.call(
+            task_type="draft_refine",
+            system_prompt=system,
+            user_prompt=user,
+            priority="balanced",
+            max_tokens=500,
+        )
+        return jsonify({"success": True, "body": refined.strip()})
+    except Exception as e:
+        log.error(f"[draft_refine] {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
