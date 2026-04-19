@@ -92,8 +92,10 @@ const Console = (() => {
 
       const rows = leads.map(l => {
         const score = Math.round(l.score || l.priority_score || 0);
-        const phone = l.phone ? `<a href="tel:${esc(l.phone)}" class="lead-phone">${esc(l.phone)}</a>` : '<span class="muted">—</span>';
-        return `<tr>
+        const phone = l.phone
+          ? `<a href="tel:${esc(l.phone)}" class="lead-phone">${esc(l.phone)}</a>`
+          : '<span class="muted">—</span>';
+        return `<tr data-status="${esc(l.status || '')}">
           <td><div class="lead-name-cell">
             <div class="lead-name">${esc(l.name || '—')}</div>
             <div class="lead-city muted">${esc(l.city || l.source || '')}</div>
@@ -105,10 +107,10 @@ const Console = (() => {
           <td>
             <div class="lead-actions">
               <button class="btn btn-xs btn-primary"
-                onclick="DraftModal && DraftModal.open({lead_id:'${esc(l.id)}',lead_name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}'},null)"
+                onclick="DraftModal && DraftModal.open({id:'${esc(l.id)}',name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}',score:${score}},null)"
                 title="נסח פנייה">✉</button>
               <button class="btn btn-xs btn-ghost"
-                onclick="_showLeadMenu('${esc(l.id)}','${esc(l.name)}')"
+                onclick="Console._showLeadMenu('${esc(l.id)}','${esc(l.name)}')"
                 title="עוד פעולות">⋮</button>
             </div>
           </td>
@@ -184,7 +186,7 @@ const Console = (() => {
         if (card) card.remove();
         Toast.success('אושר');
         Shell.switchTab('approvals');
-        Shell._refreshTodayStrip && Shell._refreshTodayStrip();
+        Shell.refreshTodayStrip?.();
       } else {
         Toast.error(res.error || 'שגיאה');
       }

@@ -280,7 +280,10 @@ const Shell = (() => {
     document.getElementById('bnIntel')?.classList.remove('active');
   }
 
-  return { init, switchTab, currentTab, closeCmdResult, toggleIntelSheet, closeIntelSheet };
+  // Expose strip refresh for external callers (DraftModal, Console post-approve)
+  function refreshTodayStrip() { return _refreshTodayStrip(); }
+
+  return { init, switchTab, currentTab, closeCmdResult, toggleIntelSheet, closeIntelSheet, refreshTodayStrip };
 })();
 
 document.addEventListener('DOMContentLoaded', Shell.init);

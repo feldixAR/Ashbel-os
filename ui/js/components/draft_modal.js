@@ -268,8 +268,7 @@ const DraftModal = (() => {
       if (res.success) {
         Toast.success('הטיוטה נשלחה לאישור — בדוק לשונית אישורים');
         setTimeout(close, 1200);
-        // Refresh approval badge
-        try { Shell.switchTab && Shell.currentTab() === 'approvals' && Shell.switchTab('approvals'); } catch(_) {}
+        try { Shell.refreshTodayStrip?.(); } catch(_) {}
       } else {
         Toast.info('העתק את הטיוטה ושלח ידנית לאחר אישור');
       }

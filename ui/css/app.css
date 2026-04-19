@@ -3659,3 +3659,166 @@ tr:hover .lead-action-row { opacity: 1; }
   border-radius: 6px; padding: 8px 10px;
 }
 .dm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Live UI Correction Pass — p24
+   Mobile-first shell, leads cards, header focus, today strip compact.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Neutralise old grid leak ────────────────────────────────────────────── */
+/* The old .os-shell grid block is overridden here explicitly */
+.os-shell {
+  display:        flex   !important;
+  flex-direction: column !important;
+  grid-template-columns: unset !important;
+  grid-template-rows:    unset !important;
+  height: 100dvh;       /* dvh = accounts for mobile browser chrome */
+  overflow: hidden;
+}
+
+/* ── Shell header: full-width command bar on all sizes ───────────────────── */
+.sh-cmd-wrap { flex: 1; min-width: 0; }
+
+/* ── Today strip: scrollable, compact, never wraps ──────────────────────── */
+.today-strip {
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+}
+.today-strip::-webkit-scrollbar { display: none; }
+.today-strip .ts-item { display: inline-flex; vertical-align: middle; }
+.today-strip .ts-sep  { display: inline-block; vertical-align: middle; }
+
+/* ── Console body: correct height fill ──────────────────────────────────── */
+.console-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.work-surface {
+  min-height: 0;
+  overflow: hidden;
+}
+.work-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Leads: card view on narrow screens ─────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Full-width shell command bar — hide decorative elements */
+  .sh-hex    { display: none; }
+  .sh-brand  { display: none; }
+  .sh-profile-badge { display: none; }
+  .shell-header { gap: 6px; padding: 0 8px; }
+
+  /* Today strip: tighter on mobile */
+  .ts-item  { padding: 0 8px; }
+  .ts-val   { font-size: 15px; }
+  .ts-label { font-size: 8px; }
+  .ts-sep   { margin: 0; }
+
+  /* Work tabs: scrollable, no wrap */
+  .work-tabs { overflow-x: auto; scrollbar-width: none; }
+  .work-tabs::-webkit-scrollbar { display: none; }
+  .wt { padding: 10px 12px; font-size: 11px; }
+
+  /* Work pane: account for bottom nav */
+  .work-pane { padding: 10px 10px 72px; }
+
+  /* Bottom nav visible */
+  .bottom-nav { display: flex !important; }
+
+  /* Intel rail hidden — accessible via intel sheet only */
+  .intel-rail { display: none !important; }
+  .console-body { grid-template-columns: 1fr !important; }
+
+  /* ── Leads: table → card list ─────────────────────────────────────────── */
+  .leads-tbl-wrap { overflow-x: hidden; border: none; background: transparent; border-radius: 0; }
+  .leads-tbl { min-width: unset; }
+  .leads-tbl thead { display: none; }
+  .leads-tbl tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 2px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .leads-tbl tbody tr:last-child { margin-bottom: 0; }
+  .leads-tbl tbody tr:hover { background: var(--surface); }
+  .leads-tbl td {
+    display: block;
+    border: none;
+    padding: 0;
+    vertical-align: middle;
+  }
+  /* Name cell: top-left, full row */
+  .leads-tbl td:nth-child(1) { grid-column: 1; grid-row: 1; }
+  /* Phone: second row left */
+  .leads-tbl td:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 11px; }
+  /* Score: top-right */
+  .leads-tbl td:nth-child(3) { grid-column: 2; grid-row: 1; text-align: left; }
+  /* Status: hide on mobile (shown via color) */
+  .leads-tbl td:nth-child(4) { display: none; }
+  /* Next action: hide on mobile */
+  .leads-tbl td:nth-child(5) { display: none; }
+  /* Actions: bottom-right */
+  .leads-tbl td:nth-child(6) { grid-column: 2; grid-row: 2; text-align: left; }
+  .lead-actions { justify-content: flex-end; }
+
+  /* ── Queue cols: single column ─────────────────────────────────────────── */
+  .queue-cols { grid-template-columns: 1fr; }
+
+  /* ── Growth layout: single column ──────────────────────────────────────── */
+  .growth-layout { grid-template-columns: 1fr; }
+  .growth-side { margin-top: 0; }
+
+  /* ── Approval cards: full bleed ────────────────────────────────────────── */
+  .appr-card { border-radius: var(--radius); }
+
+  /* ── Touch targets ──────────────────────────────────────────────────────── */
+  .btn { min-height: 36px; }
+  .btn-xs { min-height: 34px; padding: 6px 10px; }
+  .sh-cmd-btn { width: 44px; height: 44px; font-size: 18px; }
+
+  /* ── Toasts above bottom nav ────────────────────────────────────────────── */
+  .toast-wrap { bottom: 68px; }
+}
+
+/* ── Tablet: hide intel rail, full-width surface ────────────────────────── */
+@media (max-width: 840px) and (min-width: 641px) {
+  .intel-rail { display: none; }
+  .console-body { grid-template-columns: 1fr; }
+}
+
+/* ── Work pane loading: centered ────────────────────────────────────────── */
+.work-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 12px;
+  gap: 10px;
+}
+
+/* Mobile lead cards: status-driven left border */
+@media (max-width: 640px) {
+  .leads-tbl tbody tr[data-status="hot"]       { border-right: 3px solid var(--green); }
+  .leads-tbl tbody tr[data-status="new"]       { border-right: 3px solid var(--accent); }
+  .leads-tbl tbody tr[data-status="contacted"] { border-right: 3px solid var(--amber); }
+
+  /* Leads stats row: wrap on mobile */
+  .leads-stats-row { gap: 6px; }
+  .ls-chip { font-size: 10px; padding: 2px 8px; }
+}
