@@ -50,8 +50,9 @@ const Shell = (() => {
     try {
       const res = await API.get('/businesses');
       if (res.success) {
-        const active = res.data?.active || 'ashbel';
-        const biz    = (res.data?.businesses || []).find(b => b.id === active);
+        const active = res.active || res.data?.active || 'ashbel';
+        const bizList = res.businesses || res.data?.businesses || [];
+        const biz    = bizList.find(b => b.id === active);
         el.textContent = biz?.name || active;
       }
     } catch (_) {
@@ -195,6 +196,7 @@ const Shell = (() => {
       _loadIntelAgents(),
       _loadIntelLearning(),
       _loadIntelChannels(),
+      _loadSystemChanges(),
     ]);
   }
 
@@ -223,10 +225,25 @@ const Shell = (() => {
     const elDesktop = document.getElementById('irLearning');
     const elMobile  = document.getElementById('isLearning');
     try {
-      const res  = await API.get('/learning/snapshot');
-      const snap = res.snapshot || res.data?.snapshot || {};
+      const [snapRes, queueRes] = await Promise.all([
+        API.get('/learning/snapshot').catch(() => ({ success: false })),
+        API.get('/daily_revenue_queue').catch(() => ({ success: false })),
+      ]);
+      const snap = snapRes.snapshot || snapRes.data?.snapshot || {};
       const rows = [];
-      const ov   = snap.model_overrides || {};
+      // CEO top action
+      const queue = queueRes.data?.queue || queueRes.queue || [];
+      if (queue.length) {
+        const top = queue[0];
+        rows.push(`<div class="ir-item" style="border-right:3px solid var(--green);padding-right:6px">
+          <span class="ir-item-icon">⭐</span>
+          <div class="ir-item-text">
+            <div class="ir-item-title" style="color:var(--green)">עשה עכשיו: ${top.lead_name || top.name || '—'}</div>
+            <div class="ir-item-sub">${top.reason || top.action || 'ליד עם עדיפות גבוהה'}</div>
+          </div>
+        </div>`);
+      }
+      const ov = snap.model_overrides || {};
       if (Object.keys(ov).length)
         rows.push(`<div class="ir-item"><span class="ir-item-icon">🔀</span><div class="ir-item-text"><div class="ir-item-title">מודל מותאם</div><div class="ir-item-sub">${Object.keys(ov).join(', ')}</div></div></div>`);
       const conv = snap.conversion?.hot;
@@ -257,6 +274,26 @@ const Shell = (() => {
       }).join('') || '<div class="ir-empty">—</div>';
       if (elDesktop) elDesktop.innerHTML = html;
       if (elMobile)  elMobile.innerHTML  = html;
+    } catch (_) {}
+  }
+
+  async function _loadSystemChanges() {
+    const elDesktop = document.getElementById('irChanges');
+    if (!elDesktop) return;
+    try {
+      const res     = await API.get('/system/pending_changes');
+      const changes = res.data?.pending_changes || res.pending_changes || [];
+      const html = changes.length
+        ? changes.slice(0, 3).map(c => `
+          <div class="ir-item">
+            <span class="ir-item-icon">⚙</span>
+            <div class="ir-item-text">
+              <div class="ir-item-title">${c.change_type || c.request?.slice(0,40) || 'שינוי מערכת'}</div>
+              <div class="ir-item-sub">ממתין לאישור</div>
+            </div>
+          </div>`).join('')
+        : '<div class="ir-empty">אין שינויי מערכת ממתינים</div>';
+      elDesktop.innerHTML = html;
     } catch (_) {}
   }
 

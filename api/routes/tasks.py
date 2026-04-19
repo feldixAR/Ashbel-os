@@ -15,12 +15,12 @@ bp  = Blueprint("tasks", __name__)
 def list_tasks():
     from services.storage.repositories.task_repo import TaskRepository
     status = request.args.get("status", None)
+    limit  = min(int(request.args.get("limit", 50) or 50), 100)
     if status:
         tasks = TaskRepository().get_by_status(status)
     else:
-        # Default: last 50 tasks of any status
         repo  = TaskRepository()
-        tasks = repo.get_recent(limit=50)
+        tasks = repo.get_recent(limit=limit)
     return ok({
         "tasks": [_serialize_task(t) for t in tasks],
         "total": len(tasks),

@@ -154,22 +154,28 @@ const Console = (() => {
         return;
       }
 
-      const cards = items.map(a => `
-        <div class="appr-card" id="appr-${esc(a.id)}">
+      const cards = items.map(a => {
+        const det   = a.details || {};
+        const title = det.lead_name ? `שליחה ל${esc(det.lead_name)}` : esc(a.action || '—');
+        const body  = det.draft_body || det.body || a.preview || a.body || '';
+        const editBtn = body ? `<button class="btn btn-ghost btn-sm"
+          onclick="DraftModal && DraftModal.open({id:'${esc(det.lead_id||'')}',name:'${esc(det.lead_name||'')}',phone:'${esc(det.phone||'')}',channel:'${esc(det.channel||'')}'},'${esc(det.action_type||'first_contact')}')">✏ ערוך</button>` : '';
+        return `<div class="appr-card" id="appr-${esc(a.id)}">
           <div class="appr-card-hd">
             <div>
-              <div class="appr-action">${esc(a.action || '—')}</div>
-              <div class="appr-meta muted">${esc(a.created_at ? a.created_at.slice(0,10) : '')} · סיכון: ${esc(a.risk_level || '—')}</div>
+              <div class="appr-action">${title}</div>
+              <div class="appr-meta muted">${esc(a.created_at ? a.created_at.slice(0,10) : '')} · ${esc(det.action_type || a.action || '')} · סיכון: ${esc(String(a.risk_level || '—'))}</div>
             </div>
             <span class="pill pill-amber">ממתין</span>
           </div>
-          ${a.preview ? `<div class="appr-preview">${esc(a.preview).slice(0, 300)}</div>` : ''}
-          ${a.body    ? `<div class="appr-preview">${esc(a.body).slice(0, 300)}</div>` : ''}
+          ${body ? `<div class="appr-preview">${esc(body).slice(0, 300)}</div>` : ''}
           <div class="appr-actions">
             <button class="btn btn-primary btn-sm" onclick="Console._approve('${esc(a.id)}')">✓ אשר</button>
+            ${editBtn}
             <button class="btn btn-ghost btn-sm"   onclick="Console._deny('${esc(a.id)}')">✗ דחה</button>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
 
       el.innerHTML = `<div class="appr-list">${cards}</div>`;
     } catch (e) {
@@ -248,6 +254,9 @@ const Console = (() => {
               <button class="btn btn-xs btn-primary"
                 onclick="DraftModal && DraftModal.open({id:'${esc(l.id)}',name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}',score:${score}},null)"
                 title="נסח ושלח">✉</button>
+              <button class="btn btn-xs btn-ghost"
+                onclick="Console._setStatus('${esc(l.id)}','contacted')"
+                title="סמן כנשלח">✓</button>
             </div>`;
           }).join('')
         : _empty('תור שליחה ריק — יבוא לידים כדי להתחיל');
@@ -351,6 +360,13 @@ const Console = (() => {
             <button class="btn btn-primary" id="growthDiscoverBtn" onclick="Console._discover()">גלה →</button>
           </div>
           <div id="growthDiscoverResult" style="margin-top:8px"></div>
+          <div class="gd-label" style="margin-top:12px">🌐 ניתוח אתר</div>
+          <div class="gd-row">
+            <input class="gd-input" id="growthWebsiteInput" dir="ltr"
+              placeholder="https://example.co.il" />
+            <button class="btn btn-ghost" id="growthWebsiteBtn" onclick="Console._analyzeWebsite()">נתח →</button>
+          </div>
+          <div id="growthWebsiteResult" style="margin-top:8px"></div>
         </div>`;
 
       // SEO workbench
@@ -396,6 +412,33 @@ const Console = (() => {
         </div>`;
     } catch (e) {
       el.innerHTML = _section('צמיחה', _empty(`שגיאה: ${e.message || e}`));
+    }
+  }
+
+  async function _analyzeWebsite() {
+    const input  = document.getElementById('growthWebsiteInput');
+    const btn    = document.getElementById('growthWebsiteBtn');
+    const res_el = document.getElementById('growthWebsiteResult');
+    if (!input || !res_el) return;
+    const url = input.value.trim();
+    if (!url) return;
+    btn.disabled = true;
+    btn.textContent = '...';
+    res_el.innerHTML = '<div class="ir-loading">מנתח אתר...</div>';
+    try {
+      const res = await API.post('/lead_ops/website', { url });
+      if (!res.success) {
+        res_el.innerHTML = `<div class="ws-empty">שגיאה: ${esc(res.error || 'נסה שוב')}</div>`;
+        return;
+      }
+      const d = res.data || res;
+      const insights = d.insights || d.analysis || d.message || 'הניתוח הושלם';
+      res_el.innerHTML = `<div class="appr-preview" style="font-size:11px">${esc(String(insights).slice(0, 400))}</div>`;
+    } catch (e) {
+      res_el.innerHTML = `<div class="ws-empty">שגיאה: ${esc(e.message || String(e))}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'נתח →';
     }
   }
 
@@ -464,5 +507,5 @@ const Console = (() => {
     } catch (e) { Toast.error(`שגיאה: ${e.message || e}`); }
   }
 
-  return { render, reload, _approve, _deny, _discover, _showLeadMenu, _setStatus };
+  return { render, reload, _approve, _deny, _discover, _analyzeWebsite, _showLeadMenu, _setStatus };
 })();

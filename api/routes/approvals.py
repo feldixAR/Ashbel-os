@@ -165,6 +165,14 @@ def resolve_approval(approval_id: str):
                 )
             except Exception as _e:
                 log.error(f"[Approvals] lead outreach activity log error: {_e}")
+            # Write approved draft body to MemoryStore for learning
+            try:
+                from memory.memory_store import MemoryStore
+                _action_type = _details.get("action_type", "first_contact") if isinstance(_details, dict) else "first_contact"
+                MemoryStore.set_best_template(_action_type, _body[:1000])
+                log.info(f"[Approvals] learning: best_template_{_action_type} updated")
+            except Exception as _e:
+                log.error(f"[Approvals] learning write error: {_e}")
 
     # ── System change: store approved plan in MemoryStore ────────────────────
     if action == "approve" and not exec_result:
