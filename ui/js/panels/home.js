@@ -80,6 +80,34 @@ const HomePanel = (() => {
 
     <div class="home-card">
       <div class="home-card-hd">
+        <span class="home-card-icon">📤</span>
+        <span>תור שליחה ידנית</span>
+        <span class="home-card-badge home-badge-amber" id="homeManualCount">—</span>
+      </div>
+      <div id="homeManualQueue"><div class="home-loading">טוען...</div></div>
+      <button class="home-card-more" onclick="App.switchTo('leads')">כל הלידים →</button>
+    </div>
+
+    <div class="home-card">
+      <div class="home-card-hd">
+        <span class="home-card-icon">📅</span>
+        <span>מעקב ממתין</span>
+        <span class="home-card-badge" id="homeFollowupCount">—</span>
+      </div>
+      <div id="homeFollowupList"><div class="home-loading">טוען...</div></div>
+      <button class="home-card-more" onclick="HomePanel._runFollowupCmd()">הפעל תור מעקב →</button>
+    </div>
+
+    <div class="home-card">
+      <div class="home-card-hd">
+        <span class="home-card-icon">📣</span>
+        <span>המלצות שיווק</span>
+      </div>
+      <div id="homeMarketingRecs"><div class="home-loading">טוען...</div></div>
+    </div>
+
+    <div class="home-card">
+      <div class="home-card-hd">
         <span class="home-card-icon">◈</span>
         <span>מצב מערכת</span>
       </div>
@@ -134,6 +162,9 @@ const HomePanel = (() => {
       _loadUrgent(),
       _loadApprovals(),
       _loadHotLeads(),
+      _loadManualQueue(),
+      _loadFollowupQueue(),
+      _loadMarketingRecs(),
       _loadSysStatus(),
       _loadRevenueQueue(),
       _loadLearningSignals(),
@@ -447,11 +478,86 @@ const HomePanel = (() => {
     }
   }
 
+  async function _loadManualQueue() {
+    const el = document.getElementById('homeManualQueue');
+    const countEl = document.getElementById('homeManualCount');
+    try {
+      const res  = await API.leads({ limit: 50 });
+      const all  = res.success ? (res.data?.leads || []) : [];
+      const ready = all.filter(l =>
+        ['hot','contacted','new'].includes(l.status) &&
+        (l.score || l.priority_score || 0) >= 40
+      );
+      ready.sort((a,b) => (b.score||b.priority_score||0) - (a.score||a.priority_score||0));
+      countEl.textContent = ready.length || '0';
+      if (!ready.length) {
+        el.innerHTML = '<div class="home-empty">אין לידים ממתינים לשליחה</div>';
+        return;
+      }
+      el.innerHTML = ready.slice(0, 3).map(l => `
+        <div class="home-item">
+          <div class="home-item-title">${l.name || '—'}</div>
+          <div class="home-item-sub">${l.phone || l.email || ''} · ${l.status || ''}</div>
+          <button class="btn btn-sm btn-primary" style="font-size:10px;padding:2px 8px"
+            onclick="DraftModal && DraftModal.open({lead_id:'${l.id}',lead_name:'${(l.name||'').replace(/'/g,'')}',phone:'${(l.phone||'').replace(/'/g,'')}',email:'${(l.email||'').replace(/'/g,'')}'},null)">
+            שלח ✉
+          </button>
+        </div>`).join('');
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>'; }
+  }
+
+  async function _loadFollowupQueue() {
+    const el = document.getElementById('homeFollowupList');
+    const countEl = document.getElementById('homeFollowupCount');
+    try {
+      const res  = await API.leads({ limit: 100 });
+      const all  = res.success ? (res.data?.leads || []) : [];
+      const due  = all.filter(l => l.status === 'contacted' || l.status === 'hot');
+      countEl.textContent = due.length || '0';
+      if (!due.length) {
+        el.innerHTML = '<div class="home-empty">אין מעקב פתוח כרגע ✓</div>';
+        return;
+      }
+      el.innerHTML = due.slice(0, 3).map(l => `
+        <div class="home-item">
+          <div class="home-item-title">${l.name || '—'}</div>
+          <div class="home-item-sub">${l.city || ''} · ${l.status === 'hot' ? '🔥 חם' : 'ביצירת קשר'}</div>
+          <span class="pill pill-amber" style="font-size:9px">מעקב</span>
+        </div>`).join('');
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון</div>'; }
+  }
+
+  async function _runFollowupCmd() {
+    try {
+      const res = await API.command('תור מעקב');
+      const d = res.data || {};
+      Toast.success((d.message || 'תור מעקב הופעל').slice(0, 80));
+      await _loadFollowupQueue();
+    } catch(e) { Toast.error('שגיאה בהפעלת תור מעקב'); }
+  }
+
+  async function _loadMarketingRecs() {
+    const el = document.getElementById('homeMarketingRecs');
+    try {
+      const res = await API.get('/marketing/weekly');
+      const recs = res.data?.recommendations || res.recommendations || [];
+      if (!recs.length) {
+        el.innerHTML = '<div class="home-empty">אין המלצות שיווק כרגע</div>';
+        return;
+      }
+      el.innerHTML = recs.slice(0, 3).map(r => `
+        <div class="home-item">
+          <div class="home-item-title">${r.title || '—'}</div>
+          <div class="home-item-sub">${r.channel || ''} · ${r.cta || ''}</div>
+        </div>`).join('');
+    } catch(e) { el.innerHTML = '<div class="home-empty">לא ניתן לטעון המלצות</div>'; }
+  }
+
   function _pill(status) {
     const map = { running:'pill-amber', completed:'pill-green', failed:'pill-red', created:'pill-steel' };
     const lbl = { running:'פועל', completed:'הושלם', failed:'נכשל', created:'ממתין' };
     return `<span class="pill ${map[status]||''}" style="font-size:9px">${lbl[status]||status||''}</span>`;
   }
 
-  return { render, init, openDiscover, closeDiscover };
+  return { render, init, openDiscover, closeDiscover, _runFollowupCmd };
 })();

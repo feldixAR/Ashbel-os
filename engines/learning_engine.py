@@ -56,18 +56,26 @@ class LearningCycleResult:
     resource_plan: List[ResourceAllocation]; improvements: ImprovementReport
     bottlenecks: List[dict]; next_actions: List[str]; cycle_summary: str
 
+def _get_biz_short() -> str:
+    try:
+        from config.business_registry import get_active_business
+        p = get_active_business()
+        return p.name.split()[0]
+    except Exception:
+        return "אנחנו"
+
 AB_VARIANTS = {
     "architects": [
-        {"variant_id": "arch_a", "label": "A — תיק עבודות", "message": "שלום {name}, אני מאשבל. ראיתי את הפרויקטים שלך — אשמח לשלוח תיק עבודות רלוונטי. מתאים?"},
-        {"variant_id": "arch_b", "label": "B — שאלה פתוחה", "message": "שלום {name}, אני מאשבל — ספק אלומיניום לאדריכלים. על איזה סוג פרויקטים אתה עובד עכשיו?"},
+        {"variant_id": "arch_a", "label": "A — תיק עבודות", "message": "שלום {name}, אני מ{biz}. ראיתי את הפרויקטים שלך — אשמח לשלוח תיק עבודות רלוונטי. מתאים?"},
+        {"variant_id": "arch_b", "label": "B — שאלה פתוחה", "message": "שלום {name}, אני מ{biz} — ספק לאדריכלים. על איזה סוג פרויקטים אתה עובד עכשיו?"},
     ],
     "contractors": [
-        {"variant_id": "cont_a", "label": "A — מחיר", "message": "שלום {name}, מאשבל אלומיניום. יש לי הצעת מחיר תחרותית לפרויקט הנוכחי שלך. מעניין?"},
-        {"variant_id": "cont_b", "label": "B — אספקה", "message": "שלום {name}, מאשבל. אספקה תוך 48 שעות + תנאי אשראי לקבלנים. נשלח הצעה?"},
+        {"variant_id": "cont_a", "label": "A — מחיר", "message": "שלום {name}, מ{biz}. יש לי הצעת מחיר תחרותית לפרויקט הנוכחי שלך. מעניין?"},
+        {"variant_id": "cont_b", "label": "B — אספקה", "message": "שלום {name}, מ{biz}. אספקה תוך 48 שעות + תנאי אשראי לקבלנים. נשלח הצעה?"},
     ],
     "private": [
-        {"variant_id": "priv_a", "label": "A — ייעוץ חינם", "message": "שלום {name}, מאשבל אלומיניום. ייעוץ ראשוני חינם + הצעת מחיר ללא התחייבות. מתי נוח?"},
-        {"variant_id": "priv_b", "label": "B — לפני/אחרי", "message": "שלום {name}, מאשבל. יש לנו תמונות לפני/אחרי של עבודות בסביבה שלך — מעניין לראות?"},
+        {"variant_id": "priv_a", "label": "A — ייעוץ חינם", "message": "שלום {name}, מ{biz}. ייעוץ ראשוני חינם + הצעת מחיר ללא התחייבות. מתי נוח?"},
+        {"variant_id": "priv_b", "label": "B — לפני/אחרי", "message": "שלום {name}, מ{biz}. יש לנו תמונות לפני/אחרי של עבודות בסביבה שלך — מעניין לראות?"},
     ],
 }
 
@@ -140,7 +148,8 @@ def run_ab_analysis(audience: str = None) -> List[ABReport]:
         winner.winner=True; improvement=round(winner.reply_rate-loser.reply_rate,1)
         try:
             from memory.memory_store import MemoryStore
-            MemoryStore.set_best_template(aud,winner.message)
+            stored_msg = winner.message.replace("{biz}", _get_biz_short())
+            MemoryStore.set_best_template(aud, stored_msg)
         except Exception: pass
         reports.append(ABReport(audience=aud,winner=winner,loser=loser,improvement=improvement,recommendation=f"השתמש ב-{winner.label} — שיפור של {improvement}% בשיעור מענה."))
     return reports

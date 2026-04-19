@@ -253,10 +253,27 @@ def draft_meeting_request(lead: dict[str, Any], profile: dict[str, Any] | None =
     )
 
 
+def should_followup(lead: dict[str, Any]) -> bool:
+    """Return True if the lead should receive a follow-up outreach."""
+    status = lead.get("status", "")
+    attempts = int(lead.get("attempts") or lead.get("outreach_attempts") or 0)
+    if status in ("closed", "won", "lost", "unsubscribed"):
+        return False
+    if status in ("new", "contacted", "hot"):
+        return True
+    if attempts == 0:
+        return True
+    return False
+
+
 def draft_inbound_response(lead: dict[str, Any], inbound_text: str) -> MessageDraft:
     """Draft response to an inbound lead who already left details."""
-    name     = lead.get("name") or "שלום"
-    biz      = "אשבל אלומיניום"
+    name = lead.get("name") or "שלום"
+    try:
+        from config.business_registry import get_active_business
+        biz = get_active_business().name
+    except Exception:
+        biz = "החברה שלנו"
     short_in = inbound_text[:80] + "..." if len(inbound_text) > 80 else inbound_text
     body = (
         f"שלום {name},\n\n"

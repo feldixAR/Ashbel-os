@@ -271,13 +271,21 @@ def build_asset_draft(goal_id: str, top_audience: str, channel: str) -> dict:
     """Returns asset draft dict with first message + portfolio."""
     msg_tmpl  = MESSAGE_TEMPLATES.get(top_audience, MESSAGE_TEMPLATES["general"])
     port_tmpl = PORTFOLIO_TEMPLATES.get(top_audience, PORTFOLIO_TEMPLATES["general"])
+    try:
+        from config.business_registry import get_active_business
+        p = get_active_business()
+        subject = msg_tmpl["subject"].replace("אלומיניום", p.domain)
+        body = msg_tmpl["body"]
+    except Exception:
+        subject = msg_tmpl["subject"]
+        body = msg_tmpl["body"]
     return {
         "goal_id":   goal_id,
         "audience":  top_audience,
         "channel":   channel,
         "message": {
-            "subject": msg_tmpl["subject"],
-            "body":    msg_tmpl["body"],
+            "subject": subject,
+            "body":    body,
             "type":    "first_touch",
         },
         "portfolio": {

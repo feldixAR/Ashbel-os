@@ -53,15 +53,30 @@ FOLLOWUP_TEMPLATES = {
     },
 }
 
-INITIAL_MESSAGES = {
-    "architects": "שלום {name},\n\nאני מאשבל אלומיניום — מתמחים בפתרונות אלומיניום איכותיים לאדריכלים.\nאשמח לשלוח תיק עבודות רלוונטי.\nהאם מתאים?\n\nבברכה",
-    "contractors": "שלום {name},\n\nאני מאשבל אלומיניום — ספק עם ניסיון רב בעבודה עם קבלנים.\nמחירים תחרותיים, אספקה בזמן, תנאי אשראי גמישים.\nהאם תרצה הצעת מחיר?\n\nבברכה",
-    "private": "שלום {name},\n\nאני מאשבל אלומיניום — מתמחים בחלונות, דלתות ופרגולות לבית.\nנשמח לבוא לסקר ולתת הצעת מחיר ללא התחייבות.\n\nבברכה",
-    "general": "שלום {name},\n\nאני מאשבל אלומיניום — נשמח להכיר ולדון בשיתוף פעולה.\n\nבברכה",
-}
+def _biz_name() -> str:
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business().name
+    except Exception:
+        return "החברה שלנו"
+
+def _biz_domain() -> str:
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business().domain
+    except Exception:
+        return "עסק"
 
 def build_initial_message(audience: str, name: str) -> str:
-    return INITIAL_MESSAGES.get(audience, INITIAL_MESSAGES["general"]).replace("{name}", name)
+    biz = _biz_name()
+    domain = _biz_domain()
+    templates = {
+        "architects": f"שלום {{name}},\n\nאני מ{biz} — מתמחים ב{domain} לאדריכלים.\nאשמח לשלוח תיק עבודות רלוונטי.\nהאם מתאים?\n\nבברכה",
+        "contractors": f"שלום {{name}},\n\nאני מ{biz} — ספק עם ניסיון רב בעבודה עם קבלנים.\nמחירים תחרותיים, אספקה בזמן, תנאי אשראי גמישים.\nהאם תרצה הצעת מחיר?\n\nבברכה",
+        "private": f"שלום {{name}},\n\nאני מ{biz} — מתמחים ב{domain} לבית.\nנשמח לבוא לסקר ולתת הצעת מחיר ללא התחייבות.\n\nבברכה",
+        "general": f"שלום {{name}},\n\nאני מ{biz} — נשמח להכיר ולדון בשיתוף פעולה.\n\nבברכה",
+    }
+    return templates.get(audience, templates["general"]).replace("{name}", name)
 
 def build_followup_message(audience: str, name: str, attempt: int) -> str:
     templates = FOLLOWUP_TEMPLATES.get(audience, FOLLOWUP_TEMPLATES["general"])

@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 _repo = ClaudeTaskRepository()
 
 _SYSTEM_PROMPT = """\
-You are an execution assistant for AshbelOS (Ashbal Aluminum).
+You are an execution assistant for AshbelOS (General Business Operating System).
 You receive a single instruction and optional repo/branch/allowed_paths context.
 Respond with a JSON object only — no markdown, no explanation outside the object.
 
@@ -36,7 +36,7 @@ Rules:
 """
 
 _PREVIEW_SYSTEM_PROMPT = """\
-You are a planning assistant for AshbelOS (Ashbal Aluminum).
+You are a planning assistant for AshbelOS (General Business Operating System).
 You receive an instruction and optional context. Do NOT execute anything.
 Describe only what you would do if asked to execute.
 Respond with a JSON object only — no markdown, no explanation outside the object.

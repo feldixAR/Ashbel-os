@@ -12,8 +12,6 @@ Functions:
 """
 
 import logging
-from config.company_profile import COMPANY_CONTEXT
-from config.settings        import COMPANY_NAME
 
 log = logging.getLogger(__name__)
 
@@ -26,87 +24,123 @@ PRODUCT_DESC     = "product_description"
 EMAIL_NEWSLETTER = "email_newsletter"
 
 
+def _profile():
+    try:
+        from config.business_registry import get_active_business
+        return get_active_business()
+    except Exception:
+        return None
+
+def _biz() -> str:
+    p = _profile()
+    return p.name if p else "החברה שלנו"
+
+def _domain() -> str:
+    p = _profile()
+    return p.domain if p else "עסק"
+
+def _products() -> str:
+    p = _profile()
+    return p.products if p else "מוצרים ושירותים"
+
+def _edge() -> str:
+    p = _profile()
+    return p.competitive_edge if p else "איכות, מקצועיות, שירות"
+
+
 def build_post(content_type: str, topic: str,
-                audience: str = "בעלי בתים ואדריכלים") -> str:
+                audience: str = "") -> str:
     """
     Build a marketing post for the given content_type and topic.
     Returns formatted string ready for use.
     """
+    if not audience:
+        p = _profile()
+        audience = p.target_clients if p else "לקוחות"
     builder = _CONTENT_BUILDERS.get(content_type, _generic_content)
     return builder(topic, audience)
 
 
 def _linkedin_post(topic: str, audience: str) -> str:
+    biz = _biz()
     return (
-        f"🏗️ {topic} — אשבל אלומיניום\n\n"
+        f"🏗️ {topic} — {biz}\n\n"
         f"בשנים האחרונות ראינו עלייה משמעותית בביקוש ל{topic}.\n\n"
-        f"ב-{COMPANY_NAME} אנחנו מביאים:\n"
-        f"✅ חומרים איכותיים מספקים מובילים כמו קליל\n"
+        f"ב-{biz} אנחנו מביאים:\n"
+        f"✅ {_edge()}\n"
         f"✅ ביצוע מקצועי ועמידה בלוחות זמנים\n"
         f"✅ ייעוץ מותאם אישית לכל פרויקט\n\n"
         f"רוצים לדעת יותר? השאירו פרטים בתגובות 👇\n\n"
-        f"#אלומיניום #בנייה #עיצובבית #{topic.replace(' ', '')}"
+        f"#{_domain().replace(' ', '')} #{topic.replace(' ', '')}"
     )
 
 
 def _instagram_post(topic: str, audience: str) -> str:
+    biz = _biz()
+    products = _products()
     return (
         f"✨ {topic} ✨\n\n"
-        f"האלומיניום של אשבל — איכות שנראית 💎\n\n"
-        f"חלונות • דלתות • פרגולות • מסתורים\n"
-        f"הכל בהתאמה אישית לבית שלכם 🏠\n\n"
+        f"{biz} — איכות שנראית 💎\n\n"
+        f"{products}\n"
+        f"הכל בהתאמה אישית עבורכם 🏠\n\n"
         f"📞 השאירו הודעה לקבלת הצעת מחיר\n\n"
-        f"#אשבלאלומיניום #אלומיניום #עיצוב #בית #פרגולה"
+        f"#{_domain().replace(' ', '')} #עיצוב #בית"
     )
 
 
 def _blog_intro(topic: str, audience: str) -> str:
+    biz = _biz()
+    domain = _domain()
     return (
         f"# {topic}\n\n"
-        f"בחירת חומרים לבית היא אחת ההחלטות החשובות ביותר שתעשו. "
-        f"כשמדובר ב{topic}, אלומיניום איכותי הוא הפתרון שמאזן בין "
+        f"בחירת ספק ל{domain} היא אחת ההחלטות החשובות ביותר שתעשו. "
+        f"כשמדובר ב{topic}, {domain} איכותי הוא הפתרון שמאזן בין "
         f"עמידות, אסתטיקה וחיסכון לאורך זמן.\n\n"
         f"במאמר זה נסביר מה חשוב לדעת לפני שמתחילים, "
-        f"ומדוע {COMPANY_NAME} היא הבחירה המובילה בישראל."
+        f"ומדוע {biz} היא הבחירה המובילה."
     )
 
 
 def _website_content(topic: str, audience: str) -> str:
+    biz = _biz()
+    domain = _domain()
+    edge = _edge()
     return (
         f"## {topic}\n\n"
-        f"{COMPANY_NAME} מתמחה ב{topic} עבור בתים פרטיים ובניינים מסחריים. "
+        f"{biz} מתמחה ב{topic} עבור {audience}. "
         f"אנחנו מציעים פתרונות מותאמים אישית עם חומרים מהשורה הראשונה.\n\n"
         f"**למה לבחור בנו?**\n"
-        f"- ניסיון של שנים בתחום האלומיניום\n"
-        f"- עבודה עם ספקים מובילים כמו קליל\n"
+        f"- {edge}\n"
         f"- אחריות מלאה על כל עבודה\n"
         f"- מחירים תחרותיים ושקיפות מלאה"
     )
 
 
 def _product_description(topic: str, audience: str) -> str:
+    biz = _biz()
+    domain = _domain()
     return (
-        f"**{topic} — {COMPANY_NAME}**\n\n"
-        f"מוצרי האלומיניום שלנו מיוצרים מחומרים איכותיים "
+        f"**{topic} — {biz}**\n\n"
+        f"מוצרי {domain} שלנו מיוצרים מחומרים איכותיים "
         f"העומדים בסטנדרטים הגבוהים ביותר.\n\n"
         f"מאפיינים עיקריים:\n"
-        f"• עמידות גבוהה לתנאי מזג אוויר ישראליים\n"
-        f"• פרופילים ממותג קליל ויצרנים מובילים\n"
+        f"• עמידות גבוהה לתנאי שימוש ישראליים\n"
         f"• התאמה אישית לכל מידה ועיצוב\n"
         f"• אחריות יצרן מלאה"
     )
 
 
 def _email_newsletter(topic: str, audience: str) -> str:
+    biz = _biz()
     return (
         f"שלום,\n\n"
-        f"בחודש האחרון ב{COMPANY_NAME} עסקנו רבות ב{topic}.\n\n"
+        f"בחודש האחרון ב{biz} עסקנו רבות ב{topic}.\n\n"
         f"הנה מה שחדש:\n"
         f"• פרויקטים חדשים שהשלמנו בהצלחה\n"
-        f"• טיפים לתחזוקת אלומיניום בבית\n"
+        f"• טיפים ועדכונים מקצועיים\n"
         f"• מבצעים מיוחדים לחודש הקרוב\n\n"
         f"לפרטים נוספים — השיבו לאימייל זה או צרו קשר ישירות.\n\n"
-        f"בברכה,\nצוות {COMPANY_NAME}"
+        f"בברכה,\nצוות {biz}"
     )
 
 
@@ -114,8 +148,8 @@ def _generic_content(topic: str, audience: str) -> str:
     return (
         f"תוכן שיווקי: {topic}\n\n"
         f"קהל יעד: {audience}\n"
-        f"חברה: {COMPANY_NAME}\n\n"
-        f"[תוכן מותאם יתווסף בשלב 5 עם model_router]"
+        f"חברה: {_biz()}\n\n"
+        f"[תוכן מותאם יתווסף עם model_router]"
     )
 
 
@@ -147,7 +181,7 @@ def build_email_newsletter(topic: str, highlights: list = None) -> str:
         items = "\n".join(f"• {h}" for h in highlights)
         base = base.replace(
             "• פרויקטים חדשים שהשלמנו בהצלחה\n"
-            "• טיפים לתחזוקת אלומיניום בבית\n"
+            "• טיפים ועדכונים מקצועיים\n"
             "• מבצעים מיוחדים לחודש הקרוב",
             items
         )

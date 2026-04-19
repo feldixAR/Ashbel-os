@@ -2002,6 +2002,7 @@ tr:hover td { background: var(--surface); }
 }
 .home-badge-red   { background: var(--red); }
 .home-badge-green { background: var(--green); }
+.home-badge-amber { background: var(--amber, #f59e0b); }
 
 .home-item {
   display: flex;

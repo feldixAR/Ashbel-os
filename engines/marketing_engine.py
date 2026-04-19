@@ -81,7 +81,7 @@ def _build_recommendations(profile, month: int) -> List[MarketingRecommendation]
         channel="instagram",
         priority=2,
         cta="צור פוסט",
-        hashtags=[profile.domain.split()[0], "אלומיניום", "בית", "עיצוב"],
+        hashtags=[profile.domain.split()[0], profile.domain.split()[-1], "בית", "עיצוב"],
     ))
 
     # Follow-up on hot leads
@@ -164,7 +164,7 @@ def _seasonal_notes(profile, month: int) -> List[str]:
     if peaks:
         notes.append(f"עונת שיא פעילה: {', '.join(peaks)}")
     if month in (12, 1, 2):
-        notes.append("חורף: ביקוש לחלונות ובידוד — הדגש חסכון באנרגיה")
+        notes.append(f"חורף: עונת ביקוש — הדגש חיסכון ופתרונות {profile.domain}")
     if month in (3, 4, 5):
         notes.append("אביב: עונת שיפוצים — הגבר פרסום")
     if month in (9, 10):
