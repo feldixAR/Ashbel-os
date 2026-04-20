@@ -4246,14 +4246,23 @@ tr:hover .lead-action-row { opacity: 1; }
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 840px) {
   .intel-rail   { display: none !important; }
-  .console-body { grid-template-columns: 1fr !important; }
+  .console-body {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: unset !important;
+  }
 }
 
 @media (max-width: 640px) {
   /* Core layout */
   .bottom-nav   { display: flex !important; }
   .intel-rail   { display: none !important; }
-  .console-body { grid-template-columns: 1fr !important; }
+  .console-body {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: unset !important;
+  }
+  .work-surface { flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
   .work-pane    { padding: 10px 10px 72px !important; }
 
   /* Hide duplicated nav layers */
