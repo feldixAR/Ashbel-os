@@ -45,6 +45,10 @@
   --shadow:      0 4px 20px rgba(30,60,120,0.10);
   --glass:       rgba(255,255,255,0.80);
   --glass-border: rgba(30,60,120,0.10);
+  /* Aliases used in p25 additions */
+  --base: var(--bg2);
+  --fg:   var(--text);
+  --sans: var(--font);
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────── */
@@ -3950,4 +3954,83 @@ tr:hover .lead-action-row { opacity: 1; }
   /* Quick chips: tighter on mobile */
   .cmd-chips { padding: 5px 10px; gap: 5px; }
   .cmd-chip { padding: 4px 10px; font-size: 10px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   p26 — Mobile polish pass
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+
+  /* ── Command bar: shorter placeholder via attr trick ──────────────
+     The placeholder is set in HTML; we truncate display via width    */
+  .sh-cmd-input { font-size: 16px; }
+
+  /* ── Leads stats row: chips + import on separate lines ─────────── */
+  .leads-stats-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .leads-stats-row > .btn { margin-right: auto; }
+
+  /* ── Mobile lead card: show status in meta line ─────────────────── */
+  .leads-tbl td:nth-child(4) {
+    display: block !important;
+    grid-column: 1;
+    grid-row: 3;
+    padding-top: 3px;
+  }
+  .leads-tbl tbody tr {
+    grid-template-rows: auto auto auto;
+  }
+
+  /* ── Discover / website inputs: wrap on narrow screens ─────────── */
+  .gd-row { flex-wrap: wrap; }
+  .gd-row .gd-input { min-width: 0; }
+  .gd-row .btn { flex-shrink: 0; }
+
+  /* ── Approval card: readable body text ─────────────────────────── */
+  .appr-preview { font-size: 12px; line-height: 1.5; }
+
+  /* ── DraftModal: full-screen on mobile ─────────────────────────── */
+  .dm-modal {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: 92vh !important;
+    border-radius: 14px 14px 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+  }
+
+  /* ── Queue items: prevent overflow ─────────────────────────────── */
+  .q-item { flex-wrap: nowrap; min-width: 0; }
+  .q-item .q-item-info { min-width: 0; overflow: hidden; }
+  .q-name { font-size: 12px; }
+
+  /* ── Touch targets: meet Apple HIG 44pt minimum ────────────────── */
+  .btn      { min-height: 44px; }
+  .btn-xs   { min-height: 36px; padding: 6px 10px; }
+  .btn-sm   { min-height: 40px; }
+  .cmd-chip { min-height: 34px; display: inline-flex; align-items: center; }
+
+  /* ── Growth side: full width ────────────────────────────────────── */
+  .growth-side { border-top: 1px solid var(--border); padding-top: 12px; }
+
+  /* ── Section head: wrap actions ─────────────────────────────────── */
+  .ws-section-hd { flex-wrap: wrap; gap: 6px; }
+
+  /* ── Toasts: above bottom nav ───────────────────────────────────── */
+  .toast-container,
+  .toast-wrap { bottom: 68px !important; }
+
+  /* ── Score badge: legible size ──────────────────────────────────── */
+  .score { font-size: 12px; min-width: 28px; text-align: center; }
+}
+
+/* ── DraftModal overlay: full-screen background ─────────────────────────── */
+@media (max-width: 640px) {
+  .modal-overlay.dm-overlay { align-items: flex-end; padding: 0; }
 }
