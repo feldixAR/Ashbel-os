@@ -423,6 +423,18 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 
 ---
 
+## Production Closeout — 2026-04-20
+
+- **Production URL:** `https://ashbel-os-production.up.railway.app` — verified live ✅
+- **Production verification:** 21/21 API endpoints passing on live Railway deployment
+- **Lead status fix:** Hebrew `חדש`→`new` normalized across repo + DB migration on startup
+- **UI gaps closed:** `_statusPill` closed_won/closed_lost, DraftModal 503 handling, `isChanges` mobile intel, `_showLeadMenu` status sync, `api.js` `_status` injection
+- **Credentials in Railway:** ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GOOGLE_MAPS_API_KEY all set by operator
+- **Remaining (external accounts required):** Email SMTP, Meta Business API, LinkedIn API, Website CMS
+- **Final status: PRODUCTION VERIFIED v10.0 — ALL CODE-CLOSEABLE GAPS CLOSED**
+
+---
+
 ## Continuous Development Mode
 
 - Work from current repo reality only.
