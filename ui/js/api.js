@@ -43,6 +43,7 @@ const API = (() => {
       if (body) opts.body = JSON.stringify(body);
       const res  = await fetch(BASE + path, opts);
       const json = await res.json();
+      if (!res.ok) json._status = res.status;
       return json;
     } catch (e) {
       return { success: false, data: null, error: e.message };

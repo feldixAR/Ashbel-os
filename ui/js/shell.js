@@ -314,7 +314,8 @@ const Shell = (() => {
 
   async function _loadSystemChanges() {
     const elDesktop = document.getElementById('irChanges');
-    if (!elDesktop) return;
+    const elMobile  = document.getElementById('isChanges');
+    if (!elDesktop && !elMobile) return;
     try {
       const res     = await API.get('/system/pending_changes');
       const changes = res.data?.pending_changes || res.pending_changes || [];
@@ -328,7 +329,8 @@ const Shell = (() => {
             </div>
           </div>`).join('')
         : '<div class="ir-empty">אין שינויי מערכת ממתינים</div>';
-      elDesktop.innerHTML = html;
+      if (elDesktop) elDesktop.innerHTML = html;
+      if (elMobile)  elMobile.innerHTML  = html;
     } catch (_) {}
   }
 

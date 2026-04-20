@@ -176,6 +176,12 @@ def _run_column_migrations() -> None:
     "ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovery_session_id VARCHAR(100)",
     "ALTER TABLE leads ADD COLUMN IF NOT EXISTS meeting_suggested    VARCHAR(5) DEFAULT 'false'",
     "ALTER TABLE leads ADD COLUMN IF NOT EXISTS geo_fit_score        FLOAT DEFAULT 0",
+    # leads — normalise legacy Hebrew status values to English
+    "UPDATE leads SET status='new'         WHERE status='\u05d7\u05d3\u05e9'",
+    "UPDATE leads SET status='contacted'   WHERE status='\u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05e7\u05e9\u05e8'",
+    "UPDATE leads SET status='hot'         WHERE status='\u05de\u05ea\u05e2\u05d9\u05d9\u05df'",
+    "UPDATE leads SET status='closed_won'  WHERE status='\u05e1\u05d2\u05d5\u05e8_\u05d6\u05db\u05d4'",
+    "UPDATE leads SET status='closed_lost' WHERE status='\u05e1\u05d2\u05d5\u05e8_\u05d4\u05e4\u05e1\u05d9\u05d3'",
     # Claude bridge — sensitive action flow
         "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS sensitive     BOOLEAN DEFAULT FALSE",
         "ALTER TABLE claude_tasks ADD COLUMN IF NOT EXISTS preview_plan  TEXT",

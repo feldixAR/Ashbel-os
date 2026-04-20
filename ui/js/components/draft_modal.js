@@ -179,9 +179,10 @@ const DraftModal = (() => {
       if (res.success && res.body) {
         bodyEl.value = res.body;
         Toast.success('הטיוטה עודכנה');
-        // Clear refine input
         const ri = document.getElementById('dmRefineInput');
         if (ri) ri.value = '';
+      } else if (!res.success && res._status === 503) {
+        Toast.error('המודל אינו זמין כרגע — נסה שוב בעוד רגע');
       } else {
         Toast.error(res.error || 'לא ניתן לשפר כרגע');
       }

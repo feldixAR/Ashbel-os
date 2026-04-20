@@ -39,12 +39,14 @@ const Console = (() => {
 
   function _statusPill(status) {
     const map = {
-      new:       ['pill-steel',  'חדש'],
-      contacted: ['pill-amber',  'ביצירת קשר'],
-      hot:       ['pill-green',  'חם 🔥'],
-      closed:    ['pill-silver', 'סגור'],
-      won:       ['pill-green',  'נסגר ✓'],
-      lost:      ['pill-red',    'אבד'],
+      new:         ['pill-steel',  'חדש'],
+      contacted:   ['pill-amber',  'ביצירת קשר'],
+      hot:         ['pill-green',  'חם 🔥'],
+      closed:      ['pill-silver', 'סגור'],
+      closed_won:  ['pill-green',  'נסגר ✓'],
+      closed_lost: ['pill-red',    'אבד'],
+      won:         ['pill-green',  'נסגר ✓'],
+      lost:        ['pill-red',    'אבד'],
     };
     const [cls, lbl] = map[status] || ['pill-silver', status || '—'];
     return `<span class="pill ${cls}">${lbl}</span>`;
@@ -609,7 +611,8 @@ const Console = (() => {
     menu.innerHTML = `
       <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','contacted')">📞 סמן: ביצירת קשר</div>
       <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','hot')">🔥 סמן: חם</div>
-      <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','closed')">✓ סמן: סגור</div>
+      <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','closed_won')">✓ סמן: נסגר</div>
+      <div class="lead-ctx-item" onclick="Console._setStatus('${esc(id)}','closed_lost')">✗ סמן: אבד</div>
     `;
     // Position near the clicked button
     const btn = event?.target?.closest('button');
