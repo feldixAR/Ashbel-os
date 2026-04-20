@@ -74,30 +74,50 @@ const Console = (() => {
   // ── TAB 1: Leads ─────────────────────────────────────────────────────────
   async function _leads(el) {
     try {
-      const res   = await API.leads({ limit: 100 });
-      const leads = res.success ? (res.data?.leads || []) : [];
+      const [leadsRes, queueRes] = await Promise.all([
+        API.leads({ limit: 100 }),
+        API.dailyRevenue().catch(() => ({ success: false })),
+      ]);
+      const leads = leadsRes.success ? (leadsRes.data?.leads || []) : [];
+      const queue = queueRes.success ? (queueRes.data?.queue || queueRes.queue || []) : [];
 
       if (!leads.length) {
         el.innerHTML = _section('לידים',
           _empty('אין לידים במערכת.',
             `<button class="btn btn-primary btn-sm" onclick="UploadModal.open()">📂 יבוא קובץ</button>
-             <button class="btn btn-ghost btn-sm" onclick="Shell.switchTab('growth')">🔍 גלה לידים</button>`));
+             <button class="btn btn-ghost btn-sm" onclick="Shell.switchTab('growth')">🔍 גלה לידים</button>
+             <button class="btn btn-ghost btn-sm" onclick="Console._showAddLeadForm()">+ ליד חדש</button>`));
         return;
       }
 
-      // Sort: hot first, then by score
       leads.sort((a, b) => {
         if (a.status === 'hot' && b.status !== 'hot') return -1;
         if (b.status === 'hot' && a.status !== 'hot') return  1;
         return (b.score || b.priority_score || 0) - (a.score || a.priority_score || 0);
       });
 
-      const rows = leads.map(l => {
-        const score = Math.round(l.score || l.priority_score || 0);
-        const phone = l.phone
+      const newCount       = leads.filter(l => l.status === 'new').length;
+      const hotCount       = leads.filter(l => l.status === 'hot').length;
+      const contactedCount = leads.filter(l => l.status === 'contacted').length;
+
+      // Priority action card (from daily revenue queue)
+      const top = queue[0];
+      const priorityCard = top ? `
+        <div class="priority-card" onclick="DraftModal && DraftModal.open({id:'${esc(top.lead_id||top.id||'')}',name:'${esc(top.lead_name||top.name||'')}',phone:'${esc(top.phone||'')}',score:${top.score||0}},null)">
+          <div class="pc-badge">⭐ הפעולה שלך עכשיו</div>
+          <div class="pc-name">${esc(top.lead_name || top.name || '—')}</div>
+          <div class="pc-reason">${esc(top.reason || top.action || 'ליד עם עדיפות גבוהה')}</div>
+          <div class="pc-cta">✉ נסח פנייה עכשיו →</div>
+        </div>` : '';
+
+      // Table rows (desktop)
+      const tableRows = leads.map(l => {
+        const score      = Math.round(l.score || l.priority_score || 0);
+        const phone      = l.phone
           ? `<a href="tel:${esc(l.phone)}" class="lead-phone">${esc(l.phone)}</a>`
           : '<span class="muted">—</span>';
-        return `<tr data-status="${esc(l.status || '')}">
+        const srch = esc((l.name||'') + ' ' + (l.phone||'') + ' ' + (l.city||''));
+        return `<tr data-status="${esc(l.status || '')}" data-search="${srch}">
           <td><div class="lead-name-cell">
             <div class="lead-name">${esc(l.name || '—')}</div>
             <div class="lead-city muted">${esc(l.city || l.source || '')}</div>
@@ -119,27 +139,67 @@ const Console = (() => {
         </tr>`;
       }).join('');
 
-      const newCount      = leads.filter(l => l.status === 'new').length;
-      const hotCount      = leads.filter(l => l.status === 'hot').length;
-      const contactedCount= leads.filter(l => l.status === 'contacted').length;
+      // Lead cards (mobile)
+      const cardRows = leads.map(l => {
+        const score    = Math.round(l.score || l.priority_score || 0);
+        const initials = (l.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const avBg     = l.status === 'hot' ? '#ef4444' : l.status === 'contacted' ? '#d97706' : '#2563eb';
+        const srch     = esc((l.name||'') + ' ' + (l.phone||'') + ' ' + (l.city||''));
+        return `<div class="lead-card" data-status="${esc(l.status || '')}" data-search="${srch}">
+          <div class="lc-main" onclick="Console._showLeadDetail('${esc(l.id)}')">
+            <div class="lc-avatar" style="background:${avBg}">${initials}</div>
+            <div class="lc-info">
+              <div class="lc-name">${esc(l.name || '—')}</div>
+              <div class="lc-city">${esc(l.city || l.source || '')}</div>
+            </div>
+            <div class="lc-right">
+              <span class="score ${_scoreCls(score)}">${score}</span>
+              ${_statusPill(l.status)}
+            </div>
+          </div>
+          <div class="lc-footer">
+            ${l.phone ? `<a class="btn btn-sm btn-ghost lc-phone" href="tel:${esc(l.phone)}">📞 ${esc(l.phone)}</a>` : '<span style="flex:1"></span>'}
+            <button class="btn btn-sm btn-primary lc-draft"
+              onclick="DraftModal && DraftModal.open({id:'${esc(l.id)}',name:'${esc(l.name)}',phone:'${esc(l.phone||'')}',email:'${esc(l.email||'')}',score:${score}},null)">✉ נסח</button>
+            <button class="btn btn-sm btn-ghost"
+              onclick="Console._showLeadMenu('${esc(l.id)}','${esc(l.name)}')">⋮</button>
+          </div>
+        </div>`;
+      }).join('');
 
       el.innerHTML = `
+        ${priorityCard}
         <div class="leads-stats-row">
-          <span class="ls-chip">סה"כ <strong>${leads.length}</strong></span>
-          <span class="ls-chip ls-hot">חמים <strong>${hotCount}</strong></span>
-          <span class="ls-chip ls-new">חדשים <strong>${newCount}</strong></span>
-          <span class="ls-chip">ביצירת קשר <strong>${contactedCount}</strong></span>
+          <span class="ls-chip ls-filter active" data-f="all">סה"כ <strong>${leads.length}</strong></span>
+          <span class="ls-chip ls-filter ls-hot" data-f="hot">🔥 <strong>${hotCount}</strong></span>
+          <span class="ls-chip ls-filter ls-new" data-f="new">חדשים <strong>${newCount}</strong></span>
+          <span class="ls-chip ls-filter" data-f="contacted">קשר <strong>${contactedCount}</strong></span>
           <div style="flex:1"></div>
-          <button class="btn btn-xs btn-ghost" onclick="UploadModal.open()">📂 יבוא</button>
+          <button class="btn btn-xs btn-primary" onclick="Console._showAddLeadForm()">+ ליד</button>
+          <button class="btn btn-xs btn-ghost" onclick="UploadModal.open()">📂</button>
+        </div>
+        <div class="lead-search-wrap">
+          <input class="lead-search" id="leadsSearch" placeholder="🔍  חיפוש לפי שם, טלפון, עיר..." dir="rtl"
+            oninput="Console._filterLeads(this.value)" />
         </div>
         <div class="leads-tbl-wrap">
           <table class="leads-tbl">
             <thead><tr>
               <th>שם</th><th>טלפון</th><th>ציון</th><th>סטטוס</th><th>הצעד הבא</th><th>פעולות</th>
             </tr></thead>
-            <tbody>${rows}</tbody>
+            <tbody id="leadsTableBody">${tableRows}</tbody>
           </table>
-        </div>`;
+        </div>
+        <div class="leads-cards-mobile" id="leadsCardsMobile">${cardRows}</div>`;
+
+      el.querySelectorAll('.ls-filter').forEach(chip => {
+        chip.addEventListener('click', () => {
+          el.querySelectorAll('.ls-filter').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          _filterLeads(document.getElementById('leadsSearch')?.value || '', chip.dataset.f);
+        });
+      });
+
     } catch (e) {
       el.innerHTML = _section('לידים', _empty(`שגיאה: ${e.message || e}`));
     }
@@ -656,5 +716,150 @@ const Console = (() => {
     } catch (e) { Toast.error(`שגיאה: ${e.message || e}`); }
   }
 
-  return { render, reload, _approve, _deny, _discover, _analyzeWebsite, _scheduleMeeting, _logCall, _markSent, _showLeadMenu, _setStatus };
+  // ── Lead search / filter ──────────────────────────────────────────────────
+  let _leadsStatusFilter = 'all';
+
+  function _filterLeads(query, statusF) {
+    if (statusF !== undefined) _leadsStatusFilter = statusF;
+    const q  = (query || '').toLowerCase();
+    const sf = _leadsStatusFilter;
+    const test = el => {
+      const matchQ = !q || (el.dataset.search || '').toLowerCase().includes(q);
+      const matchS = sf === 'all' || (el.dataset.status || '') === sf;
+      return matchQ && matchS;
+    };
+    document.querySelectorAll('#leadsTableBody tr').forEach(r => r.style.display = test(r) ? '' : 'none');
+    document.querySelectorAll('#leadsCardsMobile .lead-card').forEach(c => c.style.display = test(c) ? '' : 'none');
+  }
+
+  // ── Add Lead ──────────────────────────────────────────────────────────────
+  function _showAddLeadForm() {
+    document.getElementById('addLeadOverlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'addLeadOverlay';
+    overlay.className = 'add-lead-overlay';
+    overlay.innerHTML = `
+      <div class="add-lead-panel">
+        <div class="alp-header">
+          <span class="alp-title">+ ליד חדש</span>
+          <button class="btn btn-ghost" onclick="document.getElementById('addLeadOverlay').remove()">✕</button>
+        </div>
+        <div class="alp-body">
+          <input class="alp-input" id="alpName"   placeholder="שם מלא *" dir="rtl" />
+          <input class="alp-input" id="alpPhone"  placeholder="טלפון" dir="ltr" type="tel" />
+          <input class="alp-input" id="alpCity"   placeholder="עיר" dir="rtl" />
+          <input class="alp-input" id="alpSource" placeholder="מקור (המלצה / רשת חברתית...)" dir="rtl" />
+          <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="Console._submitAddLead()">שמור ✓</button>
+        </div>
+        <div id="alpResult"></div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('open'), 10);
+    document.getElementById('alpName')?.focus();
+  }
+
+  async function _submitAddLead() {
+    const name   = document.getElementById('alpName')?.value.trim();
+    const phone  = document.getElementById('alpPhone')?.value.trim();
+    const city   = document.getElementById('alpCity')?.value.trim();
+    const source = document.getElementById('alpSource')?.value.trim();
+    const resEl  = document.getElementById('alpResult');
+    if (!name) {
+      if (resEl) resEl.innerHTML = '<div class="alp-err">שם הוא שדה חובה</div>';
+      return;
+    }
+    try {
+      const res = await API.createLead({ name, phone, city, source, status: 'new' });
+      if (res.success || res.data?.id || res.id) {
+        Toast.success(`${name} נוסף ✓`);
+        document.getElementById('addLeadOverlay')?.remove();
+        Console.reload('leads');
+        Shell.refreshTodayStrip?.();
+      } else {
+        if (resEl) resEl.innerHTML = `<div class="alp-err">${esc(res.error || 'שגיאה')}</div>`;
+      }
+    } catch (e) {
+      if (resEl) resEl.innerHTML = `<div class="alp-err">שגיאה: ${esc(e.message || String(e))}</div>`;
+    }
+  }
+
+  // ── Lead Detail Panel ─────────────────────────────────────────────────────
+  async function _showLeadDetail(id) {
+    document.getElementById('leadDetailOverlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'leadDetailOverlay';
+    overlay.className = 'lead-detail-overlay';
+    overlay.innerHTML = `
+      <div class="lead-detail-panel" id="leadDetailPanel">
+        <div class="ldp-header">
+          <button class="btn btn-ghost btn-sm" onclick="Console._closeLeadDetail()">← חזור</button>
+          <span class="ldp-title">פרופיל ליד</span>
+        </div>
+        <div class="ldp-body" id="ldpBody"><div class="wl-spinner"></div></div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) _closeLeadDetail(); });
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.classList.add('open'), 10);
+
+    try {
+      const [fullRes, tlRes] = await Promise.all([
+        API.leadFull(id).catch(() => ({ success: false })),
+        API.timeline(id, 10).catch(() => ({ success: false })),
+      ]);
+      const lead     = fullRes.success ? (fullRes.data?.lead || fullRes.data || {}) : {};
+      const timeline = tlRes.success   ? (tlRes.data?.timeline || tlRes.data?.events || []) : [];
+      const score    = Math.round(lead.score || lead.priority_score || 0);
+      const initials = (lead.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+      const tlHtml = timeline.length
+        ? timeline.map(ev => `
+            <div class="ldp-tl-item">
+              <span class="ldp-tl-dot"></span>
+              <div>
+                <div class="ldp-tl-title">${esc(ev.event_type || ev.type || '—')}</div>
+                <div class="ldp-tl-meta">${esc(ev.created_at_il || ev.created_at || '')}${ev.body ? ' · ' + esc(String(ev.body).slice(0, 60)) : ''}</div>
+              </div>
+            </div>`).join('')
+        : '<div class="muted" style="font-size:11px;padding:8px 0">אין היסטוריה עדיין</div>';
+
+      document.getElementById('ldpBody').innerHTML = `
+        <div class="ldp-hero">
+          <div class="ldp-avatar">${initials}</div>
+          <div class="ldp-hero-info">
+            <div class="ldp-name">${esc(lead.name || '—')}</div>
+            <div class="ldp-sub">${esc(lead.city || '')}${lead.city && lead.source ? ' · ' : ''}${esc(lead.source || '')}</div>
+          </div>
+          <span class="score ${_scoreCls(score)}" style="font-size:18px">${score}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+          ${_statusPill(lead.status)}
+          ${lead.sector  ? `<span class="pill pill-steel">${esc(lead.sector)}</span>`  : ''}
+          ${lead.company ? `<span class="pill pill-steel">${esc(lead.company)}</span>` : ''}
+        </div>
+        <div class="ldp-actions">
+          ${lead.phone ? `<a class="btn btn-primary btn-sm" href="tel:${esc(lead.phone)}">📞 ${esc(lead.phone)}</a>` : ''}
+          <button class="btn btn-primary btn-sm"
+            onclick="DraftModal && DraftModal.open({id:'${esc(id)}',name:'${esc(lead.name||'')}',phone:'${esc(lead.phone||'')}',email:'${esc(lead.email||'')}',score:${score}},null);Console._closeLeadDetail()">✉ נסח פנייה</button>
+          <button class="btn btn-ghost btn-sm"
+            onclick="Console._showLeadMenu('${esc(id)}','${esc(lead.name||'')}')">⋮ פעולות</button>
+        </div>
+        ${lead.next_action ? `<div class="ldp-next"><strong>הצעד הבא:</strong> ${esc(lead.next_action)}</div>` : ''}
+        <div class="ldp-section-title">היסטוריה</div>
+        <div class="ldp-timeline">${tlHtml}</div>`;
+    } catch (e) {
+      const bodyEl = document.getElementById('ldpBody');
+      if (bodyEl) bodyEl.innerHTML = `<div class="ws-empty">שגיאה: ${esc(e.message || String(e))}</div>`;
+    }
+  }
+
+  function _closeLeadDetail() {
+    const overlay = document.getElementById('leadDetailOverlay');
+    if (overlay) {
+      overlay.classList.remove('open');
+      setTimeout(() => overlay.remove(), 280);
+    }
+  }
+
+  return { render, reload, _approve, _deny, _discover, _analyzeWebsite, _scheduleMeeting, _logCall, _markSent, _showLeadMenu, _setStatus, _filterLeads, _showAddLeadForm, _submitAddLead, _showLeadDetail, _closeLeadDetail };
 })();
