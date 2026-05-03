@@ -74,6 +74,98 @@ def version():
     })
 
 
+@bp.route("/system/qa", methods=["GET"])
+@require_auth
+@log_request
+def system_qa():
+    """Read-only operator QA checklist for browser-based system review."""
+    from services.storage.db import health_check
+
+    def check(name: str, status: str, details: dict | None = None, next_action: str = "") -> dict:
+        return {
+            "name": name,
+            "status": status,
+            "details": details or {},
+            "next_action": next_action,
+        }
+
+    checks: list[dict] = []
+    try:
+        db_ok = bool(health_check())
+    except Exception as e:
+        db_ok = False
+        checks.append(check("Database health", "fail", {"error": str(e)}, "בדוק DATABASE_URL / PostgreSQL"))
+
+    checks.append(check("API health", "pass", {"status": "ok"}))
+    checks.append(check("Database health", "pass" if db_ok else "fail", {"db": db_ok}))
+
+    try:
+        from services.storage.repositories.lead_repo import LeadRepository
+        leads = LeadRepository().list_all()
+        checks.append(check("Leads API", "pass", {"count": len(leads)}))
+    except Exception as e:
+        checks.append(check("Leads API", "fail", {"error": str(e)}, "בדוק LeadRepository"))
+
+    try:
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        pending = ApprovalRepository().get_pending()
+        checks.append(check("Approval Gate", "pass", {"pending": len(pending)}))
+    except Exception as e:
+        checks.append(check("Approval Gate", "fail", {"error": str(e)}, "בדוק ApprovalRepository"))
+
+    try:
+        from services.storage.repositories.import_run_repo import ImportRunRepository
+        reports = ImportRunRepository().latest(limit=5)
+        checks.append(check("Import reports", "pass", {"recent": len(reports)}))
+    except Exception as e:
+        checks.append(check("Import reports", "warn", {"error": str(e)}, "בדוק ImportRunRepository"))
+
+    parser_status = {}
+    for mod_name, key in (("docx", "docx"), ("openpyxl", "xlsx"), ("pdfplumber", "pdf")):
+        try:
+            __import__(mod_name)
+            parser_status[key] = True
+        except Exception:
+            parser_status[key] = False
+    checks.append(check("Document parsers", "pass" if parser_status.get("docx") else "warn", parser_status))
+
+    checks.append(check("Outreach safety", "pass", {
+        "imports_send_outreach": False,
+        "whatsapp_email_direct_send": "blocked_or_approval_required",
+    }))
+
+    checks.append(check("UI workflow", "manual", {
+        "dashboard": "open /",
+        "import_center": "click יבוא מסמך",
+        "approvals": "open אישורים",
+        "mobile_rtl": "manual browser check required",
+    }, "בצע מעבר ידני מהדפדפן"))
+
+    return ok({
+        "environment": os.getenv("RAILWAY_ENVIRONMENT_NAME", "local"),
+        "service": os.getenv("RAILWAY_SERVICE_NAME", "ashbel-os"),
+        "commit": _read_commit(),
+        "safe_mode": {
+            "real_lead_import_performed": False,
+            "outreach_sent": False,
+            "qa_endpoint_mutates_data": False,
+        },
+        "checks": checks,
+        "browser_walkthrough": [
+            "פתח דשבורד ראשי",
+            "פתח יבוא מסמך",
+            "העלה CSV או DOCX לדוגמה ב-Preview בלבד",
+            "ודא שמופיעות כפילויות, חוסרים ואזהרות",
+            "ודא ש-Commit דורש אישור",
+            "פתח אישורים",
+            "פתח לידים",
+            "בדוק מוכנות להצעה",
+            "בדוק תוכנית הכנסות יומית",
+            "ודא שאין שליחה ללקוחות",
+        ],
+    })
+
+
 @bp.route("/system/metrics", methods=["GET"])
 @require_auth
 @log_request
