@@ -11,6 +11,9 @@
 const UploadModal = (() => {
 
   const GROUP_LABELS = {
+    hot_now:          { label: 'חם עכשיו — פעולה היום', cls: 'ug-relevant-now' },
+    clarify_aluminum: { label: 'לברר אלומיניום', cls: 'ug-relevant' },
+    follow_up_future: { label: 'מעקב עתידי', cls: 'ug-relevant' },
     relevant_now:     { label: 'דחוף — פעולה מיידית', cls: 'ug-relevant-now' },
     relevant_waiting: { label: 'רלוונטי — ממתין לתיעדוף', cls: 'ug-relevant' },
     missing_info:     { label: 'חסר מידע', cls: 'ug-missing' },
@@ -25,6 +28,7 @@ const UploadModal = (() => {
 
   function open() {
     document.getElementById('uploadModal').classList.remove('hidden');
+    _resetFileInput();
     _showStage('drop');
   }
 
@@ -34,6 +38,9 @@ const UploadModal = (() => {
     _sourceFile = '';
     _importRunId = '';
     _approvalId = '';
+    _resetFileInput();
+    const err = document.getElementById('umDropError');
+    if (err) err.textContent = '';
   }
 
   function init() {
@@ -62,19 +69,27 @@ const UploadModal = (() => {
 
     document.getElementById('umCommitBtn').addEventListener('click', _commit);
 
-    document.getElementById('umApproveAllBtn')?.addEventListener('click', () => {
-      _records.forEach(r => {
-        if (r.group !== 'not_relevant' && r.group !== 'duplicate') r.action = 'approve';
+    const approveAll = document.getElementById('umApproveAllBtn');
+    if (approveAll) {
+      approveAll.textContent = 'אשר לידים מומלצים בלבד';
+      approveAll.addEventListener('click', () => {
+        _records.forEach(r => {
+          if (['hot_now','relevant_now','relevant_waiting'].includes(r.group)) r.action = 'approve';
+          else if (r.group !== 'duplicate' && r.group !== 'not_relevant') r.action = 'review';
+        });
+        _renderReview();
       });
-      _renderReview();
-    });
+    }
   }
 
   async function _handleFile(file) {
     const allowed = ['csv','xlsx','xls','docx','doc','pdf','txt'];
     const ext = file.name.split('.').pop();
+    const err = document.getElementById('umDropError');
+    if (err) err.textContent = '';
     if (!allowed.includes((ext||'').toLowerCase())) {
       _showError(`סוג קובץ לא נתמך: .${ext}. נתמך: CSV, Excel, Word, PDF, TXT`);
+      _resetFileInput();
       return;
     }
     _sourceFile = file.name;
@@ -103,6 +118,8 @@ const UploadModal = (() => {
         `נמצאו ${cnt} רשומות מתוך "${file.name}"`;
     } catch(e) {
       _showError(`שגיאה: ${e.message || e}`);
+    } finally {
+      _resetFileInput();
     }
   }
 
@@ -133,11 +150,14 @@ const UploadModal = (() => {
     const approvedCount = _records.filter(r => r.action === 'approve').length;
     document.getElementById('umApprovedCount').textContent = `${approvedCount} אושרו`;
 
-    const ORDER = ['relevant_now','relevant_waiting','missing_info','not_relevant','duplicate'];
+    const commitBtn = document.getElementById('umCommitBtn');
+    if (commitBtn) commitBtn.textContent = 'העבר לאישור ייבוא';
+
+    const ORDER = ['hot_now','clarify_aluminum','follow_up_future','relevant_now','relevant_waiting','missing_info','not_relevant','duplicate'];
     container.innerHTML = ORDER.map(key => {
       const items = grouped[key];
       if (!items?.length) return '';
-      const meta = GROUP_LABELS[key];
+      const meta = GROUP_LABELS[key] || GROUP_LABELS.not_relevant;
       return `
         <div class="um-group">
           <div class="um-group-hd ${meta.cls}">
@@ -151,14 +171,20 @@ const UploadModal = (() => {
 
   function _renderRow(rec) {
     const idx  = rec._idx;
-    const name  = rec.name  || '—';
-    const phone = rec.phone || '';
-    const email = rec.email || '';
-    const city  = rec.city  || '';
-    const score = rec.score || 0;
-    const reason = rec.reason || '';
+    const name  = _esc(rec.name  || '—');
+    const phone = _esc(rec.phone || '');
+    const email = _esc(rec.email || '');
+    const city  = _esc(rec.city  || '');
+    const score = rec.score_total || rec.score || 0;
+    const reason = _esc(rec.business_reason || rec.reason || '');
     const action = rec.action || 'skip';
     const isDup  = rec.group === 'duplicate';
+    const intent = _esc(rec.aluminum_intent_label || 'לא זוהתה כוונת אלומיניום');
+    const stage = _esc(rec.construction_stage_label || 'שלב לא מזוהה');
+    const timing = _esc(rec.timing_window || 'בדיקה ידנית');
+    const recommended = _esc(rec.recommended_action || rec.next_action || 'בדיקה ידנית');
+    const missing = Array.isArray(rec.missing_fields) ? rec.missing_fields.filter(Boolean) : [];
+    const breakdown = rec.score_breakdown || {};
 
     return `
       <div class="um-row ${action === 'approve' ? 'um-row-approved' : ''}" id="umrow-${idx}">
@@ -169,18 +195,27 @@ const UploadModal = (() => {
             ${email ? `<span>✉ ${email}</span>` : ''}
             ${city  ? `<span>📍 ${city}</span>`  : ''}
           </div>
+          <div class="um-business-badges">
+            <span>${intent}</span>
+            <span>שלב: ${stage}</span>
+            <span>חלון פעולה: ${timing}</span>
+          </div>
           <div class="um-row-reason">${reason}</div>
-          ${isDup ? `<div class="um-row-dup">⚠ כבר קיים: ${rec.dup_name||'—'}</div>` : ''}
-          ${rec.next_action ? `<div class="um-row-next">→ ${rec.next_action}</div>` : ''}
+          <div class="um-row-next">→ ${recommended}</div>
+          ${missing.length ? `<div class="um-row-missing">חסר להצעה: ${missing.map(_esc).join(', ')}</div>` : ''}
+          <div class="um-score-breakdown">
+            ניקוד: כוונה ${breakdown.intent ?? 0}, תזמון ${breakdown.timing ?? 0}, קשר ${breakdown.contactability ?? 0}, היקף ${breakdown.scope ?? 0}, מיקום ${breakdown.geography ?? 0}, מוכנות ${breakdown.readiness ?? 0}
+          </div>
+          ${isDup ? `<div class="um-row-dup">⚠ כבר קיים: ${_esc(rec.dup_name||'—')}</div>` : ''}
         </div>
         <div class="um-row-score">
           <span class="score ${score>=70?'score-hot':score>=40?'score-warm':'score-cold'}" style="font-size:11px">${score}</span>
         </div>
         <div class="um-row-actions">
           <button class="um-act-btn ${action==='approve'?'um-act-active':''}"
-            onclick="UploadModal.setAction(${idx},'approve')">✓ ייבא</button>
+            onclick="UploadModal.setAction(${idx},'approve')">✓ סמן לייבוא</button>
           <button class="um-act-btn ${action==='review'?'um-act-active':''}"
-            onclick="UploadModal.setAction(${idx},'review')">? בדוק</button>
+            onclick="UploadModal.setAction(${idx},'review')">? דורש בדיקה</button>
           <button class="um-act-btn um-act-skip ${action==='skip'?'um-act-skip-active':''}"
             onclick="UploadModal.setAction(${idx},'skip')">✕ דלג</button>
         </div>
@@ -205,7 +240,7 @@ const UploadModal = (() => {
     }
 
     _showStage('committing');
-    document.getElementById('umCommittingCount').textContent = `מייבא ${toImport.length} רשומות...`;
+    document.getElementById('umCommittingCount').textContent = `מעביר ${toImport.length} רשומות לאישור ייבוא...`;
 
     try {
       const res = await API.post('/intake/commit', {
@@ -220,10 +255,10 @@ const UploadModal = (() => {
       if (res.success && data.approval_required && data.approval_id) {
         _approvalId = data.approval_id;
         document.getElementById('umResultMsg').innerHTML = `<div class="um-warning">
-          נדרש אישור ייבוא לפני כתיבה למערכת.<br>
+          נוצרה בקשת אישור ייבוא. עדיין לא נכתבו לידים למערכת ולא נשלחה שום הודעה ללקוחות.<br>
           אישור: <code>${data.approval_id}</code><br>
           <button class="btn btn-primary" style="margin-top:8px" onclick="Shell.switchTab('approvals');UploadModal.close()">פתח אישורים</button>
-          <button class="btn btn-ghost" style="margin-top:8px" onclick="UploadModal.retryCommit()">נסה שוב אחרי אישור</button>
+          <button class="btn btn-ghost" style="margin-top:8px" onclick="UploadModal.retryCommit()">השלם ייבוא אחרי אישור</button>
         </div>`;
         return;
       }
@@ -258,6 +293,17 @@ const UploadModal = (() => {
 
   function _extractError(res, fallback) {
     return res?.error || res?.data?.message || res?.message || fallback;
+  }
+
+  function _resetFileInput() {
+    const input = document.getElementById('umFileInput');
+    if (input) input.value = '';
+  }
+
+  function _esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
   }
 
   function retryCommit() {
