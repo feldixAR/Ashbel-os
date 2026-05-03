@@ -51,6 +51,7 @@ const API = (() => {
   }
 
   return {
+    _getKey: getKey,
     setKey(key, remember = false) {
       sessionStorage.setItem(SS_KEY, key);
       if (remember) {
@@ -75,6 +76,7 @@ const API = (() => {
     // System
     health:  ()     => request('GET', '/health'),
     status:  ()     => request('GET', '/status'),
+    systemQa: ()    => request('GET', '/system/qa'),
 
     // Command — two endpoints (legacy + new)
     command: (cmd)  => request('POST', '/command', { command: cmd }),
@@ -138,7 +140,7 @@ const API = (() => {
     weeklyCalendar: ()           => request('GET', '/crm/calendar/week'),
     createCalEvent: (data)       => request('POST', '/crm/calendar/events', data),
 
-    // ── CRM — Lead Full Record View (Batch 7) ────────────────────────────────
+    // ── CRM — Lead Full Record View (Batch 7) ───────────────────────────────
     leadFull: (leadId) => request('GET', `/crm/leads/${leadId}/full`),
 
     // ── Dashboard Command Center (Batch 7) ───────────────────────────────────
