@@ -240,9 +240,20 @@ const UploadModal = (() => {
     }
 
     _showStage('committing');
-    document.getElementById('umCommittingCount').textContent = `מעביר ${toImport.length} רשומות לאישור ייבוא...`;
+    document.getElementById('umCommittingCount').textContent = _approvalId
+      ? `בודק אישור ומייבא ${toImport.length} רשומות...`
+      : `מעביר ${toImport.length} רשומות לאישור ייבוא...`;
 
     try {
+      if (_approvalId) {
+        const approved = await _isApprovalApproved(_approvalId);
+        if (!approved) {
+          _showStage('results');
+          _renderApprovalPending(_approvalId);
+          return;
+        }
+      }
+
       const res = await API.post('/intake/commit', {
         records: toImport,
         source_file: _sourceFile,
@@ -254,20 +265,15 @@ const UploadModal = (() => {
       const data = res.success ? (res.data || {}) : {};
       if (res.success && data.approval_required && data.approval_id) {
         _approvalId = data.approval_id;
-        document.getElementById('umResultMsg').innerHTML = `<div class="um-warning">
-          נוצרה בקשת אישור ייבוא. עדיין לא נכתבו לידים למערכת ולא נשלחה שום הודעה ללקוחות.<br>
-          אישור: <code>${data.approval_id}</code><br>
-          <button class="btn btn-primary" style="margin-top:8px" onclick="Shell.switchTab('approvals');UploadModal.close()">פתח אישורים</button>
-          <button class="btn btn-ghost" style="margin-top:8px" onclick="UploadModal.retryCommit()">השלם ייבוא אחרי אישור</button>
-        </div>`;
+        _renderApprovalPending(data.approval_id);
         return;
       }
       document.getElementById('umResultMsg').innerHTML = res.success
         ? `<div class="um-success">
             ✅ ${data.message || `יובאו ${data.created||0} לידים`}
-            ${data.created ? `<br><button class="btn btn-primary" style="margin-top:8px" onclick="UploadModal.close();App.switchTo('leads')">הצג לידים שיובאו →</button>` : ''}
+            ${data.created ? `<br><button class="btn btn-primary" style="margin-top:8px" onclick="UploadModal.close();Shell.switchTab('leads')">הצג לידים שיובאו →</button>` : ''}
           </div>`
-        : `<div class="um-error">❌ ${_extractError(res, 'שגיאת ייבוא')}</div>`;
+        : `<div class="um-error">❌ ${_humanError(res, 'שגיאת ייבוא')}</div>`;
 
       if (typeof HomePanel !== 'undefined') {
         setTimeout(() => App.rerender('home'), 500);
@@ -277,6 +283,44 @@ const UploadModal = (() => {
       document.getElementById('umResultMsg').innerHTML =
         `<div class="um-error">❌ שגיאה: ${e.message||e}</div>`;
     }
+  }
+
+  async function _isApprovalApproved(id) {
+    try {
+      const [pending, history] = await Promise.all([
+        API.approvals ? API.approvals() : API.get('/approvals'),
+        API.approvalHistory ? API.approvalHistory(100) : API.get('/approvals/history?limit=100'),
+      ]);
+      const pendingItem = (pending?.data?.approvals || []).find(a => a.id === id);
+      if (pendingItem) return false;
+      const resolvedItem = (history?.data?.history || []).find(a => a.id === id);
+      return resolvedItem?.status === 'approved';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function _renderApprovalPending(id) {
+    document.getElementById('umResultMsg').innerHTML = `<div class="um-warning">
+      נוצרה בקשת אישור ייבוא. עדיין לא נכתבו לידים למערכת ולא נשלחה שום הודעה ללקוחות.<br>
+      אישור: <code>${_esc(id)}</code><br>
+      <div style="margin-top:8px;color:var(--muted);font-size:12px">
+        יש לפתוח את מסך האישורים, לאשר את בקשת הייבוא הזו ואז לחזור לכאן וללחוץ שוב על השלמת הייבוא.
+      </div>
+      <button class="btn btn-primary" style="margin-top:8px" onclick="Shell.switchTab('approvals')">פתח אישורים</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="UploadModal.retryCommit()">בדוק שוב והשלם ייבוא</button>
+    </div>`;
+  }
+
+  function _humanError(res, fallback) {
+    const msg = _extractError(res, fallback);
+    if (msg === 'import approval is not approved') {
+      return 'בקשת הייבוא עדיין לא אושרה. פתח את מסך האישורים, אשר את בקשת import_commit ואז לחץ שוב על השלמת הייבוא.';
+    }
+    if (msg === 'approval_id not found') return 'בקשת האישור לא נמצאה. יש ליצור בקשת ייבוא חדשה.';
+    if (msg === 'approval_id is not an import approval') return 'האישור שנבחר אינו אישור ייבוא.';
+    if (msg === 'approval_id does not match source_file') return 'האישור אינו שייך לקובץ הזה. יש ליצור בקשת ייבוא חדשה.';
+    return msg;
   }
 
   function _showStage(stage) {
