@@ -107,6 +107,8 @@ def create_all_tables() -> None:
     import services.storage.models.claude_task    # noqa
     # Phase 12 — Lead Acquisition OS
     import services.storage.models.lead_discovery # noqa
+    # Final completion run — safe lead import reports
+    import services.storage.models.import_run     # noqa
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")
@@ -176,6 +178,26 @@ def _run_column_migrations() -> None:
     "ALTER TABLE leads ADD COLUMN IF NOT EXISTS discovery_session_id VARCHAR(100)",
     "ALTER TABLE leads ADD COLUMN IF NOT EXISTS meeting_suggested    VARCHAR(5) DEFAULT 'false'",
     "ALTER TABLE leads ADD COLUMN IF NOT EXISTS geo_fit_score        FLOAT DEFAULT 0",
+    # leads — final completion import/proposal readiness fields
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS work_type              VARCHAR(120)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS project_stage          VARCHAR(120)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_value        INTEGER DEFAULT 0",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS source_file            VARCHAR(300)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS import_batch           VARCHAR(80)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS address                TEXT",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS decision_maker         VARCHAR(200)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_reason           TEXT",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS priority               VARCHAR(40)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS ready_for_proposal     VARCHAR(5) DEFAULT 'false'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_photos         VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_plans          VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_measurements   VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_address        VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_decision_maker VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_budget         VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS missing_project_stage  VARCHAR(5) DEFAULT 'true'",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS proposal_followup_date VARCHAR(40)",
+    "ALTER TABLE leads ADD COLUMN IF NOT EXISTS proposal_metadata      TEXT",
     # leads — normalise legacy Hebrew status values to English
     "UPDATE leads SET status='new'         WHERE status='\u05d7\u05d3\u05e9'",
     "UPDATE leads SET status='contacted'   WHERE status='\u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05e7\u05e9\u05e8'",

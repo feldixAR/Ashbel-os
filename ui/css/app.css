@@ -3511,6 +3511,43 @@ tr:hover .lead-action-row { opacity: 1; }
 .q-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-meta { font-size: 10px; color: var(--muted); }
 
+.operator-safety-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+.import-status-card,
+.stuck-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  min-width: 0;
+}
+.import-status-empty,
+.stuck-ok { border-color: rgba(22, 163, 74, 0.25); }
+.isc-title {
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.isc-meta {
+  font-size: 10px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .operator-safety-row { grid-template-columns: 1fr; }
+  .import-status-card,
+  .stuck-card { padding: 10px; }
+}
+
 /* ── Growth layout ──────────────────────────────────────────────────────── */
 .growth-layout {
   display: grid; grid-template-columns: 1fr 240px; gap: 16px;

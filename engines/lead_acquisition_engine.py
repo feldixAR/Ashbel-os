@@ -137,6 +137,7 @@ def run_acquisition(
         except Exception as e:
             errors.append(f"outreach: {e}")
         lead_d["discovery_session_id"] = session_id
+        lead_d.update(_proposal_fields({**sl.lead.raw, **lead_d}))
         leads_for_queue.append(lead_d)
 
     # 5. Build work queue
@@ -209,6 +210,7 @@ def process_inbound(lead_data: dict[str, Any], session: Any = None) -> str:
     lead_dict["outreach_draft"]  = draft.body
     lead_dict["outreach_action"] = "inbound_response"
     lead_dict["is_inbound"]      = True
+    lead_dict.update(_proposal_fields(lead_data))
 
     lead_id = ""
     try:
@@ -283,13 +285,43 @@ def _scored_to_dict(sl: Any) -> dict:
         "source_url":     lead.source_url,
         "segment":        lead.segment,
         "is_inbound":     lead.is_inbound,
+        "work_type":      getattr(lead, "work_type", ""),
+        "project_stage":  getattr(lead, "project_stage", ""),
+        "estimated_value": getattr(lead, "estimated_value", 0),
+        "address":        getattr(lead, "address", ""),
+        "decision_maker": getattr(lead, "decision_maker", ""),
         "score":          sl.score,
         "priority":       sl.priority,
         "fit_reasons":    sl.fit_reasons,
+        "score_reason":   " | ".join(sl.fit_reasons),
         "next_action":    sl.next_action,
         "geo_fit_score":  sl.geo_fit_score,
         "notes":          " | ".join(sl.fit_reasons),
     }
+
+
+def _proposal_fields(lead_data: dict[str, Any]) -> dict:
+    try:
+        from skills.proposal_readiness import evaluate
+        readiness = evaluate(lead_data)
+        return {
+            **{k: lead_data.get(k) for k in (
+                "work_type", "project_stage", "estimated_value", "source_file",
+                "import_batch", "address", "decision_maker"
+            ) if k in lead_data},
+            "ready_for_proposal": str(readiness["ready_for_proposal"]).lower(),
+            "missing_photos": str(readiness["missing_photos"]).lower(),
+            "missing_plans": str(readiness["missing_plans"]).lower(),
+            "missing_measurements": str(readiness["missing_measurements"]).lower(),
+            "missing_address": str(readiness["missing_address"]).lower(),
+            "missing_decision_maker": str(readiness["missing_decision_maker"]).lower(),
+            "missing_budget": str(readiness["missing_budget"]).lower(),
+            "missing_project_stage": str(readiness["missing_project_stage"]).lower(),
+            "proposal_followup_date": readiness["proposal_followup_date"],
+            "proposal_metadata": readiness["proposal_metadata"],
+        }
+    except Exception:
+        return {}
 
 
 def _work_item_to_dict(item: Any) -> dict:

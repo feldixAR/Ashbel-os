@@ -137,46 +137,13 @@ def _normalize_e164(phone: str) -> str:
 
 
 def _send_email(task: OutreachTask) -> OutreachResult:
-    """Send via SMTP when configured; fall back to 'logged' mode if not."""
-    import os, smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-
+    """Return an email draft result; real email sending is disabled."""
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    host = os.environ.get("SMTP_HOST", "")
-    user = os.environ.get("SMTP_USER", "")
-    pwd  = os.environ.get("SMTP_PASS", "")
-    to   = task.phone  # for email channel, 'phone' field carries the email address
-
-    if host and user and pwd and "@" in (to or ""):
-        try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = f"{_biz_name()} — {task.lead_name}"
-            msg["From"]    = user
-            msg["To"]      = to
-            msg.attach(MIMEText(task.message, "plain", "utf-8"))
-            port = int(os.environ.get("SMTP_PORT", "587"))
-            with smtplib.SMTP(host, port, timeout=10) as srv:
-                srv.starttls()
-                srv.login(user, pwd)
-                srv.sendmail(user, [to], msg.as_string())
-            log.info(f"[Email] sent to {to} lead={task.lead_id}")
-            return OutreachResult(
-                success=True, task_id=task.task_id, lead_name=task.lead_name,
-                channel="email", mode="smtp", message_id="", sent_at=now,
-            )
-        except Exception as e:
-            log.error(f"[Email] SMTP failed to={to}: {e}")
-            return OutreachResult(
-                success=False, task_id=task.task_id, lead_name=task.lead_name,
-                channel="email", mode="smtp", error=str(e), sent_at=now,
-            )
-
-    # SMTP not configured — log the intended message, return 'logged' mode
-    log.info(f"[Email] SMTP not configured — logged lead={task.lead_id} to={to}")
+    to = task.phone  # for email channel, phone field carries the email address
+    log.info(f"[Email] draft-only lead={task.lead_id} to={to}")
     return OutreachResult(
         success=True, task_id=task.task_id, lead_name=task.lead_name,
-        channel="email", mode="logged", message_id="", sent_at=now,
+        channel="email", mode="draft_only", message_id="", sent_at=now,
     )
 
 
@@ -200,34 +167,17 @@ def execute_outreach(task: OutreachTask) -> OutreachResult:
     except Exception as _ca_err:
         log.debug(f"[Outreach] cultural_adapter skipped: {_ca_err}")
 
-    # ── Email channel ──────────────────────────────────────────────────────────
     if task.channel == "email":
-        return _send_email(task)
+        return OutreachResult(
+            success=True, task_id=task.task_id, lead_name=task.lead_name,
+            channel="email", mode="draft_only", deep_link="", sent_at=now,
+        )
 
-    # ── WhatsApp channel ───────────────────────────────────────────────────────
-    try:
-        from services.integrations.whatsapp_client import WhatsAppClient
-        token    = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
-        phone_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
-        if token and phone_id:
-            e164 = _normalize_e164(task.phone)   # FIX: normalize before API call
-            result = WhatsAppClient(phone_id, token).send_text(e164, task.message)
-            if result.get("success"):
-                return OutreachResult(
-                    success=True, task_id=task.task_id, lead_name=task.lead_name,
-                    channel=task.channel, mode="api",
-                    message_id=result.get("message_id", ""), sent_at=now,
-                )
-            # API returned failure — log and fall through to deeplink
-            log.warning(f"[Outreach] WhatsApp API returned failure: {result.get('error')}")
-    except Exception as e:
-        log.warning(f"[Outreach] WhatsApp API exception: {e}")
-
-    # ── Safe deeplink fallback (all other channels or API unavailable) ─────────
     return OutreachResult(
         success=True, task_id=task.task_id, lead_name=task.lead_name,
         channel=task.channel, mode="deeplink", deep_link=task.deep_link, sent_at=now,
     )
+
 
 def _write_activity(lead_id: str, atype: str, subject: str, notes: str,
                     direction: str = "outbound", outcome: str = "completed") -> bool:
@@ -375,7 +325,7 @@ class OutreachEngineService:
     """
 
     def run_outreach_batch(self, goal_id: str) -> List[OutreachResult]:
-        """Send initial outreach for all pending leads under a goal."""
+        """Prepare initial outreach drafts for all pending leads under a goal."""
         try:
             from services.storage.repositories.lead_repo import LeadRepository
             from services.storage.repositories.goal_repo import GoalRepository
@@ -389,9 +339,6 @@ class OutreachEngineService:
             for task in daily:
                 task.goal_id = goal_id
                 result = execute_outreach(task)
-                if result.success:
-                    record_outreach_sent(task)
-                    update_pipeline_status(task.task_id, "sent")
                 results.append(result)
             return results
         except Exception as e:
@@ -399,7 +346,7 @@ class OutreachEngineService:
             return []
 
     def run_followup_batch(self, goal_id: str) -> List[OutreachResult]:
-        """Send due follow-ups for a given goal."""
+        """Prepare due follow-up drafts for a given goal."""
         try:
             from services.storage.repositories.lead_repo import LeadRepository
             from services.storage.repositories.outreach_repo import OutreachRepository
@@ -430,9 +377,6 @@ class OutreachEngineService:
                     attempt=attempt, deep_link=deep_link,
                 )
                 result = execute_outreach(task)
-                if result.success:
-                    record_outreach_sent(task)
-                    update_pipeline_status(record.id, "sent")
                 results.append(result)
             return results
         except Exception as e:

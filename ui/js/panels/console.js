@@ -74,8 +74,12 @@ const Console = (() => {
   // ── TAB 1: Leads ─────────────────────────────────────────────────────────
   async function _leads(el) {
     try {
-      const res   = await API.leads({ limit: 100 });
+      const [res, importRes] = await Promise.all([
+        API.leads({ limit: 100 }),
+        API.intakeReports ? API.intakeReports().catch(() => ({ success: false })) : Promise.resolve({ success: false }),
+      ]);
       const leads = res.success ? (res.data?.leads || []) : [];
+      const imports = importRes.success ? (importRes.data?.reports || []) : [];
 
       if (!leads.length) {
         el.innerHTML = _section('לידים',
@@ -97,6 +101,10 @@ const Console = (() => {
         const phone = l.phone
           ? `<a href="tel:${esc(l.phone)}" class="lead-phone">${esc(l.phone)}</a>`
           : '<span class="muted">—</span>';
+        const ready = l.proposal_readiness?.ready_for_proposal;
+        const proposal = ready
+          ? '<span class="pill pill-green">הצעה מוכנה</span>'
+          : '<span class="pill pill-amber">חסר להצעה</span>';
         return `<tr data-status="${esc(l.status || '')}">
           <td><div class="lead-name-cell">
             <div class="lead-name">${esc(l.name || '—')}</div>
@@ -105,7 +113,7 @@ const Console = (() => {
           <td>${phone}</td>
           <td><span class="score ${_scoreCls(score)}">${score}</span></td>
           <td>${_statusPill(l.status)}</td>
-          <td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.next_action || '—')}</td>
+          <td class="muted" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${proposal}<br>${esc(l.next_action || '—')}</td>
           <td>
             <div class="lead-actions">
               <button class="btn btn-xs btn-primary"
@@ -122,6 +130,31 @@ const Console = (() => {
       const newCount      = leads.filter(l => l.status === 'new').length;
       const hotCount      = leads.filter(l => l.status === 'hot').length;
       const contactedCount= leads.filter(l => l.status === 'contacted').length;
+      const proposalReady = leads.filter(l => l.proposal_readiness?.ready_for_proposal).length;
+      const stuckLeads = leads.filter(l =>
+        (!l.phone && !l.email) || !l.next_action ||
+        l.proposal_readiness?.missing_address || l.proposal_readiness?.missing_budget
+      );
+      const lastImport = imports[0];
+      const importStatusHtml = lastImport ? `
+        <div class="import-status-card">
+          <div class="isc-title">ייבוא אחרון: ${esc(lastImport.source_file || '—')}</div>
+          <div class="isc-meta muted">${esc(lastImport.status || '—')} · נקלטו ${lastImport.created_count || 0} · שגיאות ${lastImport.error_count || 0}</div>
+          ${lastImport.approval_id ? `<div class="isc-meta muted">אישור: ${esc(lastImport.approval_id)}</div>` : ''}
+        </div>` : `
+        <div class="import-status-card import-status-empty">
+          <div class="isc-title">אין ייבוא אחרון</div>
+          <div class="isc-meta muted">העלה קובץ בטוח כדי לראות תצוגה מקדימה לפני commit.</div>
+        </div>`;
+      const stuckHtml = stuckLeads.length ? `
+        <div class="stuck-card">
+          <div class="isc-title">לידים תקועים (${stuckLeads.length})</div>
+          <div class="isc-meta muted">${stuckLeads.slice(0, 3).map(l => esc(l.name || '—')).join(' · ')}</div>
+        </div>` : `
+        <div class="stuck-card stuck-ok">
+          <div class="isc-title">אין לידים תקועים</div>
+          <div class="isc-meta muted">לכל הלידים הפעילים יש נתיב טיפול ברור.</div>
+        </div>`;
 
       el.innerHTML = `
         <div class="leads-stats-row">
@@ -129,9 +162,11 @@ const Console = (() => {
           <span class="ls-chip ls-hot">חמים <strong>${hotCount}</strong></span>
           <span class="ls-chip ls-new">חדשים <strong>${newCount}</strong></span>
           <span class="ls-chip">ביצירת קשר <strong>${contactedCount}</strong></span>
+          <span class="ls-chip">הצעה מוכנה <strong>${proposalReady}</strong></span>
           <div style="flex:1"></div>
           <button class="btn btn-xs btn-ghost" onclick="UploadModal.open()">📂 יבוא</button>
         </div>
+        <div class="operator-safety-row">${importStatusHtml}${stuckHtml}</div>
         <div class="leads-tbl-wrap">
           <table class="leads-tbl">
             <thead><tr>

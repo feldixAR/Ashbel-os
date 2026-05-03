@@ -148,6 +148,21 @@ def push_to_crm(lead: dict[str, Any], session: Any = None) -> str:
         if hasattr(new_lead, col) and col in lead:
             setattr(new_lead, col, lead[col])
 
+    new_lead.status = "new"
+    new_lead.next_action = lead.get("next_action") or lead.get("outreach_draft") or ""
+    new_lead.next_action_due = lead.get("next_action_due") or ""
+    new_lead.potential_value = lead.get("estimated_value") or lead.get("budget") or 0
+    new_lead.priority_score = float(lead.get("score") or 0)
+    for col in ("work_type", "project_stage", "estimated_value", "source_file",
+                "import_batch", "address", "decision_maker", "score_reason",
+                "priority", "ready_for_proposal", "missing_photos",
+                "missing_plans", "missing_measurements", "missing_address",
+                "missing_decision_maker", "missing_budget",
+                "missing_project_stage", "proposal_followup_date",
+                "proposal_metadata"):
+        if hasattr(new_lead, col) and col in lead:
+            setattr(new_lead, col, lead[col])
+
     with _get_session() as s:
         s.add(new_lead)
     return new_lead.id

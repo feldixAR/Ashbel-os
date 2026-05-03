@@ -185,5 +185,7 @@ const API = (() => {
     // ── Draft studio ─────────────────────────────────────────────────────────
     draftRefine: (body, instruction, lead = {}) =>
       request('POST', '/lead_ops/draft_refine', { body, instruction, lead }),
+
+    intakeReports: () => request('GET', '/intake/reports'),
   };
 })();

@@ -93,6 +93,22 @@ def detect_lead_columns(headers: list[str]) -> dict:
             mapping.setdefault("role", i)
         elif any(w in hl for w in ["הערות", "notes", "פרטים", "info", "description"]):
             mapping.setdefault("notes", i)
+        elif any(w in hl for w in ["work type", "סוג עבודה", "עבודה", "service"]):
+            mapping.setdefault("work_type", i)
+        elif any(w in hl for w in ["project stage", "stage", "שלב", "סטטוס פרויקט"]):
+            mapping.setdefault("project_stage", i)
+        elif any(w in hl for w in ["budget", "תקציב", "estimated", "value", "שווי"]):
+            mapping.setdefault("estimated_value", i)
+        elif any(w in hl for w in ["address", "כתובת", "street", "רחוב"]):
+            mapping.setdefault("address", i)
+        elif any(w in hl for w in ["decision maker", "מקבל החלטות", "איש קשר", "contact person"]):
+            mapping.setdefault("decision_maker", i)
+        elif any(w in hl for w in ["photos", "תמונות"]):
+            mapping.setdefault("photos", i)
+        elif any(w in hl for w in ["plans", "תוכניות", "תכניות"]):
+            mapping.setdefault("plans", i)
+        elif any(w in hl for w in ["measurements", "מידות", "מדידות"]):
+            mapping.setdefault("measurements", i)
     return mapping
 
 
@@ -112,6 +128,14 @@ def normalize_records(rows: list[list], headers: list[str],
             "company":     _cell(row, col_map.get("company")),
             "role":        _cell(row, col_map.get("role")),
             "notes":       _cell(row, col_map.get("notes")),
+            "work_type":   _cell(row, col_map.get("work_type")),
+            "project_stage": _cell(row, col_map.get("project_stage")),
+            "estimated_value": _extract_amount(_cell(row, col_map.get("estimated_value"))),
+            "address":     _cell(row, col_map.get("address")),
+            "decision_maker": _cell(row, col_map.get("decision_maker")),
+            "missing_photos": _missing_from_cell(_cell(row, col_map.get("photos"))),
+            "missing_plans": _missing_from_cell(_cell(row, col_map.get("plans"))),
+            "missing_measurements": _missing_from_cell(_cell(row, col_map.get("measurements"))),
             "source_type": source_type,
         }
         # Skip rows with no identifying information
@@ -284,3 +308,16 @@ def _cell(row: list, idx: int | None) -> str:
     if idx is None or idx >= len(row):
         return ""
     return str(row[idx] or "").strip()
+
+
+def _extract_amount(value: str) -> int:
+    import re
+    digits = re.sub(r"[^\d]", "", value or "")
+    return int(digits) if digits else 0
+
+
+def _missing_from_cell(value: str) -> bool:
+    v = (value or "").strip().lower()
+    if not v:
+        return True
+    return v in ("no", "false", "0", "חסר", "אין", "missing")
