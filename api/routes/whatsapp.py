@@ -17,6 +17,7 @@ import os
 
 from services.integrations.whatsapp_client import WhatsAppClient
 from orchestration.orchestrator import orchestrator          # BUG-3 FIX: singleton
+from api.middleware import require_auth
 
 logger = logging.getLogger(__name__)
 whatsapp_bp = Blueprint("whatsapp", __name__)
@@ -55,9 +56,6 @@ def receive_webhook():
             msg_id      = msg.get("id")
             msg_type    = msg.get("type")
 
-            client = get_client()
-            client.mark_as_read(msg_id)
-
             if msg_type == "text":
                 text = msg.get("text", {}).get("body", "")
                 logger.info(f"Incoming WhatsApp from {from_number}: {text}")
@@ -67,24 +65,24 @@ def receive_webhook():
                 result = orchestrator.handle_command(text)
                 reply  = result.message or "✅ התקבל"
 
-                client.send_text(from_number, reply)
+                logger.info("WhatsApp dry-run reply preview msg_id=%s from=%s reply=%s", msg_id, from_number, reply)
 
     except Exception as e:
         logger.error(f"Webhook error: {e}", exc_info=True)
 
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "ok", "dry_run": True, "sent_outreach": False}), 200
 
 
 @whatsapp_bp.route("/send", methods=["POST"])
+@require_auth
 def send_message():
     data    = request.get_json(silent=True) or {}
     to      = data.get("to")
     message = data.get("message")
     if not to or not message:
         return jsonify({"error": "to and message required"}), 400
-    client = get_client()
-    result = client.send_text(to, message)
-    return jsonify(result)
+    from engines.outreach_engine import _build_whatsapp_link
+    return jsonify({"success": True, "approval_required": True, "dry_run": True, "sent_outreach": False, "mode": "draft_only", "to": to, "message": message, "deep_link": _build_whatsapp_link(to, message)}), 202
 
 
 @whatsapp_bp.route("/status", methods=["GET"])

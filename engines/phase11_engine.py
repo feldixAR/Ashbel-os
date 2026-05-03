@@ -112,6 +112,24 @@ def _work_score(text: str) -> int:
     return 8  # regular
 
 
+def _proposal_score(lead) -> int:
+    if not hasattr(lead, "ready_for_proposal"):
+        return 0
+    ready = str(getattr(lead, "ready_for_proposal", "false")).lower() == "true"
+    if ready:
+        return 12
+    missing = [
+        "missing_photos", "missing_plans", "missing_measurements",
+        "missing_address", "missing_decision_maker", "missing_budget",
+        "missing_project_stage",
+    ]
+    missing_count = sum(
+        1 for field in missing
+        if str(getattr(lead, field, "true")).lower() == "true"
+    )
+    return max(-8, 6 - missing_count * 2)
+
+
 def _urgency_score(hours: float) -> int:
     if hours >= 48:
         return 20
@@ -221,6 +239,8 @@ def score_lead(lead, deal=None) -> Phase11Result:
     hours = _hours_since(lead.last_activity_at)
     text_blob = " ".join(filter(None, [lead.notes, lead.response,
                                        lead.domain,
+                                       getattr(lead, "work_type", None),
+                                       getattr(lead, "project_stage", None),
                                        getattr(deal, "title", None),
                                        getattr(deal, "commercial_stage", None)]))
 
@@ -228,15 +248,17 @@ def score_lead(lead, deal=None) -> Phase11Result:
     g_score = _geo_score(lead.city)
     w_score = _work_score(text_blob)
     u_score = _urgency_score(hours)
+    p_score = _proposal_score(lead)
     s_base  = BUSINESS_STATES[business_state]
 
-    total = v_score + g_score + w_score + u_score + s_base
+    total = v_score + g_score + w_score + u_score + p_score + s_base
 
     reason_parts = [
         f"state={business_state}({s_base:+d})",
         f"value={value_ils}({v_score:+d})",
         f"geo={lead.city or '?'}({g_score:+d})",
         f"work({w_score:+d})",
+        f"proposal({p_score:+d})",
         f"urgency={hours:.0f}h({u_score:+d})",
     ]
     reason = " | ".join(reason_parts)

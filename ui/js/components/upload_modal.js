@@ -20,6 +20,8 @@ const UploadModal = (() => {
 
   let _records = [];
   let _sourceFile = '';
+  let _importRunId = '';
+  let _approvalId = '';
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -32,6 +34,8 @@ const UploadModal = (() => {
     document.getElementById('uploadModal').classList.add('hidden');
     _records = [];
     _sourceFile = '';
+    _importRunId = '';
+    _approvalId = '';
   }
 
   // ── Init (called once on page load) ──────────────────────────────────────
@@ -99,6 +103,8 @@ const UploadModal = (() => {
       }
 
       _records = res.data?.records || [];
+      _importRunId = res.data?.import_run_id || '';
+      _approvalId = '';
       _showStage('review');
       _renderReview();
       _renderGroupSummary(res.data?.groups || {});
@@ -225,10 +231,22 @@ const UploadModal = (() => {
       const res = await API.post('/intake/commit', {
         records: toImport,
         source_file: _sourceFile,
+        import_run_id: _importRunId,
+        approval_id: _approvalId,
       });
 
       _showStage('results');
       const data = res.success ? (res.data || {}) : {};
+      if (res.success && data.approval_required && data.approval_id) {
+        _approvalId = data.approval_id;
+        document.getElementById('umResultMsg').innerHTML = `<div class="um-warning">
+          נדרש אישור ייבוא לפני כתיבה למערכת.<br>
+          אישור: <code>${data.approval_id}</code><br>
+          <button class="btn btn-primary" style="margin-top:8px" onclick="Shell.switchTab('approvals');UploadModal.close()">פתח אישורים</button>
+          <button class="btn btn-ghost" style="margin-top:8px" onclick="UploadModal.retryCommit()">נסה שוב אחרי אישור</button>
+        </div>`;
+        return;
+      }
       document.getElementById('umResultMsg').innerHTML = res.success
         ? `<div class="um-success">
             ✅ ${data.message || `יובאו ${data.created||0} לידים`}
@@ -261,7 +279,15 @@ const UploadModal = (() => {
     document.getElementById('umDropError').textContent = msg;
   }
 
-  return { open, close, init, setAction };
+  function retryCommit() {
+    if (!_approvalId) {
+      Toast.show('אין approval_id לייבוא הזה', 'warning');
+      return;
+    }
+    _commit();
+  }
+
+  return { open, close, init, setAction, retryCommit };
 })();
 
 // Extend API to support FormData posts

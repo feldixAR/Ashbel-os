@@ -105,34 +105,11 @@ def resolve_approval(approval_id: str):
         ot = details.get("outreach_task") if isinstance(details, dict) else None
         if ot and isinstance(ot, dict) and ot.get("lead_id") and ot.get("phone"):
             try:
-                import uuid as _uuid
-                from engines.outreach_engine import (
-                    OutreachTask, execute_outreach,
-                    record_outreach_sent, record_outreach_failed,
-                    _build_whatsapp_link,
-                )
+                from engines.outreach_engine import _build_whatsapp_link
                 msg  = ot.get("message", "")
-                task = OutreachTask(
-                    task_id  = str(_uuid.uuid4()),
-                    lead_id  = ot["lead_id"],
-                    lead_name= ot.get("lead_name", ""),
-                    phone    = ot["phone"],
-                    channel  = ot.get("channel", "whatsapp"),
-                    message  = msg,
-                    audience = ot.get("audience", "general"),
-                    priority = ot.get("priority", 1),
-                    urgency  = "today",
-                    reason   = f"אושר על-ידי בעלים (approval {approval_id[:8]})",
-                    attempt  = ot.get("attempt", 1),
-                    deep_link= _build_whatsapp_link(ot["phone"], msg),
-                )
-                res = execute_outreach(task)
-                exec_result = {"executed": True, "mode": res.mode, "success": res.success}
-                if res.success:
-                    record_outreach_sent(task, mode=res.mode)
-                else:
-                    record_outreach_failed(task, error=res.error or "execution failed")
-                log.info(f"[Approvals] post-approval outreach lead={task.lead_id} mode={res.mode}")
+                exec_result = {"executed": False, "approval_granted": True, "dry_run": True, "sent_outreach": False, "mode": "approved_draft_only", "lead_id": ot["lead_id"], "channel": ot.get("channel", "whatsapp"), "deep_link": _build_whatsapp_link(ot["phone"], msg)}
+                log.info(f"[Approvals] outreach approved as draft-only lead={ot['lead_id']}")
+                return ok({"approval": _serialize(result), "outreach_execution": exec_result})
             except Exception as ex:
                 log.error(f"[Approvals] post-approval execution error: {ex}")
                 exec_result = {"executed": False, "error": str(ex)}
@@ -246,46 +223,10 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
         ot = details.get("outreach_task") if isinstance(details, dict) else None
         if ot and isinstance(ot, dict) and ot.get("lead_id") and ot.get("phone"):
             try:
-                import uuid as _uuid
-                from engines.outreach_engine import (
-                    OutreachTask, execute_outreach,
-                    record_outreach_sent, record_outreach_failed,
-                    _build_whatsapp_link,
-                )
+                from engines.outreach_engine import _build_whatsapp_link
                 msg  = ot.get("message", "")
-                task = OutreachTask(
-                    task_id  = str(_uuid.uuid4()),
-                    lead_id  = ot["lead_id"],
-                    lead_name= ot.get("lead_name", ""),
-                    phone    = ot["phone"],
-                    channel  = ot.get("channel", "whatsapp"),
-                    message  = msg,
-                    audience = ot.get("audience", "general"),
-                    priority = ot.get("priority", 1),
-                    urgency  = "today",
-                    reason   = f"אושר דרך {source}",
-                    attempt  = ot.get("attempt", 1),
-                    deep_link= _build_whatsapp_link(ot["phone"], msg),
-                )
-                res = execute_outreach(task)
-                if res.success:
-                    record_outreach_sent(task, mode=res.mode)
-                    # ── Live learning: record template sent ───────────────
-                    try:
-                        from skills.learning_skills import record_template_outcome
-                        record_template_outcome(
-                            template_type="outreach",
-                            template_text=msg[:500],
-                            outcome="sent",
-                            segment=ot.get("audience"),
-                            channel=ot.get("channel"),
-                        )
-                    except Exception:
-                        pass
-                    return f"✅ אושר ובוצע — {ot.get('lead_name','')} ({res.mode})"
-                else:
-                    record_outreach_failed(task, error=res.error or "failed")
-                    return f"✅ אושר אך ביצוע נכשל: {res.error}"
+                _build_whatsapp_link(ot["phone"], msg)
+                return f"Approved as draft only: {ot.get('lead_name','')}"
             except Exception as ex:
                 return f"✅ אושר אך שגיאת ביצוע: {ex}"
 

@@ -45,6 +45,26 @@ class LeadModel(Base, TimestampMixin):
     discovery_session_id = Column(String(100), nullable=True)   # links to LeadDiscoveryModel
     meeting_suggested    = Column(String(5),   nullable=True, default="false")
     geo_fit_score        = Column(Float,       nullable=True, default=0.0)
+    # Final completion run — Ashbel Aluminum import and proposal readiness
+    work_type            = Column(String(120), nullable=True)
+    project_stage        = Column(String(120), nullable=True)
+    estimated_value      = Column(Integer,     nullable=True, default=0)
+    source_file          = Column(String(300), nullable=True)
+    import_batch         = Column(String(80),  nullable=True)
+    address              = Column(Text,        nullable=True)
+    decision_maker       = Column(String(200), nullable=True)
+    score_reason         = Column(Text,        nullable=True)
+    priority             = Column(String(40),  nullable=True)
+    ready_for_proposal   = Column(String(5),   nullable=True, default="false")
+    missing_photos       = Column(String(5),   nullable=True, default="true")
+    missing_plans        = Column(String(5),   nullable=True, default="true")
+    missing_measurements = Column(String(5),   nullable=True, default="true")
+    missing_address      = Column(String(5),   nullable=True, default="true")
+    missing_decision_maker = Column(String(5), nullable=True, default="true")
+    missing_budget       = Column(String(5),   nullable=True, default="true")
+    missing_project_stage = Column(String(5),  nullable=True, default="true")
+    proposal_followup_date = Column(String(40), nullable=True)
+    proposal_metadata    = Column(JSON,        nullable=True)
 
     history = relationship("LeadHistoryModel",
                            back_populates="lead",

@@ -24,18 +24,18 @@ def get_daily_summary():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @bp.route("/outreach/execute", methods=["POST"])
+@require_auth
 def execute_task():
     try:
         data = request.get_json() or {}
-        from engines.outreach_engine import OutreachTask, execute_outreach, record_outreach_sent
+        from engines.outreach_engine import OutreachTask, _build_whatsapp_link
         task = OutreachTask(task_id=data.get("task_id", str(_uuid.uuid4())), lead_id=data.get("lead_id",""), lead_name=data.get("lead_name",""), phone=data.get("phone",""), channel=data.get("channel","whatsapp"), message=data.get("message",""), audience=data.get("audience","general"), priority=data.get("priority",2), urgency=data.get("urgency","today"), reason=data.get("reason",""), goal_id=data.get("goal_id",""), opp_id=data.get("opp_id",""), attempt=data.get("attempt",1), deep_link=data.get("deep_link",""))
-        result = execute_outreach(task)
-        if result.success and task.lead_id: record_outreach_sent(task)
-        return jsonify({"success": result.success, "lead_name": result.lead_name, "mode": result.mode, "message_id": result.message_id, "deep_link": result.deep_link, "sent_at": result.sent_at, "error": result.error})
+        return jsonify({"success": False, "approval_required": True, "dry_run": True, "sent_outreach": False, "mode": "approval_required", "lead_name": task.lead_name, "channel": task.channel, "message": task.message, "deep_link": task.deep_link or _build_whatsapp_link(task.phone, task.message), "error": "Sensitive outreach execution requires approval via /api/outreach/request-approval"}), 202
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @bp.route("/outreach/send", methods=["POST"])
+@require_auth
 def send_to_lead():
     try:
         data = request.get_json() or {}
@@ -46,14 +46,14 @@ def send_to_lead():
                 if name.lower() in l.name.lower(): phone = l.phone or ""; lead_id = l.id; break
         if not phone: return jsonify({"success": False, "error": "לא נמצא טלפון"}), 400
         if not message: return jsonify({"success": False, "error": "חסרה הודעה"}), 400
-        from engines.outreach_engine import _build_whatsapp_link, OutreachTask, execute_outreach
+        from engines.outreach_engine import _build_whatsapp_link, OutreachTask
         task = OutreachTask(task_id=str(_uuid.uuid4()), lead_id=lead_id, lead_name=name, phone=phone, channel="whatsapp", message=message, audience="general", priority=1, urgency="today", reason="שליחה ידנית", attempt=1, deep_link=_build_whatsapp_link(phone, message))
-        result = execute_outreach(task)
-        return jsonify({"success": result.success, "lead_name": name, "phone": phone, "mode": result.mode, "deep_link": result.deep_link, "message_id": result.message_id, "sent_at": result.sent_at})
+        return jsonify({"success": True, "approval_required": True, "dry_run": True, "sent_outreach": False, "mode": "draft_only", "lead_id": lead_id, "lead_name": name, "phone": phone, "channel": "whatsapp", "message": message, "deep_link": task.deep_link}), 202
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @bp.route("/outreach/<outreach_id>/status", methods=["PUT"])
+@require_auth
 def update_status(outreach_id):
     try:
         data = request.get_json() or {}
@@ -234,17 +234,14 @@ def list_by_lifecycle(lifecycle_status: str):
 
 
 @bp.route("/outreach/daily", methods=["POST"])
+@require_auth
 def run_daily_cycle():
     try:
-        from engines.outreach_engine import build_outreach_queue, prioritize_daily, execute_outreach, record_outreach_sent
+        from engines.outreach_engine import build_outreach_queue, prioritize_daily
         from services.storage.repositories.lead_repo import LeadRepository
         leads = LeadRepository().list_all(); queue = build_outreach_queue(leads); daily = prioritize_daily(queue, 5)
-        results = []
-        for task in daily:
-            result = execute_outreach(task)
-            if result.success and task.lead_id: record_outreach_sent(task)
-            results.append({"lead_name": task.lead_name, "mode": result.mode, "deep_link": result.deep_link, "message_id": result.message_id, "success": result.success})
-        return jsonify({"success": True, "total_queue": len(queue), "executed": len(results), "results": results})
+        results = [{"lead_id": task.lead_id, "lead_name": task.lead_name, "channel": task.channel, "message": task.message, "deep_link": task.deep_link, "priority": task.priority, "urgency": task.urgency, "reason": task.reason} for task in daily]
+        return jsonify({"success": True, "dry_run": True, "sent_outreach": False, "total_queue": len(queue), "executed": 0, "preview_count": len(results), "results": results})
     except Exception as e:
         log.error(f"[Outreach] daily cycle error: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500

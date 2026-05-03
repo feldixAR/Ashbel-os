@@ -13,7 +13,7 @@ from .manual_send import _email_manual
 
 log = logging.getLogger(__name__)
 
-_SMTP_READY = bool(os.getenv("SMTP_HOST") and os.getenv("SMTP_USER") and os.getenv("SMTP_PASS"))
+_SMTP_READY = False
 
 
 def draft_email(
@@ -47,43 +47,11 @@ def send_email(
 ) -> ChannelResult:
     """
     Send email. Returns readiness result if SMTP not configured.
-    When SMTP is configured, sends via smtplib.
+    This function never sends; it returns a draft-only result.
     """
     result = draft_email(recipient_name, recipient_email, body, subject, sender_name)
-
-    if not _SMTP_READY:
-        log.info(f"[EmailChannel] SMTP not configured — returning readiness draft for {recipient_email}")
-        return result
-
-    # ── Active send path (activates when SMTP credentials are set) ────────────
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-
-        smtp_host = os.getenv("SMTP_HOST")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_user = os.getenv("SMTP_USER")
-        smtp_pass = os.getenv("SMTP_PASS")
-        from_addr = os.getenv("SMTP_FROM", smtp_user)
-
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"]    = f"{sender_name or 'אשבל'} <{from_addr}>"
-        msg["To"]      = recipient_email
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(from_addr, recipient_email, msg.as_string())
-
-        result.status = ChannelStatus.ACTIVE
-        result.meta["sent"] = True
-        log.info(f"[EmailChannel] sent to {recipient_email}")
-    except Exception as e:
-        log.error(f"[EmailChannel] send failed: {e}")
-        result.status = ChannelStatus.READINESS
-        result.meta["error"] = str(e)
-
+    log.info(f"[EmailChannel] returning draft-only email for {recipient_email}")
+    result.status = ChannelStatus.READINESS
+    result.meta["sent"] = False
+    result.meta["dry_run"] = True
     return result

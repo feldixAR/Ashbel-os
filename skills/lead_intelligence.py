@@ -36,6 +36,11 @@ class NormalizedLead:
     source_url:       str  = ""
     segment:          str  = ""
     is_inbound:       bool = False
+    work_type:        str  = ""
+    project_stage:    str  = ""
+    estimated_value:  int  = 0
+    address:          str  = ""
+    decision_maker:   str  = ""
     raw:              dict = field(default_factory=dict)
     fingerprint:      str  = ""   # dedup key
 
@@ -104,6 +109,11 @@ def normalize(raw: dict[str, Any]) -> NormalizedLead:
     company = _clean(raw.get("company") or raw.get("organization") or "")
     role    = _normalize_role(raw.get("role") or raw.get("title") or _extract_role(text))
     segment = _infer_segment(role, raw.get("segment") or "")
+    work_type = _clean(raw.get("work_type") or _extract_work_type(text))
+    project_stage = _clean(raw.get("project_stage") or _extract_project_stage(text))
+    estimated_value = _amount(raw.get("estimated_value") or raw.get("budget") or _extract_budget(text))
+    address = _clean(raw.get("address") or "")
+    decision_maker = _clean(raw.get("decision_maker") or raw.get("contact_person") or "")
     fp = _fingerprint(name, phone, email, company)
 
     return NormalizedLead(
@@ -117,6 +127,11 @@ def normalize(raw: dict[str, Any]) -> NormalizedLead:
         source_url=raw.get("source_url") or raw.get("url") or "",
         segment=segment,
         is_inbound=bool(raw.get("is_inbound")),
+        work_type=work_type,
+        project_stage=project_stage,
+        estimated_value=estimated_value,
+        address=address,
+        decision_maker=decision_maker,
         raw=raw,
         fingerprint=fp,
     )
@@ -177,6 +192,19 @@ _BUYING_SIGNAL_KEYWORDS = [
     "מחפש", "צריך", "רוצה", "building", "renovation", "project", "new build",
 ]
 
+_PROJECT_STAGE_WEIGHTS = {
+    "ready": 1.0, "quote": 0.9, "proposal": 0.9, "measurements": 0.8,
+    "planning": 0.65, "early": 0.45,
+    "מוכן": 1.0, "הצעת מחיר": 0.9, "מדידה": 0.8, "תכנון": 0.65,
+}
+
+_WORK_TYPE_WEIGHTS = {
+    "window": 0.7, "windows": 0.7, "door": 0.65, "balcony": 0.8,
+    "villa": 0.95, "belgian": 0.9, "פרגולה": 0.7, "חלון": 0.7,
+    "חלונות": 0.7, "דלת": 0.65, "מרפסת": 0.8, "וילה": 0.95,
+    "בלגי": 0.9,
+}
+
 
 def enrich(lead: NormalizedLead, context: dict[str, Any] | None = None) -> EnrichedLead:
     """Add geo fit, role fit, signal strength, and notes."""
@@ -184,6 +212,10 @@ def enrich(lead: NormalizedLead, context: dict[str, Any] | None = None) -> Enric
     geo_fit    = _compute_geo_fit(lead.city)
     role_fit   = _compute_role_fit(lead.segment)
     signal_str = _compute_signal(lead.raw)
+    if lead.project_stage:
+        signal_str = max(signal_str, _stage_fit(lead.project_stage))
+    if lead.work_type:
+        role_fit = max(role_fit, _work_type_fit(lead.work_type))
     notes: list[str] = []
     if geo_fit >= 0.8:
         notes.append(f"גאוגרפיה מעולה: {lead.city}")
@@ -244,11 +276,25 @@ def score_lead(enriched: EnrichedLead, weights: dict[str, int] | None = None) ->
         + (1 if enriched.lead.email else 0) * w.get("has_email", 10)
         + (1 if enriched.lead.is_inbound else 0) * w.get("is_inbound", 5)
     )
+    if enriched.lead.estimated_value >= 50000:
+        raw_score += 10
+    elif enriched.lead.estimated_value >= 20000:
+        raw_score += 5
+    if enriched.lead.work_type:
+        raw_score += int(_work_type_fit(enriched.lead.work_type) * 5)
+    if enriched.lead.project_stage:
+        raw_score += int(_stage_fit(enriched.lead.project_stage) * 8)
     score = min(100, int(raw_score))
     priority = "high" if score >= 70 else "medium" if score >= 40 else "low"
     reasons = list(enriched.enrichment_notes)
     if not reasons:
         reasons.append(f"ציון בסיס: {score}")
+    if enriched.lead.work_type:
+        reasons.append(f"סוג עבודה: {enriched.lead.work_type}")
+    if enriched.lead.project_stage:
+        reasons.append(f"שלב פרויקט: {enriched.lead.project_stage}")
+    if enriched.lead.estimated_value:
+        reasons.append(f"שווי משוער: ₪{enriched.lead.estimated_value:,}")
 
     # ── Segment-aware next action ─────────────────────────────────────────
     seg = (enriched.lead.segment or "").lower()
@@ -378,6 +424,48 @@ def _compute_role_fit(segment: str) -> float:
 
 
 def _compute_signal(raw: dict) -> float:
-    text = str(raw.get("text") or raw.get("bio") or raw.get("post") or "").lower()
+    text = str(raw.get("text") or raw.get("bio") or raw.get("post") or raw.get("notes") or "").lower()
     hits = sum(1 for kw in _BUYING_SIGNAL_KEYWORDS if kw in text)
     return min(1.0, hits * 0.2)
+
+
+def _extract_work_type(text: str) -> str:
+    tl = text.lower()
+    for keyword in _WORK_TYPE_WEIGHTS:
+        if keyword in tl:
+            return keyword
+    return ""
+
+
+def _extract_project_stage(text: str) -> str:
+    tl = text.lower()
+    for keyword in _PROJECT_STAGE_WEIGHTS:
+        if keyword in tl:
+            return keyword
+    return ""
+
+
+def _extract_budget(text: str) -> int:
+    money = re.search(r"(?:₪|nis|ils)?\s?([\d,]{4,})", text.lower())
+    return _amount(money.group(1)) if money else 0
+
+
+def _amount(value: Any) -> int:
+    digits = re.sub(r"[^\d]", "", str(value or ""))
+    return int(digits) if digits else 0
+
+
+def _stage_fit(stage: str) -> float:
+    tl = (stage or "").lower()
+    for keyword, value in _PROJECT_STAGE_WEIGHTS.items():
+        if keyword in tl:
+            return value
+    return 0.5
+
+
+def _work_type_fit(work_type: str) -> float:
+    tl = (work_type or "").lower()
+    for keyword, value in _WORK_TYPE_WEIGHTS.items():
+        if keyword in tl:
+            return value
+    return 0.55

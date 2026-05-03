@@ -113,7 +113,9 @@ def create_app() -> Flask:
 
     @app.route("/api/health")
     def health():
-        return {"status": "ok"}, 200
+        from api.middleware import ok
+        from services.storage.db import health_check
+        return ok({"status": "ok", "db": health_check()})
 
     log.info("[App] AshbalOS API ready")
 
