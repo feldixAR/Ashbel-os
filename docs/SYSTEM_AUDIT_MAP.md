@@ -1,185 +1,356 @@
 # System Audit Map
 
-## Status of this document
+## Status
 
-This is the initial audit map created during the alignment run. It separates code-verified facts from items still requiring a focused local audit.
+Focused audit update completed on branch `control/alignment-run-2026-05-03`.
 
-## Code and docs verified during alignment
+This audit is based on direct inspection of key repo files through GitHub. It is not a full local runtime run. Runtime boot, UI rendering and tests still require local or CI execution.
+
+## Code-verified facts
+
+### Repository
 
 - Repo: `feldixAR/Ashbel-os`.
-- Default branch: `master`.
-- README identifies the product as AshbelOS for Ashbel Aluminum.
-- README states stack: Python 3.11, Flask, Gunicorn, PostgreSQL and Railway.
-- README states production URL: `https://ashbel-os-production.up.railway.app`.
-- CLAUDE.md exists and contains architecture, batch inventory and production closeout history.
-- Governance doc exists.
-- Product operating model exists.
+- Working branch for this alignment: `control/alignment-run-2026-05-03`.
+- Default production branch from repo metadata/docs: `master`.
+- Primary system direction: AshbelOS custom system only.
+- HubSpot: out of scope by project decision.
 
-## Architecture from repo docs
+### Runtime and entrypoint
 
-Documented flow:
+Verified files:
 
-1. Dashboard UI / WhatsApp.
-2. `api/routes/*.py` as Flask Blueprints.
-3. `orchestration/orchestrator.py` for intent to task mapping.
-4. `orchestration/task_manager.py` for task lifecycle.
-5. `services/execution/executor.py` for action dispatch.
-6. `engines/*.py` and `agents/**` for domain logic.
-7. `services/storage/` for PostgreSQL through SQLAlchemy.
+- `Procfile`
+- `api/app.py`
+- `requirements.txt`
+- `.gitignore`
 
-## Source-of-truth docs to inspect in final audit
+Findings:
 
-- `README.md`
-- `CLAUDE.md`
-- `docs/ashbelos-governance.md`
-- `docs/ashbelos-token-efficiency-policy.md`
-- `docs/PRODUCT_OPERATING_MODEL.md`
-- `docs/AGENTS_SKILLS_ORCHESTRATION.md`
-- `docs/UI_UX_MOBILE_RULES.md`
-- `docs/DEPLOY_AND_VERIFICATION_DISCIPLINE.md`
-- `docs/API.md`
-- `docs/TELEGRAM.md`
-- `docs/FALLBACK.md`
-- `docs/INTEGRATIONS.md`
+- Gunicorn entrypoint is `api.app:create_app()`.
+- Procfile command: `gunicorn 'api.app:create_app()' --bind 0.0.0.0:$PORT --workers 2 --timeout 120`.
+- Flask app factory exists in `api/app.py`.
+- `create_app()` creates a Flask app, configures CORS, calls `create_all_tables()`, bootstraps the event dispatcher, registers blueprints, serves `ui/index.html`, serves `/ui/<path>`, exposes `/api/health`, and attempts to start `scheduler.revenue_scheduler`.
+- `requirements.txt` confirms Flask, Gunicorn, SQLAlchemy, PostgreSQL driver, AI provider SDKs, APScheduler, auth/security packages, dotenv, prometheus-client, pytest, flask-cors, requests and httpx.
+- `.gitignore` ignores `.env`, local env files, `data/`, local DB files, logs, test caches and IDE folders. This supports keeping real lead files out of Git if they are placed under `data/`.
 
-## Areas to map in the next focused audit
+Status:
 
-### App and runtime
+- Exists and concrete.
+- Requires runtime verification.
 
-- App entrypoint.
-- Gunicorn entrypoint.
-- Local run command.
-- Test command.
-- Environment variables.
-- Database startup and migrations.
+### Registered API surface from `api/app.py`
 
-### API routes
+Verified active blueprint imports/registrations include:
 
-Map routes related to:
+- `api.routes.commands`
+- `api.routes.actions`
+- `api.routes.leads`
+- `api.routes.agents`
+- `api.routes.tasks`
+- `api.routes.approvals`
+- `api.routes.reports`
+- `api.routes.system`
+- `api.routes.goals`
+- `api.routes.dashboard`
+- `api.routes.learning`
+- `api.routes.outreach`
+- `api.routes.research`
+- `api.routes.delivery`
+- `api.routes.analytics`
+- `api.routes.crm`
+- `api.routes.webhooks`
+- `api.routes.briefing`
+- `api.routes.admin`
+- `api.routes.revenue_queue`
+- `api.routes.claude_dispatch`
+- `api.routes.gpt_connector`
+- `api.routes.mcp`
+- `api.routes.openclaw`
+- `api.routes.telegram`
+- `api.routes.seo`
+- `api.routes.lead_ops`
+- `api.routes.intake`
+- `api.routes.channels`
+- `api.routes.whatsapp`
 
-- Health.
-- Command.
-- Leads.
-- Lead operations.
-- Approvals.
-- Revenue.
-- Dashboard / Home.
-- System.
-- Learning.
-- Telegram.
-- GPT connector.
-- MCP.
-- Channels.
-- Marketing.
-- Calendar.
-- Tasks.
+Status:
 
-### UI
+- Broad API surface exists.
+- Some route names are still legacy/generic, including `crm`, but this does not by itself mean external HubSpot dependency.
+- Must verify route behavior and whether any route conflicts with the current HubSpot-out decision.
 
-Map:
+### Health endpoint
 
-- `ui/index.html`.
-- Shell controller.
-- Home / Command Center.
-- Leads panel.
-- Console panel.
-- Approvals panel.
-- Communications panel.
-- Import or Upload panel.
-- Draft modal.
-- Mobile CSS.
-- Empty, loading, error and blocked states.
+Verified in `api/app.py`:
 
-### Lead and intake modules
+- `/api/health` returns `{"status": "ok"}`, HTTP 200.
 
-Map:
+Status:
 
-- Lead model.
-- Contact / client model.
-- Task model.
-- Approval model.
-- Activity model.
-- Import run model, if present.
-- Intake normalizer.
-- Document intelligence parser.
-- Lead acquisition engine.
-- Lead scoring logic.
-- Deduplication logic.
+- Exists in code.
+- Runtime status not verified in this audit.
 
-### Agents and skills
+### UI entrypoint and shell
 
-Map:
+Verified files:
 
-- Agent registry.
-- Lead acquisition agent.
-- Follow-up agent.
-- Reporting agent.
-- Channel strategy agent.
-- Marketing strategy agent.
-- SEO agent.
-- Learning skills.
-- Lead intelligence skills.
-- Outreach intelligence skills.
-- Document intelligence skills.
+- `ui/index.html`
+- `ui/js/components/upload_modal.js`
 
-### Revenue and daily operation
+Findings from `ui/index.html`:
 
-Map:
+- UI is Hebrew RTL: `<html lang="he" dir="rtl">`.
+- Title: `AshbelOS — Operating Console`.
+- API key modal exists.
+- Upload modal exists inside the main UI.
+- Operating Console shell exists.
+- Header includes profile badge, command input and upload button.
+- Command chips exist: hot leads, send queue, meetings, approvals, marketing and document import.
+- Today strip exists with metrics for new leads, approvals, manual queue, meetings and pipeline.
+- Main work surface tabs: leads, approvals, queue, meetings, growth.
+- Intelligence rail exists for agents, learning, Telegram, channels and system changes.
+- Mobile bottom navigation exists.
+- Scripts loaded: `api.js`, `toast.js`, `ui.js`, `upload_modal.js`, `draft_modal.js`, `shell.js`, `console.js`.
 
-- Daily revenue queue.
-- Revenue scoring.
-- Next best action.
-- Proposal readiness.
-- Follow-up queue.
-- Weekly review.
-- Learning snapshot.
+Findings from `upload_modal.js`:
 
-### Integrations
+- File upload modal exists.
+- Supported extensions in UI: CSV, XLSX, XLS, DOCX, DOC, PDF, TXT.
+- Upload posts multipart file to `/api/intake/upload`.
+- Review stage groups records by relevant_now, relevant_waiting, missing_info, not_relevant and duplicate.
+- Operator can approve, review or skip individual rows.
+- Commit posts approved records to `/api/intake/commit`.
 
-Map:
+Status:
 
-- Telegram operator flow.
-- GPT connector.
-- MCP endpoint.
-- Manual send readiness.
-- Email readiness.
-- WhatsApp readiness.
-- Google Drive readiness, if any.
-- n8n readiness, if any.
+- Import/Upload UI exists.
+- RTL and mobile shell exist in markup.
+- Runtime visual quality still requires browser verification.
+- Commit currently appears to happen directly from the modal after row approval. Need confirm whether this is sufficient approval or whether a separate approval queue is required for full imports.
+
+### Intake API
+
+Verified file:
+
+- `api/routes/intake.py`
+
+Endpoints:
+
+- `POST /api/intake/upload`
+- `POST /api/intake/commit`
+
+Findings:
+
+- Upload requires auth.
+- Upload accepts multipart file field named `file`.
+- Max file size: 10MB.
+- Upload uses `skills.document_intelligence.parse_document()`.
+- Upload classifies records through `_classify_records()`.
+- Preview response includes source file, format, raw count, preview records, group summary and warnings.
+- Commit requires auth.
+- Commit receives records and source file.
+- Commit skips records whose action is `skip` or `reject`.
+- Commit calls `engines.lead_acquisition_engine.process_inbound()` to create leads.
+- Commit returns created, skipped, errors and lead IDs.
+
+Status:
+
+- Upload and preview exist.
+- Commit exists.
+- The code describes commit as commit to CRM, but implementation uses AshbelOS internal lead acquisition engine, not external HubSpot.
+- Gap: commit is not obviously routed through `ApprovalRepository` or a global import approval request.
+- Gap: no explicit ImportRun model/log verified in this audit.
+- Gap: no confirmed persisted raw file storage path. The route reads bytes directly from upload.
+
+### Document parser
+
+Verified file:
+
+- `skills/document_intelligence.py`
+
+Findings:
+
+- Stateless parser exists.
+- Supported formats documented and implemented: CSV, Excel, Word, PDF and TXT, with graceful fallback where optional packages are unavailable.
+- CSV parser uses stdlib csv.
+- Excel parser uses optional openpyxl.
+- Word parser uses optional python-docx.
+- PDF parser uses optional pdfplumber.
+- Text parser exists.
+- Header mapping supports Hebrew and English fields for name, phone, email, city, company, role and notes.
+- Free-text extraction exists for phone and email.
+
+Status:
+
+- Parser exists and is broad.
+- Gap: `requirements.txt` does not list `openpyxl`, `python-docx` or `pdfplumber`, so Excel/Word/PDF parsing may fail unless installed in the runtime separately.
+- Gap: DOCX support exists in code but dependency may be missing from requirements.
+
+### Lead intelligence
+
+Verified file:
+
+- `skills/lead_intelligence.py`
+
+Findings:
+
+- Normalization contract exists.
+- Deduplication contract exists.
+- Enrichment contract exists.
+- Lead scoring contract exists.
+- Ranking and explanation functions exist.
+- Israeli phone and email regexes exist.
+- City normalization exists for common Israeli cities.
+- Role/segment inference exists for architects, interior designers, contractors, developers, project managers and engineers.
+- Scoring produces score, priority, reasons and next action.
+- Learning-aware scoring adjustment exists through MemoryStore.
+
+Status:
+
+- Lead scoring and next action exist.
+- Gap: scoring is generic and may need Ashbel Aluminum-specific work type/project stage/value rules.
+- Gap: current document import normalization only maps general fields. It does not yet clearly normalize project stage, work type, budget, proposal readiness fields or import batch.
+
+### Lead operations API
+
+Verified file:
+
+- `api/routes/lead_ops.py`
+
+Endpoints documented in file:
+
+- `POST /api/lead_ops/discover`
+- `POST /api/lead_ops/inbound`
+- `POST /api/lead_ops/website`
+- `GET /api/lead_ops/queue`
+- `GET/POST /api/lead_ops/discovery_plan`
+- `POST /api/lead_ops/draft`
+- `GET /api/lead_ops/status`
+- `GET /api/lead_ops/brief/<id>`
+- `POST /api/lead_ops/batch_score`
+- `POST /api/lead_ops/execute/<approval_id>`
+- `POST /api/lead_ops/draft_refine`
+
+Findings:
+
+- Discover pipeline exists.
+- Inbound lead processing exists.
+- Website analysis exists.
+- Work queue exists and splits discovered, inbound, pending_action and meeting_suggestions.
+- Draft generation exists.
+- Status counts exist.
+- AI briefing exists with deterministic fallback.
+- Batch scoring exists.
+- Execute approval endpoint exists.
+- Draft refinement exists.
+
+Status:
+
+- Lead operations are substantial and active in code.
+- Gap: proposal readiness not directly verified in this route.
+- Gap: daily revenue plan must be verified through revenue routes/modules.
+- Gap: `execute` approval endpoint logs approved outreach and emits events, but actual customer-send behavior must be checked in `engines.outreach_engine` and channel services.
+
+### Approval flow
+
+Verified file:
+
+- `api/routes/approvals.py`
+
+Endpoints:
+
+- `GET /api/approvals`
+- `GET /api/approvals/history`
+- `POST /api/approvals/create`
+- `POST /api/approvals/<approval_id>`
+
+Findings:
+
+- Pending approval listing exists.
+- Approval history exists.
+- UI-created approval request exists.
+- Resolve endpoint exists.
+- Resolve publishes approval granted/denied events.
+- Lead outreach approval logs ActivityModel notes and emits `LEAD_OUTREACH_SENT`.
+- System change approvals are stored in MemoryStore.
+- Shared `_resolve_approval()` exists for Telegram.
+
+Risk finding:
+
+- For approval details containing `outreach_task`, the approval route can call `execute_outreach(task)`. This must be reviewed to ensure real sending is blocked unless credentials and explicit approval policy allow it.
+- For draft-modal style approvals, the code logs approved draft/activity and emits event. That is compatible with controlled manual workflow.
+
+Status:
+
+- Approval system exists.
+- Requires safety audit of `engines.outreach_engine` and channel execution modes before approving live use.
+
+### Data safety
+
+Verified `.gitignore`:
+
+- `data/` is ignored.
+- `.env` and local env files are ignored.
+- DB files and logs are ignored.
+
+Status:
+
+- Good baseline for keeping real lead data out of Git.
+- Gap: project needs explicit folder convention and local instructions for `data/raw_leads`, `data/samples`, `data/processed`, `data/import_reports`.
 
 ### Tests
 
-Map tests for:
+Verified file:
 
-- Bootstrapping.
-- Health.
-- Product fit.
-- Lead acquisition.
-- Approvals.
-- Revenue queue.
-- Learning feedback.
-- Scheduler.
-- Cross-surface truth.
-- UI behavior.
+- `tests/test_product_fit.py`
 
-## Suspected obsolete or risk areas to verify
+Findings:
 
-- Demo profile or demo real estate scaffolding.
-- Old generic CRM views that do not support Ashbel Aluminum daily work.
-- Channel execution code that could bypass approval gates.
-- Any HubSpot-related code, if present.
-- Sample data paths that could be confused with real data.
-- Old UI panels that are no longer in active navigation.
-- Duplicate import or lead parsing paths.
+- Product-fit tests cover profile-driven context, intent routing, queue logic, drafting studio, intake surfaces, SEO workbench and lead-to-action flow.
+- Tests confirm draft generation requires approval.
+- Tests confirm document column detection in Hebrew and English.
+- Tests confirm draft refine endpoint is present in `api/routes/lead_ops.py`.
 
-## Required audit output before implementation
+Status:
 
-The next audit must update this file with concrete paths and current status:
+- Relevant tests exist.
+- Full test suite not run in this audit.
+- Additional tests needed for current HubSpot-out decision, full import approval, raw lead folder separation, ImportRun logging and proposal readiness.
 
-- Exists and working.
-- Exists but incomplete.
-- Exists but obsolete.
-- Missing.
-- Requires runtime verification.
+## Status summary by area
 
-No final implementation should start until this map is filled with concrete repo facts.
+| Area | Status | Notes |
+|---|---|---|
+| App entrypoint | Exists | `api.app:create_app()` |
+| Production command | Exists | Procfile uses Gunicorn |
+| Health endpoint | Exists | Runtime not verified here |
+| Custom UI | Exists | Hebrew RTL Operating Console |
+| Import UI | Exists | Upload modal and review flow |
+| Intake upload | Exists | `/api/intake/upload` |
+| Intake preview | Exists | Preview records and group summary |
+| Intake commit | Exists but needs approval review | `/api/intake/commit` directly commits approved rows |
+| Document parser | Exists | CSV/TXT OK; DOCX/XLSX/PDF need dependency check |
+| Lead scoring | Exists | Needs aluminum-specific enrichment check |
+| Deduplication | Exists | Phone/email in route, fingerprint skill in skill layer |
+| Lead ops | Exists | Discover, inbound, queue, draft, brief, score, execute |
+| Approval queue | Exists | Create/list/history/resolve |
+| Activity log | Exists in approval flow | Broader import logging not verified |
+| Proposal readiness | Unverified | Must audit or implement |
+| Daily revenue plan | Unverified in code | Must audit revenue routes/modules |
+| HubSpot dependency | Not found in inspected active files | Must search locally in final audit |
+| Real data safety | Partially exists | `data/` ignored, but folder convention docs needed |
+| Tests | Exist | Full suite not run |
+
+## Required next audit items before implementation
+
+1. Inspect `engines.outreach_engine` and channel services to verify no customer send can bypass approval.
+2. Inspect storage models for Lead, Task, Approval, Activity, ImportRun and Proposal readiness.
+3. Inspect revenue queue and daily plan implementation.
+4. Inspect console JS and API JS for UI behavior and API paths.
+5. Inspect scheduler status and learning snapshot.
+6. Search for HubSpot references locally and remove/quarantine active direction if present.
+7. Run local tests or CI to establish current actual status.
+8. Verify UI in browser, especially mobile and Hebrew RTL usability.
+9. Verify DOCX dependency and import behavior using a safe sample file.
+10. Decide whether `/api/intake/commit` needs a formal ApprovalRepository gate before writing leads.
