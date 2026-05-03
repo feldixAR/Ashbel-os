@@ -24,6 +24,17 @@ Intent -> Preview -> Business review -> Approval -> Commit -> Daily work queue -
 
 Sensitive actions remain blocked unless explicitly approved.
 
+## Current research update 2026-05-03
+
+Recent product and QA direction was reviewed before implementation planning. The conclusions are:
+
+1. Lead scoring should not rely on a single number. It should combine Fit, Intent, Timing and Actionability, then explain the reason in plain language.
+2. Sales teams trust scoring only when the system shows why a lead is prioritized and what action should follow.
+3. For AshbelOS, construction stage is the timing signal. Aluminum request type is the intent signal. Location, project type and contactability are fit/actionability signals.
+4. E2E frontend tests should protect the critical revenue flows, not attempt full UI coverage.
+5. Visual regression testing should focus on the most important screens first, with stable baseline screenshots, masked dynamic data and disabled animations.
+6. AI-assisted QA must remain human-in-the-loop: the system may inspect, summarize and propose fixes, but sensitive actions require operator approval.
+
 ## Primary product areas
 
 1. Executive Revenue Dashboard
@@ -55,6 +66,7 @@ Each imported record must include:
 - email
 - city_or_settlement
 - construction_stage
+- construction_stage_label
 - aluminum_intent
 - aluminum_intent_label
 - work_type_detected
@@ -67,6 +79,8 @@ Each imported record must include:
 - proposal_readiness
 - missing_fields
 - import_recommendation
+- confidence_level
+- parser_warnings
 
 ## Aluminum intent classification
 
@@ -143,6 +157,23 @@ Suggested scoring categories:
 | Geography | 5 | target service area: 5, acceptable: 3, far: 0 |
 | Proposal readiness | 5 | enough data for next commercial step: 5 |
 
+## Score output contract
+
+The API and UI must not expose only `score`. Each scored lead must expose:
+
+- score_total
+- score_label: hot_now, warm, follow_up, clarify, skip
+- score_breakdown.intent
+- score_breakdown.timing
+- score_breakdown.contactability
+- score_breakdown.scope
+- score_breakdown.geography
+- score_breakdown.readiness
+- business_reason
+- recommended_action
+- next_action_date
+- confidence_level
+
 ## Preview card display
 
 Each imported lead card should show:
@@ -193,6 +224,10 @@ Before commit, the UI must state:
 - Number of missing contact details.
 - Number of duplicates skipped.
 
+## File re-upload behavior
+
+After every upload attempt, success or failure, the file input must be reset. The same file must be selectable again without refreshing the page. Closing the import modal must reset file input, errors, records, import_run_id and approval_id.
+
 ---
 
 # 2. Daily Revenue Dashboard
@@ -221,6 +256,10 @@ Every displayed lead must show:
 - next action
 - blocker if any
 - approval state if relevant
+
+## Daily queue decision contract
+
+A lead should enter the daily queue only if it has an action that can be taken today. A high future potential lead should not crowd out a lead that requires action now. Future leads should enter follow-up scheduling, not the today queue.
 
 ---
 
@@ -307,6 +346,10 @@ Build a browser-facing QA capability that verifies the product as a user experie
 3. Frontend QA: screens, modals, buttons, error states, mobile RTL
 4. Visual QA: screenshots and spec comparison
 
+## QA technology direction
+
+Use a browser automation layer such as Playwright for critical flows. The purpose is not broad coverage. The purpose is revenue-protection testing: proving that the operator can complete the few flows that would block daily work if broken.
+
 ## Required browser walkthroughs
 
 1. Load dashboard
@@ -331,6 +374,16 @@ Build a browser-facing QA capability that verifies the product as a user experie
 20. Run mobile viewport check
 21. Save screenshots
 22. Produce pass/fail/spec-gap report
+
+## Visual QA rules
+
+- Create stable baseline screenshots in a controlled environment.
+- Start with the critical screens only: Dashboard, Import Center, Approval Center, Leads, QA Console and Mobile Dashboard.
+- Mask dynamic data such as timestamps, commit hashes, counters and live queue values.
+- Disable animations before screenshot capture.
+- Store baseline screenshots with the repo or as CI artifacts.
+- Review visual diffs as product decisions, not only technical failures.
+- Do not fail the whole release on harmless pixel noise. Fail on layout breakage, hidden buttons, unreadable text, overflow or missing primary actions.
 
 ## QA report must include
 
@@ -357,6 +410,7 @@ Build a browser-facing QA capability that verifies the product as a user experie
 - No outreach
 - No external sending
 - Any commit requires explicit operator approval
+- AI-generated QA findings are recommendations until reviewed by the operator
 
 ---
 
@@ -390,7 +444,26 @@ The UI must emphasize action priority:
 
 ---
 
-# 7. Definition of Done
+# 7. Implementation readiness checklist
+
+Before any implementation run, verify:
+
+1. The active branch and latest master commit.
+2. Production health and version.
+3. The current upload/import behavior using synthetic CSV.
+4. Whether `/api/system/qa` works in production.
+5. Whether the QA Console button appears in the UI.
+6. Whether the Bonim parser helper exists.
+7. Whether the helper is connected to `document_intelligence.py`.
+8. Whether UI labels still use risky wording.
+9. Whether file re-upload still fails.
+10. Whether current tests already cover the target behavior.
+
+Only after this readiness check should code implementation start.
+
+---
+
+# 8. Definition of Done
 
 The system is product-aligned only when:
 
@@ -417,7 +490,7 @@ The system is product-aligned only when:
 
 ---
 
-# 8. Current known open gaps
+# 9. Current known open gaps
 
 1. Connect Bonim parser helper to active document_intelligence parse flow.
 2. Upgrade import preview to Business Import Review.
@@ -431,6 +504,9 @@ The system is product-aligned only when:
 10. Add screenshot-based QA reporting.
 11. Perform mobile visual review.
 12. Remove or rewrite generic CRM/demo language.
+13. Add score output contract to API responses.
+14. Add visual QA baseline strategy.
+15. Add QA report storage and review flow.
 
 ## Next planning step
 
