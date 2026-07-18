@@ -2,8 +2,9 @@
 TelegramService — sends messages via Telegram Bot API using httpx (sync).
 
 Environment variables required:
-    TELEGRAM_BOT_TOKEN  — bot token from @BotFather
-    TELEGRAM_CHAT_ID    — target chat/channel ID
+    TELEGRAM_BOT_TOKEN          — bot token from @BotFather
+    TELEGRAM_CHAT_ID            — target chat/channel ID
+    TELEGRAM_OUTBOUND_ENABLED   — explicit opt-in for outbound messages (default: false)
 
 Usage:
     from services.telegram_service import telegram_service
@@ -37,12 +38,25 @@ class TelegramService:
     def __init__(self):
         self._token   = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self._chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        self._outbound_enabled = os.getenv("TELEGRAM_OUTBOUND_ENABLED", "false").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+
+    def _outbound_blocked(self) -> TelegramResult | None:
+        if self._outbound_enabled:
+            return None
+        msg = "Telegram outbound messaging is disabled"
+        log.info(f"[TelegramService] {msg}")
+        return TelegramResult(success=False, error=msg)
 
     def send(self, text: str, parse_mode: str = "Markdown") -> TelegramResult:
         """
         Send a text message to the configured chat.
         Returns TelegramResult(success=True, message_id=...) on success.
         """
+        blocked = self._outbound_blocked()
+        if blocked:
+            return blocked
         if not self._token or not self._chat_id:
             msg = "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set"
             log.warning(f"[TelegramService] {msg}")
@@ -83,6 +97,9 @@ class TelegramService:
           ✅ אשר  |  ❌ דחה  |  ✏️ ערוך
         callback_data format: "approve:{id}", "deny:{id}", "edit:{id}"
         """
+        blocked = self._outbound_blocked()
+        if blocked:
+            return blocked
         if not self._token or not self._chat_id:
             return TelegramResult(success=False, error="token/chat_id not set")
         if httpx is None:
