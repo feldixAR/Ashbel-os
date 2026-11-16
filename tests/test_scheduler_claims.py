@@ -25,7 +25,7 @@ def callback():
     if os.environ.get('CRASH_JOB'):
         os._exit(17)
     if os.environ.get('FAIL_JOB'):
-        raise RuntimeError('synthetic job failure')
+        raise RuntimeError('SECRET-provider-token customer-private-data')
     return {'sent': False, 'mode': 'draft_only'}
 
 result = run_scheduled_once(os.environ.get('CLAIM_JOB', 'daily_plan'), callback,
@@ -93,7 +93,9 @@ def test_failed_job_is_recorded_and_not_replayed(tmp_path):
     with Session(create_engine(env['DATABASE_URL'])) as session:
         row = session.get(SchedulerRunModel, ('daily_plan', '2026-11-16'))
         assert row.status == 'failed'
-        assert row.error == 'synthetic job failure'
+        assert row.error == 'RuntimeError'
+        assert 'SECRET' not in row.error
+        assert 'customer-private-data' not in row.error
         assert row.finished_at
 
 

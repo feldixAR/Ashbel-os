@@ -46,7 +46,7 @@ def run_scheduled_once(job_id, callback, now=None):
     try:
         return callback()
     except Exception as exc:
-        status, error = 'failed', str(exc)[:1000]
+        status, error = 'failed', type(exc).__name__
         raise
     finally:
         try:
