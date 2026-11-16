@@ -98,9 +98,14 @@ def finance_review(facts):
     scenarios = []
     for quote in comparison["quotes"]:
         total = number(quote["total_ex_vat_ils"])
-        contribution = sale - total if sale is not None and total is not None and quote["eligible_for_comparison"] else None
+        scope_matches = (isinstance(contract.get("scope_hash"), str) and bool(contract["scope_hash"])
+                         and contract["scope_hash"] == quote["scope_hash"])
+        contribution = sale - total if sale is not None and total is not None and quote["eligible_for_comparison"] and scope_matches else None
         scenarios.append({"quote_id": quote["quote_id"], "supplier_id": quote["supplier_id"],
-                          "scope_hash": quote["scope_hash"], "gross_contribution_ex_vat_ils": money(contribution),
+                          "scope_hash": quote["scope_hash"], "contract_scope_hash": contract.get("scope_hash"),
+                          "scope_matches_contract": scope_matches,
+                          "missing": [] if scope_matches else ["matching_contract_and_purchase_scope"],
+                          "gross_contribution_ex_vat_ils": money(contribution),
                           "gross_margin_percent": money(contribution / sale * 100) if contribution is not None and sale else None,
                           "source_refs": [contract.get("source_ref"), quote.get("source_ref")],
                           "basis": "contract_less_manufacturing_installation_ancillary_not_net_profit"})
@@ -114,6 +119,7 @@ def finance_review(facts):
             "business_net_profit_ils": None, "monthly_operating_profit_target_ils": "100000.00",
             "target_basis": "after_business_expenses_before_personal_tax",
             "missing": (["signed_sale_contract"] if sale is None else [])
+                       + (["matching_contract_and_purchase_scope"] if not scenarios or any(not row["scope_matches_contract"] for row in scenarios) else [])
                        + (["verified_comparable_procurement_costs"] if not any(q["eligible_for_comparison"] for q in comparison["quotes"]) else [])
                        + (["collection_evidence"] if not receipts else []),
             "cashflow_gate": "reconcile_customer_payment_schedule_with_supplier_and_installer_terms"}
