@@ -31,8 +31,10 @@ def purchase_comparison(facts):
     for quote in facts.get("purchase_quotes", [])[:20]:
         if not isinstance(quote, dict):
             continue
-        required = ("supplier_id", "scope_hash", "payment_terms", "warranty")
+        required = ("quote_id", "supplier_id", "scope_hash", "payment_terms", "warranty")
         missing = [key for key in required if not quote.get(key)]
+        missing += [key for key in ("quote_id", "supplier_id", "scope_hash")
+                    if not isinstance(quote.get(key), str) or not quote[key].strip()]
         if not source_backed(quote):
             missing.append("verified_source")
         if quote.get("price_kind") != "contractor_purchase":
@@ -49,9 +51,26 @@ def purchase_comparison(facts):
                      "warranty": quote.get("warranty"), "costs_ex_vat_ils": {k: money(v) for k, v in costs.items()},
                      "total_ex_vat_ils": money(total), "eligible_for_comparison": not missing,
                      "missing": missing, "evidence_status": "source_claimed_verified" if source_backed(quote) else "unverified"})
+    # Repeated quotes are not independent suppliers. A conflicting reuse of a
+    # quote identity is held for review rather than counted or selected.
+    deduplicated, identities = [], {}
+    for row in rows:
+        quote_id = row.get("quote_id")
+        if not isinstance(quote_id, str) or not quote_id.strip():
+            deduplicated.append(row)
+        elif quote_id not in identities:
+            identities[quote_id] = row
+            deduplicated.append(row)
+        elif identities[quote_id] != row:
+            existing = identities[quote_id]
+            existing["eligible_for_comparison"] = False
+            existing["missing"] = list(dict.fromkeys(existing["missing"] + ["quote_identity_conflict"]))
+    rows = deduplicated
     scopes = {row["scope_hash"] for row in rows if row["eligible_for_comparison"]}
-    comparable = len(scopes) == 1 and len([r for r in rows if r["eligible_for_comparison"]]) >= 2
-    return {"quotes": rows, "same_scope_comparison_available": comparable,
+    suppliers = {row["supplier_id"] for row in rows if row["eligible_for_comparison"]}
+    comparable = len(scopes) == 1 and len(suppliers) >= 2
+    return {"quotes": rows, "independent_supplier_count": len(suppliers),
+            "same_scope_comparison_available": comparable,
             "selected_supplier": None, "commitment_made": False,
             "required_request": ["manufacturing_only", "manufacturing_with_installation",
                                  "ancillary_costs", "payment_terms", "warranty", "capacity"],
@@ -109,19 +128,37 @@ def finance_review(facts):
                           "gross_margin_percent": money(contribution / sale * 100) if contribution is not None and sale else None,
                           "source_refs": [contract.get("source_ref"), quote.get("source_ref")],
                           "basis": "contract_less_manufacturing_installation_ancillary_not_net_profit"})
-    receipts = [row for row in facts.get("collections", [])[:100] if source_backed(row)
-                and row.get("document_kind") == "payment_receipt" and row.get("currency") == "ILS"
-                and number(row.get("amount_ils")) is not None]
-    collected = sum((number(row["amount_ils"]) for row in receipts), Decimal(0)) if receipts else None
+    receipts_by_id, receipt_conflicts, missing_receipt_identity = {}, [], False
+    for row in facts.get("collections", [])[:100]:
+        if not (source_backed(row) and row.get("document_kind") == "payment_receipt"
+                and row.get("currency") == "ILS" and number(row.get("amount_ils")) is not None):
+            continue
+        receipt_id = row.get("receipt_id")
+        if not isinstance(receipt_id, str) or not receipt_id.strip():
+            missing_receipt_identity = True
+            continue
+        receipt_id = receipt_id.strip()
+        signature = (money(number(row["amount_ils"])), row["currency"], row["source_ref"])
+        old = receipts_by_id.get(receipt_id)
+        if old is None:
+            receipts_by_id[receipt_id] = (signature, row)
+        elif old[0] != signature:
+            receipt_conflicts.append(receipt_id)
+    receipts = [value[1] for value in receipts_by_id.values()]
+    collected = (sum((number(row["amount_ils"]) for row in receipts), Decimal(0))
+                 if receipts and not receipt_conflicts and not missing_receipt_identity else None)
     return {"signed_sale_ex_vat_ils": money(sale), "scenarios": scenarios,
             "recorded_collection_ils": money(collected), "collection_basis": "source_backed_receipt_facts_not_bank_reconciliation",
             "collection_source_refs": [row["source_ref"] for row in receipts],
+            "receipt_count": len(receipts), "receipt_identity_conflicts": sorted(set(receipt_conflicts)),
             "business_net_profit_ils": None, "monthly_operating_profit_target_ils": "100000.00",
             "target_basis": "after_business_expenses_before_personal_tax",
             "missing": (["signed_sale_contract"] if sale is None else [])
                        + (["matching_contract_and_purchase_scope"] if not scenarios or any(not row["scope_matches_contract"] for row in scenarios) else [])
                        + (["verified_comparable_procurement_costs"] if not any(q["eligible_for_comparison"] for q in comparison["quotes"]) else [])
-                       + (["collection_evidence"] if not receipts else []),
+                       + (["collection_evidence"] if not receipts else [])
+                       + (["collection_identity"] if missing_receipt_identity else [])
+                       + (["conflicting_receipt_identity"] if receipt_conflicts else []),
             "cashflow_gate": "reconcile_customer_payment_schedule_with_supplier_and_installer_terms"}
 
 
