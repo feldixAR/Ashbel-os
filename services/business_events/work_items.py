@@ -90,6 +90,11 @@ def persist_work_items(session, event, output):
             result["prior_owner_report"] = existing.get("completion_evidence")
             row.input_data, row.output_data = incoming, result
             row.status = status  # new facts require new review; never auto-close
+        elif (row.input_data or {}).get("observed_at", "") < event["occurred_at"]:
+            # Identical artifacts still advance the source watermark. Otherwise
+            # t1=A, t3=A, t2=B could replace a newer observation with stale B.
+            # Preserve review/version because no business artifact changed.
+            row.input_data = {**(row.input_data or {}), **incoming}
         ids.append(item_id)
     return ids
 
