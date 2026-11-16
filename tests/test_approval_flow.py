@@ -399,6 +399,29 @@ class TestApprovalDoesNotInventDelivery(unittest.TestCase):
                         activity = s.query(ActivityModel).filter_by(lead_id=lead_id).one()
                         self.assertIn('אושרה', activity.subject)
 
+    def test_legacy_outreach_task_is_a_deeplink_and_never_dispatches(self):
+        from unittest.mock import patch
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        lead_id = self._lead_with_existing_followup()
+        before = self._state(lead_id)
+        approval = ApprovalRepository().create(
+            action='send_outreach', risk_level=2, requested_by='regression',
+            details={'outreach_task': {'lead_id': lead_id, 'phone': '0501234567',
+                                      'message': 'Legacy draft', 'channel': 'whatsapp'}},
+        )
+        with patch('engines.outreach_engine.execute_outreach') as execute:
+            response = self.c.post(f'/api/approvals/{approval.id}',
+                                   json={'action': 'approve'}, headers=_AUTH)
+            execute.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()['data']['outreach_execution']
+        self.assertFalse(result['executed'])
+        self.assertFalse(result['sent_outreach'])
+        self.assertTrue(result['dry_run'])
+        self.assertEqual(result['mode'], 'approved_draft_only')
+        self.assertTrue(result['deep_link'].startswith('https://wa.me/'))
+        self.assertEqual(self._state(lead_id), before)
+
     def test_confirmed_delivery_event_still_updates_contact_and_followup(self):
         from events.event_bus import event_bus
         import events.event_types as ET
