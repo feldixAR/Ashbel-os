@@ -284,3 +284,28 @@ def test_extended_source_adapter_separates_entity_types_from_sales_proposals():
     assert result["lead_count"] == 2 and result["entity_counts"]["ספק"] == 1
     assert result["proposal_lead_facts_total"] == 1
     assert result["proposal_lead_facts"][0]["source_category"] == "חיצוני"
+
+
+def test_committed_crm_write_publishes_event_and_event_retry_never_repeats_append():
+    sheet = Sheet()
+    preview = sync.prepare_append(reviewed(), sheet)
+    with patch("services.business_events.runtime.ingest_event", side_effect=RuntimeError("private")):
+        result = sync.commit_append(preview["operation_id"], preview["preview_hash"], sheet)
+    assert result["status"] == "committed" and result["result"]["business_event_status"] == "pending_retry"
+    assert sheet.appends == 1
+    with patch("services.business_events.runtime.ingest_event",
+               return_value={"id": "synthetic-event-id", "status": "pending"}) as publish:
+        result = sync.commit_append(preview["operation_id"], preview["preview_hash"], sheet)
+    assert result["result"]["business_event_id"] == "synthetic-event-id"
+    assert sheet.appends == 1
+    assert publish.call_args.args[0]["facts"]["contact_permission"] == "unverified"
+
+
+def test_crm_action_date_is_a_sheet_date_number_and_formula_text_is_not_executed():
+    candidate = reviewed()
+    row = sync.crm_row(sync.validate_candidate(candidate))
+    assert isinstance(row[2], int)
+    assert sync._row_equal([str(value) for value in row], row)
+    candidate = sync.candidate_fields(facts())
+    candidate["name"] = "=SYNTHETIC_FORMULA()"
+    assert sync.crm_row(candidate)[7] == "=SYNTHETIC_FORMULA()"

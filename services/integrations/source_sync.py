@@ -200,7 +200,7 @@ def lead_id(candidate):
 def crm_row(candidate):
     fields = {
         "עדיפות": "3", "סטטוס": "הזדמנות חיצונית מאומתת — אין הרשאת פנייה",
-        "תאריך פעולה": candidate["found_at"], "שלב בנייה": candidate["project_stage"],
+        "תאריך פעולה": (dt.date.fromisoformat(candidate["found_at"]) - dt.date(1899, 12, 30)).days, "שלב בנייה": candidate["project_stage"],
         "אזור ויישוב": candidate["city"], "מה ביקש": candidate["aluminum_need"],
         "שם הלקוח": candidate["name"], "פעולה הבאה": candidate["next_action"],
         "סיכום ומעקב": candidate["details"], "מזהה ליד": lead_id(candidate),
@@ -271,6 +271,22 @@ def _client():
     return SheetsClient()
 
 
+
+class SourcePreviewClient:
+    """A preview can read through the existing Viewer credential, never write."""
+    def read(self):
+        from services.integrations.business_source import _read_values
+        ranges = _read_values(sheet_id()).get("valueRanges", [])
+        if not ranges:
+            raise ValueError("source_unavailable")
+        return ranges[0].get("values", [])
+
+
+def _preview_client():
+    if os.getenv("ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON", ""):
+        return SourcePreviewClient()
+    return _client()
+
 def _require_enabled():
     if not enabled():
         raise ValueError("source_sync_disabled")
@@ -279,7 +295,7 @@ def _require_enabled():
 def prepare_append(raw, client=None):
     _require_enabled()
     candidate = validate_candidate(raw)
-    client = client or _client()
+    client = client or _preview_client()
     rows, snapshot_hash = snapshot(client.read())
     match = duplicate(candidate, rows)
     if match:
@@ -356,7 +372,7 @@ def _finish(operation_id, token, status, result=None, release=True, error_code=N
 
 
 def _row_equal(actual, expected):
-    return bool(actual) and (list(map(str, actual)) + [""] * (44 - len(actual))) == expected
+    return bool(actual) and (list(map(str, actual)) + [""] * (44 - len(actual))) == list(map(str, expected))
 
 
 def commit_append(operation_id, preview_hash, client=None):
@@ -365,8 +381,9 @@ def commit_append(operation_id, preview_hash, client=None):
     if not isinstance(preview_hash, str) or preview_hash != operation.preview_hash:
         raise ValueError("preview_hash_mismatch")
     if operation.status != "prepared":
+        result = _ensure_business_event(operation, operation.result) if operation.status == "committed" else operation.result
         return {"status": operation.status, "appended": operation.status == "committed",
-                "result": operation.result}
+                "result": result}
     if operation.expires_at < now().isoformat():
         raise ValueError("preview_expired")
     # Credential/token failures occur before claiming and before any write.
@@ -406,7 +423,7 @@ def commit_append(operation_id, preview_hash, client=None):
                   "source_url": operation.candidate["source_url"], "provider_response": response}
         if not _finish(operation_id, token, "committed", result=result):
             return {"status": "uncertain", "appended": False, "requires_reconciliation": True}
-        return {"status": "committed", "appended": True, "result": result}
+        return {"status": "committed", "appended": True, "result": _ensure_business_event(operation, result)}
     except Exception as exc:
         _finish(operation_id, token, "uncertain", release=False, error_code=type(exc).__name__)
         return {"status": "uncertain", "appended": False, "requires_reconciliation": True,
@@ -450,3 +467,37 @@ def recent_operations():
             SourceSyncOperation.created_at.desc()).limit(30).all()
         return [{"id": row.id, "status": row.status, "preview_hash": row.preview_hash,
                  "result": row.result, "error_code": row.error_code} for row in rows]
+
+
+def _ensure_business_event(operation, result):
+    """Event publication can retry independently; a committed append never does."""
+    result = dict(result or {})
+    if result.get("business_event_id"):
+        return result
+    candidate = operation.candidate
+    try:
+        from services.business_events.runtime import ingest_event
+        event = ingest_event({
+            "source": "verified_public_source",
+            "source_event_id": "crm:" + lead_id(candidate),
+            "event_type": "opportunity.discovered",
+            "source_ref": candidate["source_url"],
+            "occurred_at": candidate["verification"]["checked_at"],
+            "facts": {
+                "crm_record_id": lead_id(candidate), "crm_row": result["row"],
+                "name": candidate["name"],
+                "entity_type": candidate["entity_type"], "project_type": candidate["project_type"],
+                "project_stage": candidate["project_stage"], "aluminum_need": candidate["aluminum_need"],
+                "contact_permission": "unverified",
+                "source_verification_id": candidate["verification"]["verification_id"],
+                "source_published_date": candidate["published_at"],
+            },
+        })
+        result.update(business_event_id=event["id"], business_event_status=event["status"])
+        with get_session() as session:
+            row = session.get(SourceSyncOperation, operation.id)
+            if row and row.business_id == tenant() and row.status == "committed":
+                row.result = result
+    except Exception as exc:
+        result.update(business_event_status="pending_retry", event_error_code=type(exc).__name__)
+    return result
