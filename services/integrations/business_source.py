@@ -18,7 +18,7 @@ SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
 LEAD_HEADERS = ("שם הלקוח", "מזהה ליד", "סטטוס", "פעולה הבאה", "סיכום ומעקב")
 WORK_HEADERS = ("נושא / לקוח", "פעולה נדרשת", "מועד", "סטטוס מאומת",
                 "אחראי", "הקשר ומידע חשוב", "מקור", "קבוצה אחראית")
-LEADS_RANGE = "'לידים'!A1:AE1000"
+LEADS_RANGE = "'לידים'!A1:AR2000"
 WORK_RANGE = "'תור עבודה'!A1:H50"
 WORK_SECTION_END = "מעקבי לידים"
 
@@ -120,9 +120,9 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
     if len(ranges) != 2:
         raise ValueError("missing_ranges")
     lead_values = ranges[0].get("values", [])
-    if len(lead_values) == 1000 and any(str(v).strip() for v in lead_values[-1]):
+    if len(lead_values) == 2000 and any(str(v).strip() for v in lead_values[-1]):
         raise ValueError("lead_range_exhausted")
-    leads = _records(lead_values, LEAD_HEADERS, 1000, 31)
+    leads = _records(lead_values, LEAD_HEADERS, 2000, 44)
     work = _records(ranges[1].get("values", []), WORK_HEADERS, 50, 8, WORK_SECTION_END)
     ids = [row["מזהה ליד"] for row in leads if row["מזהה ליד"]]
     if len(ids) != len(set(ids)):
@@ -168,13 +168,16 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
                         "disposition": disposition, "evidence": evidence})
     # Read-only facts retain source wording. Neither a proposal amount nor draft
     # approval proves a sent message, accepted contract, collection or commission.
-    proposal_rows = [row for row in leads if row.get("מצב הצעת מחיר", "").strip()
+    proposal_rows = [row for row in leads if row.get("סוג ישות", "") in {"", "לקוח"} and row.get("מצב הצעת מחיר", "").strip()
                      not in {"", "טרם הוכנה", "טרם תומחר", "טרם תומחרה", "לא הוכנה"}]
     lead_facts = [{"lead_id": row["מזהה ליד"], "subject": row["שם הלקוח"],
                    "status": row["סטטוס"], "next_action": row["פעולה הבאה"],
                    "proposal_status": row.get("מצב הצעת מחיר", ""),
+                   "entity_type": row.get("סוג ישות", "") or "legacy_customer",
+                   "source_category": row.get("קטגוריית מקור", "") or "not_verified",
+                   "contact_permission": row.get("הרשאת פנייה", "") or "unverified",
                    "delivery": "not_verified", "commission": "not_verified",
-                   "evidence": {"range": f"'לידים'!A{row['_row']}:AE{row['_row']}",
+                   "evidence": {"range": f"'לידים'!A{row['_row']}:AR{row['_row']}",
                                 "snapshot_sha256": fingerprint}}
                   for row in proposal_rows[:25]]
     capacity_state = "blocked" if capacity_blocked else "confirmed" if capacity_confirmed else "unknown"
@@ -194,6 +197,10 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
     return {"health": "read_ok", "fetched_at": fetched_at, "source_updated_at": None,
             "source_freshness": "not_verified", "spreadsheet_id": spreadsheet_id,
             "snapshot_sha256": fingerprint, "lead_count": len(leads), "work_count": len(work),
+            "entity_counts": {kind: sum(1 for row in leads if (row.get("סוג ישות", "") or "legacy_customer") == kind)
+                              for kind in ("לקוח", "ספק", "מתקין", "שותף עסקי", "legacy_customer")},
+            "source_category_counts": {kind: sum(1 for row in leads if (row.get("קטגוריית מקור", "") or "not_verified") == kind)
+                                      for kind in ("בונים בישראל", "חיצוני", "not_verified")},
             "proposal_lead_facts": lead_facts, "proposal_lead_facts_limit": 25,
             "proposal_lead_facts_total": len(proposal_rows),
             "proposal_lead_facts_truncated": max(0, len(proposal_rows) - len(lead_facts)),

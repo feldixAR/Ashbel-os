@@ -329,7 +329,10 @@ def _job_gmail_scan():
 
 
 def _job_maps_scan():
-    """Scrape Google Maps for leads in key cities. Runs daily 06:00 IL."""
+    """Existing daily source slot; opt-in public feeds replace legacy Maps intake."""
+    from services.integrations.source_discovery import enabled, scan_sources
+    if enabled():
+        return scan_sources()
     try:
         from services.integrations.lead_scraper import scrape, CATEGORIES
         cities = ["נס ציונה", "רחובות", "ראשון לציון", "תל אביב"]
