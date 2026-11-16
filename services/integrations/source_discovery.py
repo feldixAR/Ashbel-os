@@ -52,24 +52,47 @@ def sources():
 def _public_dns(url):
     host = urlsplit(url).hostname
     addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-    if not addresses or any(not ipaddress.ip_address(entry[4][0]).is_global for entry in addresses):
+    values = sorted(set(entry[4][0] for entry in addresses))
+    if not values or any(not ipaddress.ip_address(address).is_global for address in values):
         raise ValueError("source_address_not_public")
+    return values
 
 
 def _fetch(source):
-    import requests
-    _public_dns(source["url"])
-    with requests.get(source["url"], headers={"User-Agent": "AsifSourceObserver/1.0 (+public-feed-review-only)"},
-                      timeout=(5, 15), allow_redirects=False, stream=True) as response:
-        if response.status_code != 200:
-            raise ValueError("public_feed_http_" + str(response.status_code))
+    """Pin the checked IP; preserve hostname for Host, SNI and certificate check."""
+    import ssl
+    import certifi
+    import urllib3
+    parts = urlsplit(source["url"])
+    addresses = _public_dns(source["url"])
+    # No second DNS resolution, proxy, redirect, or retry can change this peer.
+    pool = urllib3.HTTPSConnectionPool(
+        addresses[0], port=443, assert_hostname=parts.hostname,
+        server_hostname=parts.hostname, cert_reqs=ssl.CERT_REQUIRED,
+        ca_certs=certifi.where(), maxsize=1, block=True,
+    )
+    response = None
+    try:
+        path = (parts.path or "/") + ("?" + parts.query if parts.query else "")
+        response = pool.request(
+            "GET", path,
+            headers={"Host": parts.hostname, "User-Agent": "AsifSourceObserver/1.0 (+public-feed-review-only)"},
+            timeout=urllib3.Timeout(connect=5, read=15), retries=False, redirect=False,
+            preload_content=False,
+        )
+        if response.status != 200:
+            raise ValueError("public_feed_http_" + str(response.status))
         chunks, size = [], 0
-        for chunk in response.iter_content(65536):
+        for chunk in response.stream(65536, decode_content=True):
             size += len(chunk)
             if size > 2_000_000:
                 raise ValueError("public_feed_too_large")
             chunks.append(chunk)
         return b"".join(chunks)
+    finally:
+        if response is not None:
+            response.close()
+        pool.close()
 
 
 def parse_feed(source, content):

@@ -345,3 +345,68 @@ def test_unknown_source_publication_date_stays_missing_and_review_hash_remains_c
     assert "city" in normalized["missing_fields"] and normalized["quality"] == "לא סווגה — חסרים נתונים"
     assert sync.crm_row(normalized)[40] == ""
     assert sync.digest(normalized) == sync.digest(sync.candidate_fields(normalized))
+
+
+def test_readonly_reconciliation_also_publishes_event():
+    sheet = Sheet(); preview = sync.prepare_append(reviewed(), sheet)
+    sheet.timeout_after = True
+    assert sync.commit_append(preview["operation_id"], preview["preview_hash"], sheet)["status"] == "uncertain"
+    with patch("services.business_events.runtime.ingest_event",
+               return_value={"id":"reconciled-event", "status":"pending"}) as publish:
+        result = sync.reconcile(preview["operation_id"], sheet)
+    assert result["result"]["business_event_id"] == "reconciled-event"
+    publish.assert_called_once()
+    assert sheet.appends == 1
+
+
+def test_publication_failure_is_durable_and_existing_job_retries_without_sheet_access(monkeypatch):
+    sheet = Sheet(); preview = sync.prepare_append(reviewed(), sheet)
+    with patch("services.business_events.runtime.ingest_event", side_effect=RuntimeError("private")):
+        sync.commit_append(preview["operation_id"], preview["preview_hash"], sheet)
+    assert sync._operation(preview["operation_id"]).result["business_event_status"] == "pending_retry"
+    monkeypatch.setenv("ASHBEL_BUSINESS_EVENTS_ENABLED", "true")
+    from scheduler.revenue_scheduler import _job_followup
+    with patch("services.business_events.runtime.ingest_event",
+               return_value={"id":"retried-event", "status":"pending"}), \
+         patch("services.business_events.runtime.poll_source_and_process", return_value={"results":[]}), \
+         patch("services.integrations.source_sync._client", side_effect=AssertionError("must not access Sheets")):
+        assert _job_followup() == {"results":[]}
+    assert sync._operation(preview["operation_id"]).result["business_event_id"] == "retried-event"
+    assert sheet.appends == 1
+
+
+def test_company_mode_never_falls_back_to_a_parallel_local_crm(monkeypatch):
+    monkeypatch.setenv("ASHBEL_BUSINESS_EVENTS_ENABLED", "true")
+    monkeypatch.setenv("ASHBEL_SOURCE_DISCOVERY_ENABLED", "false")
+    from scheduler.revenue_scheduler import _job_maps_scan, _job_gmail_scan
+    with patch("services.integrations.lead_scraper.scrape", side_effect=AssertionError("legacy CRM")), \
+         patch("services.integrations.gmail_listener.scan_inbox", side_effect=AssertionError("legacy CRM")):
+        assert _job_maps_scan()["status"] == "blocked"
+        assert _job_gmail_scan()["status"] == "blocked"
+
+
+def test_feed_connection_is_pinned_to_checked_ip_with_original_hostname_and_no_retry(monkeypatch):
+    import urllib3
+    class Response:
+        status = 200
+        def stream(self, *args, **kwargs): return iter([b"<rss/>"])
+        def close(self): pass
+    class Pool:
+        def request(self, *args, **kwargs):
+            assert kwargs["headers"]["Host"] == "example.com"
+            assert kwargs["retries"] is False and kwargs["redirect"] is False
+            return Response()
+        def close(self): pass
+    addresses = [(2, 1, 6, "", ("8.8.8.8", 443))]
+    with patch("services.integrations.source_discovery.socket.getaddrinfo", side_effect=[addresses, AssertionError("second DNS resolution")]) as dns, \
+         patch.object(urllib3, "HTTPSConnectionPool", return_value=Pool()) as pool:
+        assert discovery._fetch({"url":"https://example.com/feed"}) == b"<rss/>"
+    dns.assert_called_once()
+    assert pool.call_args.args[0] == "8.8.8.8"
+    assert pool.call_args.kwargs["server_hostname"] == "example.com"
+    assert pool.call_args.kwargs["assert_hostname"] == "example.com"
+    with patch("services.integrations.source_discovery.socket.getaddrinfo",
+               return_value=[(2, 1, 6, "", ("127.0.0.1", 443))]), \
+         patch.object(urllib3, "HTTPSConnectionPool", side_effect=AssertionError("private connection")):
+        with pytest.raises(ValueError, match="not_public"):
+            discovery._fetch({"url":"https://example.com/feed"})

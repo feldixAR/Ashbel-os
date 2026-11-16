@@ -53,6 +53,11 @@ def _job_followup():
     from services.business_events.runtime import enabled as business_events_enabled
     if business_events_enabled():
         from services.business_events.runtime import poll_source_and_process
+        from services.integrations.source_sync import retry_event_publications
+        try:
+            retry_event_publications()
+        except Exception as exc:
+            log.warning("[Scheduler] publication retry unavailable: %s", type(exc).__name__)
         return poll_source_and_process()
     try:
         from services.storage.repositories.goal_repo import GoalRepository
@@ -317,7 +322,11 @@ def _job_maintenance():
 
 
 def _job_gmail_scan():
-    """Scan Gmail inbox for new aluminum leads. Runs every 30 min."""
+    """Legacy Gmail importer; governed company mode never imports a second CRM."""
+    from services.business_events.runtime import enabled as business_events_enabled
+    from services.integrations.business_source import enabled as source_context_enabled
+    if business_events_enabled() or source_context_enabled():
+        return {"status": "blocked", "reason": "governed_source_intake_required", "local_crm_imported": 0}
     try:
         from services.integrations.gmail_listener import scan_inbox
         result = scan_inbox(max_results=20)
@@ -333,6 +342,10 @@ def _job_maps_scan():
     from services.integrations.source_discovery import enabled, scan_sources
     if enabled():
         return scan_sources()
+    from services.business_events.runtime import enabled as business_events_enabled
+    from services.integrations.business_source import enabled as source_context_enabled
+    if business_events_enabled() or source_context_enabled():
+        return {"status": "blocked", "reason": "public_source_discovery_disabled", "local_crm_imported": 0}
     try:
         from services.integrations.lead_scraper import scrape, CATEGORIES
         cities = ["נס ציונה", "רחובות", "ראשון לציון", "תל אביב"]

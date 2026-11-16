@@ -8,9 +8,11 @@ This is an opt-in bridge into the existing CRM, not another contact database. Pu
 - ASHBEL_SOURCE_CONTEXT_ENABLED=true and ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON: dedicated Viewer credential for source context and preview reads.
 - ASHBEL_SOURCE_SYNC_ENABLED=true and ASHBEL_SHEETS_WRITER_SERVICE_ACCOUNT_JSON: **separate** service account explicitly shared as Editor on the intended workbook. Writer credential is never inferred from the Viewer credential.
 - ASHBEL_SOURCE_DISCOVERY_ENABLED=true and ASHBEL_PUBLIC_SOURCE_FEEDS_JSON: reviewed public RSS/Atom sources. Each entry requires name, HTTPS url, confirmed_public:true, terms_reviewed:true and allowed_link_hosts.
-- No reviewed public feeds are enabled by default. “Not configured” is not a successful scan.
+- Connections pin the checked public IP while validating the original hostname through TLS SNI/certificate/Host; DNS rebinding, proxies, redirects and automatic connection retries cannot change that peer.
 
-The existing daily maps/source scheduler slot runs the opt-in observer instead of creating another timer. Feed entries remain candidate_unverified in the task queue. The observer never appends to CRM, downloads attachments, follows redirects, authenticates to social networks or obtains contact permission.
+No reviewed public feeds are enabled by default. “Not configured” is not a successful scan.
+
+The existing daily maps/source scheduler slot runs the opt-in observer instead of creating another timer. In governed company/source mode, disabled discovery and Gmail intake never fall back to legacy local-CRM imports. Feed entries remain candidate_unverified in the task queue. The observer never appends to CRM, downloads attachments, follows redirects, authenticates to social networks or obtains contact permission.
 
 ## Owner review and append
 
@@ -20,7 +22,7 @@ All endpoints require the existing owner API authentication.
 2. The owner reviews the primary source and exact candidate facts. POST /api/source_discovery/candidates/{task_id}/verify accepts {candidate, review_confirmed:true}. The server fetches fresh primary bytes only from configured public hosts, saves their actual hash, and binds an internally generated verification_id to the exact facts and authenticated review. A client-supplied 64-character hash is not accepted as verification.
 3. POST /api/source_sync/preview accepts {candidate} with that verification_id. It reads the existing 44-column schema and checks source key, source URL (including mr.gov.il/www.mr.gov.il aliases), lead ID, normalized phone and name anchored to city against existing rows. A duplicate returns evidence, not a new lead.
 4. The preview returns operation_id, preview_hash, row[44] and expiry. POST /api/source_sync/{operation_id}/commit requires the exact preview_hash. It acquires the durable workbook lease, rechecks source changes and duplicates, issues one RAW append with INSERT_ROWS, and reads back the exact new row. Existing cells are never updated. Spreadsheet action dates are numeric date serials.
-5. A verified append becomes committed; an opportunity.discovered event is published idempotently. Event-publication failures may retry independently without repeating the append. An approved draft or published contact detail never grants outreach permission.
+5. A verified append becomes committed; an opportunity.discovered event is published idempotently. Event-publication failures are persisted in the operation journal and retried by the existing governed follow-up job, independently without repeating the append. Reconciliation also publishes the event. An approved draft or published contact detail never grants outreach permission.
 
 Candidate facts include source_key, source_url, name, city, project_type, project_stage, aluminum_need, next_action, found_at (required ISO date), published_at (ISO date or empty/null when unknown), quality, confidence, optional entity_type (לקוח/ספק/מתקין/שותף עסקי), phone, email and details. Do not fill unknown facts with invented values. Unknown publication dates remain empty and appear in missing_fields; unverified location/stage/need prevents promotion to a qualified opportunity. Verification expires after 24 hours; unused previews expire after 30 minutes.
 

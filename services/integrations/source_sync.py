@@ -457,7 +457,8 @@ def reconcile(operation_id, client=None):
     _require_enabled()
     operation = _operation(operation_id)
     if operation.status not in {"uncertain", "in_flight"}:
-        return {"status": operation.status, "result": operation.result}
+        result = _ensure_business_event(operation, operation.result) if operation.status == "committed" else operation.result
+        return {"status": operation.status, "result": result}
     with get_session() as session:
         lease = session.get(SourceSyncLease, (tenant(), sheet_id()))
         if not lease or lease.operation_id != operation_id:
@@ -478,7 +479,7 @@ def reconcile(operation_id, client=None):
                       "range": "'לידים'!A%d:AR%d" % (number, number),
                       "lead_id": lead_id(operation.candidate), "reconciled": True}
             if _finish(operation_id, token, "committed", result=result):
-                return {"status": "committed", "appended": True, "result": result}
+                return {"status": "committed", "appended": True, "result": _ensure_business_event(operation, result)}
     _finish(operation_id, token, "uncertain", release=False, error_code="reconciliation_inconclusive")
     return {"status": "uncertain", "appended": False, "requires_operator_review": True}
 
@@ -516,10 +517,31 @@ def _ensure_business_event(operation, result):
             },
         })
         result.update(business_event_id=event["id"], business_event_status=event["status"])
+        result.pop("event_error_code", None)
+    except Exception as exc:
+        result.update(business_event_status="pending_retry", event_error_code=type(exc).__name__)
+    # The journal is the durable publication outbox, including failure state.
+    # Repeating publication uses the same source identity and can never append.
+    try:
         with get_session() as session:
             row = session.get(SourceSyncOperation, operation.id)
             if row and row.business_id == tenant() and row.status == "committed":
                 row.result = result
-    except Exception as exc:
-        result.update(business_event_status="pending_retry", event_error_code=type(exc).__name__)
+    except Exception:
+        result["event_journal_status"] = "pending_retry"
     return result
+
+
+def retry_event_publications(limit=20):
+    """Existing scheduler hook; read committed journals, never call Sheets."""
+    if not enabled():
+        return {"status": "disabled", "retried": 0}
+    with get_session() as session:
+        rows = session.query(SourceSyncOperation).filter_by(
+            business_id=tenant(), spreadsheet_id=sheet_id(), status="committed",
+        ).filter(SourceSyncOperation.result["business_event_id"].as_string().is_(None)).order_by(SourceSyncOperation.created_at).limit(min(max(limit, 1), 100)).all()
+        pending = rows
+    results = [_ensure_business_event(row, row.result) for row in pending]
+    return {"status": "checked", "retried": len(results),
+            "pending": sum(not result.get("business_event_id") for result in results),
+            "crm_appended": 0}
