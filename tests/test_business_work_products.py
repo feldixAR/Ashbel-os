@@ -219,3 +219,12 @@ def test_auditor_rejects_forged_artifact_execution_and_financial_truth():
     assert result["passed"] is False
     assert set(result["violations"]) == {"net_profit_not_proven", "advice_crossed_execution_boundary",
                                          "production_without_source_gates"}
+
+
+@pytest.mark.parametrize("key,value", [("purchase_quotes", None), ("quote_lines", "not-a-list"),
+                                       ("contract", []), ("collections", [7])])
+def test_malformed_source_fact_shapes_are_rejected_before_execution(key, value):
+    event = envelope();event["facts"][key] = value
+    with pytest.raises(ValueError, match="invalid_" + key):
+        rt.ingest_event(event)
+    assert rt.recent_events() == [] and list_work_items() == []
