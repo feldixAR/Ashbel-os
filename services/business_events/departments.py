@@ -136,6 +136,23 @@ class DepartmentExpert(BaseAgent):
                 violations.append('unproven_collection')
             if not departments or any(not d.get('evidence') for d in departments.values()):
                 violations.append('missing_department_evidence')
+            for role_name, department in departments.items():
+                artifact = department.get('artifact', {})
+                if artifact.get('business_net_profit_ils') is not None:
+                    violations.append('net_profit_not_proven')
+                advice = artifact.get('advisory', {})
+                if advice.get('business_execution') is True:
+                    violations.append('advice_crossed_execution_boundary')
+                if role_name == 'engineering' and artifact.get('production_ready') is True:
+                    if (facts.get('specification_approved') is not True
+                            or not facts.get('manufacturer_specification_ref')
+                            or not facts.get('site_measurement_ref')):
+                        violations.append('production_without_source_gates')
+                if role_name == 'finance' and artifact.get('signed_sale_ex_vat_ils') is not None:
+                    contract = facts.get('contract', {})
+                    if (contract.get('document_kind') != 'signed_customer_contract'
+                            or contract.get('verified') is not True or not contract.get('source_ref')):
+                        violations.append('sale_contract_not_proven')
             result.update(status='action' if violations else 'no_change',
                           summary='נמצאו הפרות המחייבות חסימה.' if violations else 'ההכרעה עומדת בשערי מקור, הרשאה וכסף.',
                           passed=not violations, violations=violations)
