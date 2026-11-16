@@ -1,0 +1,51 @@
+name: Company foundation checks
+
+on:
+  push:
+    branches:
+      - qa/company-foundation
+      - feat/durable-business-events
+  pull_request:
+    branches:
+      - master
+      - qa/company-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: company-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      ENV: test
+      DATABASE_URL: sqlite:///:memory:
+      PYTHONPATH: .
+      ASHBEL_SOURCE_CONTEXT_ENABLED: "false"
+      ASHBEL_BUSINESS_EVENTS_ENABLED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Full isolated regression suite
+        run: python -m pytest -q --junitxml=test-results.xml
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-regression-results
+          path: test-results.xml
+          retention-days: 7
