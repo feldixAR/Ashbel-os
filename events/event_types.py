@@ -13,6 +13,7 @@ LEAD_DEAD                = "lead.dead"
 # Lead Acquisition (Phase 12)
 LEAD_DISCOVERED          = "lead.discovered"          # web signal found a candidate
 INBOUND_LEAD_RECEIVED    = "lead.inbound_received"    # inbound via Telegram/form
+LEAD_OUTREACH_APPROVED   = "lead.outreach_approved"   # draft approved; no delivery or contact implied
 LEAD_OUTREACH_SENT       = "lead.outreach_sent"       # after approved outreach execution
 LEAD_FOLLOWUP_PROPOSED   = "lead.followup_proposed"   # follow-up surfaced
 WEBSITE_ANALYSIS_REQUESTED = "website.analysis_requested"  # website growth analysis

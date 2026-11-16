@@ -185,7 +185,7 @@ class TestResolveApprovalSharedFunction(unittest.TestCase):
         self.assertGreater(len(acts), 0,
                            "ActivityModel not written after lead-ops approval")
 
-    def test_approve_with_lead_body_emits_outreach_sent(self):
+    def test_approve_with_lead_body_emits_outreach_approved(self):
         from api.routes.approvals import _resolve_approval
         from events.event_bus import event_bus
         import events.event_types as ET
@@ -205,8 +205,8 @@ class TestResolveApprovalSharedFunction(unittest.TestCase):
                 "channel": "whatsapp",
             })
             _resolve_approval(aid, "approve", source="test")
-            self.assertIn(ET.LEAD_OUTREACH_SENT, seen,
-                          f"LEAD_OUTREACH_SENT not emitted; saw: {seen}")
+            self.assertIn(ET.LEAD_OUTREACH_APPROVED, seen,
+                          f"LEAD_OUTREACH_APPROVED not emitted; saw: {seen}")
         finally:
             event_bus.publish = original
 
@@ -276,7 +276,7 @@ class TestLeadOpsExecuteEndpoint(unittest.TestCase):
         finally:
             event_bus.publish = original
 
-    def test_execute_approve_emits_outreach_sent_for_lead(self):
+    def test_execute_approve_emits_outreach_approved_for_lead(self):
         from events.event_bus import event_bus
         import events.event_types as ET
         seen = []
@@ -294,8 +294,8 @@ class TestLeadOpsExecuteEndpoint(unittest.TestCase):
             })
             self.c.post(f"/api/lead_ops/execute/{aid}",
                         json={"action": "approve"}, headers=_AUTH)
-            self.assertIn(ET.LEAD_OUTREACH_SENT, seen,
-                          f"LEAD_OUTREACH_SENT not emitted; saw: {seen}")
+            self.assertIn(ET.LEAD_OUTREACH_APPROVED, seen,
+                          f"LEAD_OUTREACH_APPROVED not emitted; saw: {seen}")
         finally:
             event_bus.publish = original
 
@@ -323,6 +323,93 @@ class TestLeadOpsExecuteEndpoint(unittest.TestCase):
         r = self.c.post(f"/api/lead_ops/execute/{aid}",
                         json={"action": "maybe"}, headers=_AUTH)
         self.assertEqual(r.status_code, 400)
+
+
+class TestApprovalDoesNotInventDelivery(unittest.TestCase):
+    """Exercise real approval → event dispatcher → persisted CRM state."""
+
+    def setUp(self):
+        self.c = _client()
+        os.environ['OS_API_KEY'] = 'test'
+
+    def _lead_with_existing_followup(self):
+        from services.storage.repositories.lead_repo import LeadRepository
+        from services.storage.db import get_session
+        from services.storage.models.lead import LeadModel
+        lead = LeadRepository().create(name='Approval delivery regression')
+        with get_session() as s:
+            row = s.get(LeadModel, lead.id)
+            row.status = 'מתעניין'
+            row.attempts = 2
+            row.last_contact = '2026-11-01T10:00:00+00:00'
+            row.last_activity_at = '2026-11-01T10:00:00+00:00'
+            row.next_action = 'review_specification'
+            row.next_action_due = '2026-11-25'
+        return lead.id
+
+    def _state(self, lead_id):
+        from services.storage.db import get_session
+        from services.storage.models.lead import LeadModel
+        with get_session() as s:
+            row = s.get(LeadModel, lead_id)
+            return {key: getattr(row, key) for key in (
+                'status', 'attempts', 'last_contact', 'last_activity_at',
+                'next_action', 'next_action_due')}
+
+    def test_each_approval_surface_preserves_contact_and_followup_state(self):
+        from unittest.mock import patch
+        from api.routes.approvals import _resolve_approval
+        from services.storage.repositories.approval_repo import ApprovalRepository
+        from services.storage.db import get_session
+        from services.storage.models.activity import ActivityModel
+        from events.event_bus import event_bus
+        import events.event_types as ET
+
+        for surface in ('http', 'shared_telegram', 'lead_ops'):
+            for body_key in ('body', 'draft_body'):
+                with self.subTest(surface=surface, body_key=body_key):
+                    lead_id = self._lead_with_existing_followup()
+                    before = self._state(lead_id)
+                    approval = ApprovalRepository().create(
+                        action='send_outreach', risk_level=2, requested_by='regression',
+                        details={'lead_id': lead_id, 'lead_name': 'Regression',
+                                 body_key: 'Approved draft, not a sent message',
+                                 'channel': 'whatsapp'},
+                    )
+                    # Keep actual dispatch running; inspecting only event names
+                    # would miss a handler that corrupts persisted contact state.
+                    with patch.object(event_bus, 'publish', wraps=event_bus.publish) as publish:
+                        if surface == 'shared_telegram':
+                            result = _resolve_approval(approval.id, 'approve', 'telegram')
+                            self.assertIn('טרם נשלחה', result)
+                        else:
+                            path = (f'/api/approvals/{approval.id}' if surface == 'http'
+                                    else f'/api/lead_ops/execute/{approval.id}')
+                            result = self.c.post(path, json={'action': 'approve'}, headers=_AUTH)
+                            self.assertEqual(result.status_code, 200, result.get_json())
+                            payload = result.get_json()
+                            self.assertFalse(payload.get('data', payload)['sent_outreach'])
+                        seen = [call.args[0] for call in publish.call_args_list]
+                        self.assertIn(ET.APPROVAL_GRANTED, seen)
+                        self.assertIn(ET.LEAD_OUTREACH_APPROVED, seen)
+                        self.assertNotIn(ET.LEAD_OUTREACH_SENT, seen)
+                    self.assertEqual(self._state(lead_id), before)
+                    self.assertEqual(ApprovalRepository().get(approval.id).status, 'approved')
+                    with get_session() as s:
+                        activity = s.query(ActivityModel).filter_by(lead_id=lead_id).one()
+                        self.assertIn('אושרה', activity.subject)
+
+    def test_confirmed_delivery_event_still_updates_contact_and_followup(self):
+        from events.event_bus import event_bus
+        import events.event_types as ET
+        lead_id = self._lead_with_existing_followup()
+        event_bus.publish(ET.LEAD_OUTREACH_SENT,
+                          payload={'lead_id': lead_id, 'channel': 'whatsapp'})
+        state = self._state(lead_id)
+        self.assertEqual(state['status'], 'נשלחה פנייה')
+        self.assertEqual(state['attempts'], 3)
+        self.assertEqual(state['next_action'], 'follow_up')
+        self.assertNotEqual(state['last_contact'], '2026-11-01T10:00:00+00:00')
 
 
 if __name__ == "__main__":
