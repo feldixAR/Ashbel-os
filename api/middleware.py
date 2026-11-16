@@ -30,7 +30,7 @@ def _norm_key(raw: str) -> str:
       1. strip surrounding whitespace and control characters
       2. strip surrounding single or double quotes
          (Railway dashboard sometimes stores values with literal quotes
-          when pasted or set via CLI: e.g. "Ashbel2026" → Ashbel2026)
+          when pasted or set via CLI: e.g. "example-token" → example-token)
       3. strip again in case quotes had padding
     """
     k = raw.strip()
