@@ -434,19 +434,25 @@ def start():
 
             il_tz = pytz.timezone("Asia/Jerusalem")
             sched = BackgroundScheduler(timezone=il_tz)
+            from scheduler.job_claim import run_scheduled_once
+
+            def add_claimed_job(callback, **options):
+                job_id = options["id"]
+                sched.add_job(run_scheduled_once, args=[job_id, callback], **options)
 
             # Follow-up every 4 hours
-            sched.add_job(
+            add_claimed_job(
                 _job_followup,
                 trigger="interval",
                 hours=4,
+                start_date=datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
                 id="followup",
                 replace_existing=True,
                 misfire_grace_time=600,
             )
 
             # Daily plan every morning at 07:30 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_daily_plan,
                 trigger="cron",
                 hour=7, minute=30,
@@ -456,7 +462,7 @@ def start():
             )
 
             # Learning cycle every night at 23:00 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_learning_cycle,
                 trigger="cron",
                 hour=23, minute=0,
@@ -466,7 +472,7 @@ def start():
             )
 
             # Telegram delivery every morning at 08:00 IL (Axis 6)
-            sched.add_job(
+            add_claimed_job(
                 _job_telegram_delivery,
                 trigger="cron",
                 hour=8, minute=0,
@@ -476,7 +482,7 @@ def start():
             )
 
             # Daily learning report every evening at 20:00 IL (Batch 10.1)
-            sched.add_job(
+            add_claimed_job(
                 _job_daily_learning_report,
                 trigger="cron",
                 hour=20, minute=0,
@@ -486,7 +492,7 @@ def start():
             )
 
             # Maintenance agent: Sunday 07:00 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_maintenance,
                 trigger="cron",
                 day_of_week="sun", hour=7, minute=0,
@@ -496,17 +502,18 @@ def start():
             )
 
             # Gmail scan every 30 min
-            sched.add_job(
+            add_claimed_job(
                 _job_gmail_scan,
                 trigger="interval",
                 hours=0, minutes=30,
+                start_date=datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
                 id="gmail_scan",
                 replace_existing=True,
                 misfire_grace_time=300,
             )
 
             # Maps lead scrape daily at 06:00 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_maps_scan,
                 trigger="cron",
                 hour=6, minute=0,
@@ -516,7 +523,7 @@ def start():
             )
 
             # Lead follow-up proposals daily at 09:00 IL (Phase 13)
-            sched.add_job(
+            add_claimed_job(
                 _job_lead_followup_proposals,
                 trigger="cron",
                 hour=9, minute=0,
@@ -576,7 +583,14 @@ def status() -> dict:
     except Exception:
         pass
 
+    try:
+        from scheduler.job_claim import recent_claims
+        claims = recent_claims()
+    except Exception:
+        claims = []
+
     return {
+        "recent_claims": claims,
         "running":   _started,
         "jobs":      jobs_info,
         "last_runs": last_runs,

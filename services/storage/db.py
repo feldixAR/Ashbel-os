@@ -109,6 +109,7 @@ def create_all_tables() -> None:
     import services.storage.models.lead_discovery # noqa
     # Final completion run — safe lead import reports
     import services.storage.models.import_run     # noqa
+    import services.storage.models.scheduler_run  # durable scheduled occurrence claims
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")
