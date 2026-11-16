@@ -45,7 +45,7 @@ def quote(ident="p1"):
 
 def contract():
     return dict(verified=True, source_ref="https://example.invalid/signed", currency="ILS",
-                vat_basis="excluding_vat", document_kind="signed_customer_contract", selling_price_ils=100)
+                vat_basis="excluding_vat", document_kind="signed_customer_contract", selling_price_ils=100, scope_hash="same-openings")
 
 
 def test_historical_selling_prices_are_not_procurement_or_collection():
@@ -73,7 +73,7 @@ def test_finance_computes_contribution_only_with_comparable_source_backed_costs(
 def test_negative_contribution_and_receipts_are_explicit_not_net_profit():
     q = quote(); q["manufacturing_ils"] = 100
     facts = dict(contract=contract(), purchase_quotes=[q], collections=[
-        dict(amount_ils=30, currency="ILS", verified=True, document_kind="payment_receipt",
+        dict(receipt_id="synthetic-r1", amount_ils=30, currency="ILS", verified=True, document_kind="payment_receipt",
              source_ref="https://example.invalid/receipt")])
     out = finance_review(facts)
     assert out["scenarios"][0]["gross_contribution_ex_vat_ils"] == "-25.00"
@@ -244,3 +244,68 @@ def test_source_snapshot_preserves_canonical_link_and_identifier_without_inventi
     assert missing["source_ref"] == "existing_crm_snapshot"
     assert missing["facts"]["source_url"] is None
     assert missing["facts"]["spreadsheet_id"] is None
+
+
+def test_finance_requires_contract_scope_match_before_gross_profit():
+    facts = dict(contract=contract(), purchase_quotes=[quote()])
+    facts["contract"]["scope_hash"] = "full-building-but-purchase-is-partial"
+    out = finance_review(facts)
+    assert out["scenarios"][0]["gross_contribution_ex_vat_ils"] is None
+    assert out["scenarios"][0]["gross_margin_percent"] is None
+    assert "matching_contract_and_purchase_scope" in out["missing"]
+    facts["contract"].pop("scope_hash")
+    assert finance_review(facts)["scenarios"][0]["gross_contribution_ex_vat_ils"] is None
+
+
+def test_duplicate_or_conflicting_receipts_never_inflate_collection():
+    receipt = dict(receipt_id="synthetic-receipt", amount_ils=30, currency="ILS", verified=True,
+                   document_kind="payment_receipt", source_ref="https://example.invalid/receipt")
+    out = finance_review(dict(collections=[receipt, copy.deepcopy(receipt)]))
+    assert out["recorded_collection_ils"] == "30.00" and out["receipt_count"] == 1
+    conflicting = {**receipt, "amount_ils": 300}
+    out = finance_review(dict(collections=[receipt, conflicting]))
+    assert out["recorded_collection_ils"] is None
+    assert out["receipt_identity_conflicts"] == ["synthetic-receipt"]
+    missing_id = dict(receipt);missing_id.pop("receipt_id")
+    assert finance_review(dict(collections=[missing_id]))["recorded_collection_ils"] is None
+
+
+def test_repeated_quotes_do_not_become_independent_supplier_comparison():
+    q = quote()
+    out = purchase_comparison(dict(purchase_quotes=[q, copy.deepcopy(q)]))
+    assert len(out["quotes"]) == 1 and out["independent_supplier_count"] == 1
+    assert not out["same_scope_comparison_available"]
+    same_supplier = {**q, "quote_id": "revision-2"}
+    assert not purchase_comparison(dict(purchase_quotes=[q, same_supplier]))["same_scope_comparison_available"]
+    conflicting = {**q, "manufacturing_ils": 600}
+    out = purchase_comparison(dict(purchase_quotes=[q, conflicting, quote("p2")]))
+    assert out["quotes"][0]["eligible_for_comparison"] is False
+    assert "quote_identity_conflict" in out["quotes"][0]["missing"]
+    assert not out["same_scope_comparison_available"]
+
+
+def test_unchanged_newer_observation_advances_watermark_and_blocks_older_artifact():
+    def ctx(label):
+        c = context()
+        c["actions"] = [dict(subject=label, action="verify", owner="synthetic", due_date=None,
+                             kind="supplier", disposition="actionable", blocked_reasons=[], evidence={})]
+        return c
+    def event(key, minute):
+        e = envelope(key)
+        e["occurred_at"] = "2026-11-17T00:0" + str(minute) + ":00+00:00"
+        return e
+    first = rt.ingest_event(event("watermark-t1", 1))["id"]
+    assert rt.process_event(first, context=ctx("A"))["status"] == "analyzed"
+    item = next(row for row in list_work_items() if row["department"] == "pmo")
+    reported = review_work_item(item["id"], "report_complete", item["version"], "owner report",
+                               "https://example.invalid/report")
+    newest = rt.ingest_event(event("watermark-t3", 3))["id"]
+    assert rt.process_event(newest, context=ctx("A"))["status"] == "analyzed"
+    unchanged = next(row for row in list_work_items() if row["id"] == item["id"])
+    assert unchanged["version"] == reported["version"]
+    assert unchanged["status"] == "reported_complete"
+    older = rt.ingest_event(event("watermark-t2", 2))["id"]
+    assert rt.process_event(older, context=ctx("B"))["status"] == "analyzed"
+    final = next(row for row in list_work_items() if row["id"] == item["id"])
+    assert final["artifact"]["open_loops"][0]["subject"] == "A"
+    assert final["version"] == reported["version"] and final["status"] == "reported_complete"
