@@ -5,10 +5,12 @@ on:
     branches:
       - qa/company-foundation
       - feat/durable-business-events
+      - feat/company-completion
   pull_request:
     branches:
       - master
       - qa/company-foundation
+      - feat/company-completion
   workflow_dispatch:
 
 permissions:
