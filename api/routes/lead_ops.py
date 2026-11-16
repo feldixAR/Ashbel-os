@@ -427,9 +427,9 @@ def batch_score_leads():
 @require_api_key
 def execute_outreach(approval_id: str):
     """
-    Execute an approved outreach action.
+    Resolve an outreach draft approval without sending a message.
     Delegates to ApprovalRepository.resolve() for DB update, then emits
-    APPROVAL_GRANTED/DENIED, logs activity, publishes LEAD_OUTREACH_SENT,
+    APPROVAL_GRANTED/DENIED, logs activity, publishes LEAD_OUTREACH_APPROVED,
     and records learning outcome.
     Body: { "action": "approve" | "deny", "note": "..." }
     """
@@ -486,7 +486,7 @@ def execute_outreach(approval_id: str):
                     performed_by="lead_ops_api",
                 ))
             event_bus.publish(
-                ET.LEAD_OUTREACH_SENT,
+                ET.LEAD_OUTREACH_APPROVED,
                 payload={"lead_id": lead_id, "lead_name": lead_name,
                          "channel": channel, "approval_id": approval_id},
             )
@@ -496,7 +496,7 @@ def execute_outreach(approval_id: str):
                     record_template_outcome(
                         template_type="outreach",
                         template_text=body[:500],
-                        outcome="sent",
+                        outcome="approved",
                         segment=details.get("action_type"),
                         channel=channel,
                     )
@@ -507,6 +507,7 @@ def execute_outreach(approval_id: str):
             "success":     True,
             "approval_id": approval_id,
             "status":      status,
+            "sent_outreach": False,
             "lead_id":     lead_id,
             "lead_name":   lead_name,
         })

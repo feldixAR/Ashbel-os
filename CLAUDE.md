@@ -135,7 +135,7 @@ WhatsApp / Dashboard UI
 | Variable | Source | Notes |
 |----------|--------|-------|
 | `DATABASE_URL` | Railway PostgreSQL add-on | Auto-injected by Railway |
-| `OS_API_KEY` | Railway secret | Required for all API routes (`Ashbel2026`) |
+| `OS_API_KEY` | Railway secret | Required for all API routes (configured hosting secret) |
 | `SECRET_KEY` | Railway secret | Flask session key |
 | `ANTHROPIC_API_KEY` | Railway secret | For AI-powered engines |
 | `BUSINESS_ID` | Railway env | Set to `ashbel` (default if unset) |
@@ -469,3 +469,32 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 - Prefer lightweight adapters over full-code imports.
 - Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
 - Reuse existing internal logic before adding external capability.
+
+
+## 2026-11-16 — Approval/delivery truth correction
+
+HTTP approvals, shared Telegram resolution, and lead_ops/execute now emit LEAD_OUTREACH_APPROVED, not LEAD_OUTREACH_SENT. Approval logs remain, but no contact attempt or follow-up is invented. Both body and draft_body are supported; HTTP responses state sent_outreach=false. The existing confirmed-delivery event/handler remains unchanged. Regression coverage traverses actual dispatcher and persisted CRM state across three approval surfaces and both body formats. Production was read-only verified at 895d059 (health db=true); this change is not deployed.
+
+Validation: targeted approval/Telegram/cross-surface tests: 54 passed, 6 subtests passed. Full suite: 541 passed, 2 pre-existing intake failures in tests/test_completion_run.py (also reproduced before the fix and in isolation); no new failures.
+## 2026-11-16 — Durable scheduled occurrence claims
+
+Added database-backed primary-key claims around all nine scheduler registrations. Interval schedules are anchored independently of worker startup. Parallel workers/restarts cannot invoke the same job/slot twice; unavailable claim storage blocks invocation. Stale claimed rows require review rather than automatic replay. `recent_claims` exposes claimed/returned/failed, without treating callback return as delivery or success. No production deployment was performed.
+
+Validation: 22 scheduler tests pass, including six independent processes contending on a real shared SQLite database, restart replay, crash, failure, missing coordination schema, and unchanged callback output. Full suite: 546 passed, 23 subtests passed; the same two baseline intake failures remain. PostgreSQL-specific production validation has not been performed.
+## 2026-11-16 — Published credential reference cleanup
+
+Removed the literal API-key example from tracked docs, environment sample, local tool permissions, and middleware comments. Hosting must supply a unique secret. If the published value is active, rotate OS_API_KEY through secure Railway access; removing current-file references does not erase git history or revoke credentials. No key was tested, rotated, or used against production.
+## Session checkpoint — 2026-11-16: source context (branch only)
+
+- Added opt-in read-only Sheets context to existing daily-plan entry points;
+  no source writes, duplicate CRM import, deployment or external messages.
+- Fixed ranges, schema/section boundary checks, source hash and row evidence;
+  supplier capacity unknown/blocked holds acquisition, pending specification holds pricing.
+- Draft approval never establishes delivery; proposal amounts never establish collected commission.
+- Live connection remains unverified pending dedicated readonly credentials and workbook Viewer access.
+- Setup, limits and rollback: `docs/BUSINESS_SOURCE_CONTEXT.md`.
+## 2026-11-16 — Explicit English aluminum intake intent
+
+The intake classifier now recognizes complete English words aluminum/aluminium case-insensitively. Hebrew matching, scoring points, stage rules and business thresholds are unchanged. Belgian-window style alone does not establish aluminum material: the completion-run fixture now explicitly says aluminum belgian window. Added positive, word-boundary and steel/unspecified-material regression checks.
+
+Validation: full suite at the original master base plus this change: 544 passed, 23 subtests passed; no failures. No production action was performed.

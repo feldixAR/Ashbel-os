@@ -26,7 +26,7 @@ H = {"X-API-Key": "testkey"}
 def _csv_bytes(phone="0501234567"):
     return (
         "name,phone,email,city,work type,project stage,budget,address,decision maker,photos,plans,measurements,notes\n"
-        f"Test Lead,{phone},lead@example.com,Ariel,belgian window,ready,55000,Main 1,Test Lead,yes,yes,yes,urgent project\n"
+        f"Test Lead,{phone},lead@example.com,Ariel,aluminum belgian window,ready,55000,Main 1,Test Lead,yes,yes,yes,urgent project\n"
     ).encode("utf-8")
 
 

@@ -114,7 +114,7 @@ def resolve_approval(approval_id: str):
                 log.error(f"[Approvals] post-approval execution error: {ex}")
                 exec_result = {"executed": False, "error": str(ex)}
 
-    # ── Lead outreach approval: log activity + emit LEAD_OUTREACH_SENT ───────
+    # ── Lead outreach approval: log approval without implying delivery ───────
     # Handles the lead_id+body format (DraftModal / lead_ops surface).
     if action == "approve" and not exec_result:
         _details = result.details or {}
@@ -136,7 +136,7 @@ def resolve_approval(approval_id: str):
                         performed_by="owner",
                     ))
                 event_bus.publish(
-                    ET.LEAD_OUTREACH_SENT,
+                    ET.LEAD_OUTREACH_APPROVED,
                     payload={"lead_id": _lead_id, "approval_id": approval_id,
                              "channel": _channel},
                 )
@@ -188,7 +188,7 @@ def resolve_approval(approval_id: str):
             except Exception as _e:
                 log.error(f"[Approvals] system_change store error: {_e}")
 
-    resp = {"approval": _serialize(result)}
+    resp = {"approval": _serialize(result), "sent_outreach": False}
     if exec_result:
         resp["outreach_execution"] = exec_result
     return ok(resp)
@@ -233,7 +233,7 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
         # Lead ops approval format: {lead_id, lead_name, body, channel, action_type}
         lead_id   = details.get("lead_id") if isinstance(details, dict) else None
         lead_name = details.get("lead_name", "") if isinstance(details, dict) else ""
-        body      = details.get("body", "")      if isinstance(details, dict) else ""
+        body      = (details.get("body") or details.get("draft_body") or "") if isinstance(details, dict) else ""
         channel   = details.get("channel", "")   if isinstance(details, dict) else ""
         if lead_id and body:
             try:
@@ -250,11 +250,11 @@ def _resolve_approval(approval_id: str, action: str, source: str = "api") -> str
                         performed_by=source,
                     ))
                 event_bus.publish(
-                    ET.LEAD_OUTREACH_SENT,
+                    ET.LEAD_OUTREACH_APPROVED,
                     payload={"lead_id": lead_id, "lead_name": lead_name,
                              "channel": channel, "approval_id": approval_id},
                 )
-                return f"✅ אושר ונרשם — {lead_name}"
+                return f"✅ טיוטה אושרה ונרשמה — {lead_name}; טרם נשלחה"
             except Exception as ex:
                 return f"✅ אושר אך רישום נכשל: {ex}"
 

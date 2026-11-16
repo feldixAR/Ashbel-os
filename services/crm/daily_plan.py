@@ -29,13 +29,14 @@ except ImportError:
 @dataclass
 class DailyPlan:
     date_il:          str
-    total_deals:      int
+    total_deals:      int | None
     total_leads:      int
-    pipeline_value:   int        # sum of weighted deal values (ILS)
+    pipeline_value:   int | None # unknown in external source context; not zero
     priority_items:   list        # List[PriorityItem.to_dict()]
     time_blocks:      list        # List[TimeBlock.to_dict()]
     todays_events:    list        # List[CalendarEvent.to_dict()] for today
     top_action:       str         # single most important action
+    business_context: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -47,6 +48,7 @@ class DailyPlan:
             "time_blocks":    self.time_blocks,
             "todays_events":  self.todays_events,
             "top_action":     self.top_action,
+            "business_context": self.business_context,
         }
 
 
@@ -54,6 +56,14 @@ def build_daily_plan(budget_minutes: int = 240) -> DailyPlan:
     """Build today's revenue plan. All errors return a safe empty plan."""
     now_il    = datetime.datetime.now(_IL_TZ)
     date_str  = now_il.date().isoformat()
+
+    from services.integrations.business_source import enabled, load_business_context, context_plan
+    if enabled():
+        plan = context_plan(load_business_context())
+        context = plan["business_context"]
+        # No duplicate CRM data or invented valuation from sheet proposal amounts.
+        return DailyPlan(date_str, None, context.get("lead_count", 0), None,
+                         plan["priority_items"], [], [], plan["top_action"], context)
 
     deals  = _load_active_deals()
     leads  = _load_hot_leads()

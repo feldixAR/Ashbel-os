@@ -7,6 +7,7 @@ GET  /api/intake/reports - recent import reports
 from __future__ import annotations
 
 import logging
+import re
 from flask import Blueprint, request
 
 from api.middleware import require_auth, log_request, ok, _error
@@ -417,7 +418,7 @@ def _lead_text(rec: dict) -> str:
 
 def _classify_aluminum_intent(text: str) -> tuple[str, str, int, str]:
     t = text or ""
-    if "אלומיניום" in t or "בלגי" in t:
+    if "אלומיניום" in t or "בלגי" in t or re.search(r"\b(?:aluminum|aluminium)\b", t, re.IGNORECASE):
         return "explicit_aluminum", "ביקש אלומיניום במפורש", 35, "high"
     if any(x in t for x in ("כל התחומים", "כל הספקים", "כל בעלי המקצוע", "כל העבודות", "כללי")):
         return "all_fields", "ביקש הצעות בכל התחומים", 18, "medium"
