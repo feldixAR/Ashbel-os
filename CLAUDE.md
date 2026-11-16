@@ -469,3 +469,10 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 - Prefer lightweight adapters over full-code imports.
 - Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
 - Reuse existing internal logic before adding external capability.
+
+
+## 2026-11-16 — Durable scheduled occurrence claims
+
+Added database-backed primary-key claims around all nine scheduler registrations. Interval schedules are anchored independently of worker startup. Parallel workers/restarts cannot invoke the same job/slot twice; unavailable claim storage blocks invocation. Stale claimed rows require review rather than automatic replay. `recent_claims` exposes claimed/returned/failed, without treating callback return as delivery or success. No production deployment was performed.
+
+Validation: 22 scheduler tests pass, including six independent processes contending on a real shared SQLite database, restart replay, crash, failure, missing coordination schema, and unchanged callback output. Full suite: 546 passed, 23 subtests passed; the same two baseline intake failures remain. PostgreSQL-specific production validation has not been performed.
