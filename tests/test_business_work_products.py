@@ -184,3 +184,38 @@ def test_authenticated_poll_and_work_review_do_not_execute_external_actions(monk
                            json=dict(action="cancel", expected_version=item["version"], note="cancel synthetic"))
     assert response.status_code == 200
     assert response.get_json()["data"]["external_action_executed"] is False
+
+
+def test_new_source_reopens_changed_artifact_without_duplicate_tasks_or_verified_completion():
+    original = envelope("first-observation")
+    eid = rt.ingest_event(original)["id"];rt.process_event(eid, context=context())
+    items = list_work_items()
+    pmo = next(item for item in items if item["department"] == "pmo")
+    review_work_item(pmo["id"], "report_complete", pmo["version"], "owner report", "https://example.invalid/report")
+    newer = envelope("second-observation");newer["occurred_at"] = "2026-11-17T00:01:00+00:00"
+    next_context = context()
+    next_context["actions"] = [dict(subject="synthetic-open-loop", action="verify quote", owner="synthetic-owner",
+                                     due_date="2026-11-18", disposition="actionable", evidence={"range": "synthetic"})]
+    new_id = rt.ingest_event(newer)["id"]
+    assert rt.process_event(new_id, context=next_context)["status"] == "analyzed"
+    updated = list_work_items()
+    assert {item["id"] for item in updated} == {item["id"] for item in items}
+    pmo_now = next(item for item in updated if item["id"] == pmo["id"])
+    assert pmo_now["status"] == "created"
+    assert pmo_now["version"] == pmo["version"] + 2
+    assert pmo_now["completion_evidence"] is None and pmo_now["independently_verified"] is False
+    assert pmo_now["artifact"]["open_loops"][0]["subject"] == "synthetic-open-loop"
+
+
+def test_auditor_rejects_forged_artifact_execution_and_financial_truth():
+    from services.business_events.departments import DepartmentExpert
+    event = {**envelope(), "id": "synthetic-id", "fingerprint": "synthetic-fingerprint"}
+    result = DepartmentExpert("auditor").analyze(event, context(), {
+        "departments": {"engineering": {
+            "mode": "native_deterministic", "evidence": {"source_ref": event["source_ref"]},
+            "artifact": {"production_ready": True, "business_net_profit_ils": "90000",
+                         "advisory": {"business_execution": True}}}},
+        "ceo_decision": {"code": "review_open_work", "executed_external_action": False, "collected_ils": None}})
+    assert result["passed"] is False
+    assert set(result["violations"]) == {"net_profit_not_proven", "advice_crossed_execution_boundary",
+                                         "production_without_source_gates"}
