@@ -93,6 +93,17 @@ def _job_daily_plan():
         from events.event_bus import event_bus
         import events.event_types as ET
 
+        from services.integrations.business_source import enabled, load_business_context, context_plan
+        if enabled():
+            plan = context_plan(load_business_context())
+            event_bus.publish(ET.SCHEDULER_JOB_RAN, payload={
+                "job": "daily_plan", "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "plan": plan,
+            })
+            log.info("[Scheduler] source_context health=%s", plan["business_context"]["health"])
+            _record_last_run("daily_plan")
+            return
+
         summary  = outreach_engine.build_daily_summary()
         snap     = revenue_snapshot()
 

@@ -699,6 +699,16 @@ def _handle_daily_plan(task: TaskModel) -> ExecutionResult:
     from engines.outreach_engine import outreach_engine
     started = _now_ms()
     try:
+        from services.integrations.business_source import enabled, load_business_context, context_plan
+        if enabled():
+            plan = context_plan(load_business_context())
+            context = plan["business_context"]
+            return ExecutionResult(
+                success=context["health"] == "read_ok",
+                message=plan["top_action"],
+                output=plan,
+                duration_ms=_elapsed_ms(started),
+            )
         summary = outreach_engine.build_daily_summary()
         lines   = []
         if hasattr(summary, "top_priorities") and summary.top_priorities:
