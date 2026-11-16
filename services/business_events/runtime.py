@@ -45,6 +45,14 @@ def _validate(envelope):
         raise ValueError('invalid_event_type')
     if not isinstance(envelope.get('facts', {}), dict):
         raise ValueError('invalid_facts')
+    facts = envelope.get('facts', {})
+    for key, limit in (('quote_lines', 200), ('purchase_quotes', 20),
+                       ('historical_sale_quotes', 20), ('collections', 100)):
+        if key in facts and (not isinstance(facts[key], list) or len(facts[key]) > limit
+                             or any(not isinstance(row, dict) for row in facts[key])):
+            raise ValueError('invalid_' + key)
+    if 'contract' in facts and not isinstance(facts['contract'], dict):
+        raise ValueError('invalid_contract')
     if len(json.dumps(envelope, ensure_ascii=False, allow_nan=False).encode()) > 65536:
         raise ValueError('event_too_large')
     try:
