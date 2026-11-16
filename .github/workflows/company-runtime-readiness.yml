@@ -1,0 +1,52 @@
+name: Existing runtime readiness
+
+on:
+  push:
+    branches:
+      - feat/company-completion
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-existing-connections:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+      OS_API_KEY: ${{ secrets.OS_API_KEY }}
+      ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON: ${{ secrets.ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Check configured access without disclosing credential values
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.error
+          report = {"inspection_only": True, "production_mutation": False}
+          for name in ("RAILWAY_TOKEN", "RAILWAY_PROJECT_ID", "OS_API_KEY", "ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON"):
+              report[name.lower() + "_configured"] = bool(os.getenv(name))
+          base = "https://ashbel-os-production.up.railway.app"
+          for label, path in (("health", "/api/health"), ("version", "/api/version")):
+              try:
+                  with urllib.request.urlopen(base + path, timeout=20) as response:
+                      data = json.load(response)
+                      if label == "health":
+                          report["health_http"] = response.status
+                          report["database_reachable"] = data.get("data", {}).get("db") is True
+                      else:
+                          body = data.get("data", data)
+                          report["deployed_commit"] = body.get("commit") or body.get("commit_sha") or body.get("git_sha") or body.get("version")
+              except Exception as exc:
+                  report[label + "_error"] = type(exc).__name__
+          if os.getenv("OS_API_KEY"):
+              request = urllib.request.Request(base + "/api/system/scheduler",
+                                                headers={"X-API-Key": os.environ["OS_API_KEY"]})
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      report["runtime_api_auth_http"] = response.status
+              except urllib.error.HTTPError as exc:
+                  report["runtime_api_auth_http"] = exc.code
+              except Exception as exc:
+                  report["runtime_api_auth_error"] = type(exc).__name__
+          print(json.dumps(report, sort_keys=True))
