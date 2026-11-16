@@ -25,6 +25,7 @@ def page():
 window.apiCalls = [];
 window.reviewFails = false;
 window.pollHealth = 'read_ok';
+window.candidates = []; window.operations = [];
 window.work = {id:'synthetic-work',department:'engineering',code:'review_spec',
  subject:'בדיקת מפרט סינתטי',status:'created',version:1,
  source_ref:'https://example.invalid/source',
@@ -35,8 +36,8 @@ window.API = {
    window.apiCalls.push({method:'GET',path});
    if(path.startsWith('/business_events/work_items')) return {success:true,data:{items:[{...window.work}]}};
    if(path==='/business_events') return {success:true,data:{events:[{id:'synthetic-event',status:'analyzed',source_ref:'javascript:window.injected=true',output:{ceo_decision:{summary:'בדוק מפרט לפני תמחור'},departments:{}}}]}};
-   if(path==='/source_discovery') return {success:true,data:{enabled:true,sources:[],candidates:[]}};
-   if(path==='/source_sync/status') return {success:true,data:{writer_configured:false,operations:[]}};
+   if(path==='/source_discovery') return {success:true,data:{enabled:true,sources:[],candidates:window.candidates}};
+   if(path==='/source_sync/status') return {success:true,data:{writer_configured:false,operations:window.operations}};
    return {success:false,_status:404};
  },
  async post(path,body) {
@@ -107,3 +108,54 @@ def test_missing_source_and_mobile_layout_are_explicit(page):
     output = ROOT / "test-results"
     output.mkdir(exist_ok=True)
     page.screenshot(path=str(output / "company-mobile.png"), full_page=True)
+
+
+def prepare_candidate_preview(page):
+    page.evaluate("""
+window.candidates=[{task_id:'synthetic-candidate',title:'הזדמנות סינתטית',source_url:'https://example.invalid/primary',found_at:'2026-11-17T08:00:00Z'}];
+const originalPost=window.API.post.bind(window.API);
+window.API.post=async(path,body)=>{
+ if(path.includes('/candidates/')){window.apiCalls.push({method:'POST',path,body});return {success:true,data:{candidate:{...body.candidate,verification_id:'verified-primary'}}};}
+ if(path==='/source_sync/preview'){
+  window.apiCalls.push({method:'POST',path,body});
+  const row=Array(44).fill('');row[7]='הזדמנות סינתטית';row[28]='https://example.invalid/primary';
+  window.operations=[{id:'exact-operation',status:'prepared'}];
+  return {success:true,data:{operation_id:'exact-operation',status:'prepared',preview_hash:'server-preview-fingerprint',row}};
+ }
+ if(path.endsWith('/commit')){
+  window.apiCalls.push({method:'POST',path,body});
+  window.operations=[{id:'exact-operation',status:'committed'}];
+  return {success:true,data:{status:'committed'}};
+ }
+ return originalPost(path,body);
+};
+""")
+    page.evaluate("CompanyPanel.render(document.getElementById('workPane'))")
+    page.get_by_text("בדוק פרטים והכן קליטה", exact=True).click()
+    page.locator('input[type=checkbox]').check()
+    page.get_by_role("button", name="אמת מקור והצג תצוגה מקדימה", exact=True).click()
+    page.get_by_role("button", name="אשר קליטה של רשומה זו", exact=True).wait_for()
+
+
+def test_source_review_is_preview_only_until_exact_commit_and_readback(page):
+    prepare_candidate_preview(page)
+    assert page.evaluate("window.apiCalls.filter(c=>c.path.endsWith('/commit')).length") == 0
+    page.get_by_role("button", name="אשר קליטה של רשומה זו", exact=True).click()
+    page.wait_for_function("window.operations[0]?.status==='committed'")
+    calls=page.evaluate("window.apiCalls")
+    commits=[call for call in calls if call["path"].endswith("/commit")]
+    assert commits == [{"method":"POST","path":"/source_sync/exact-operation/commit",
+                        "body":{"preview_hash":"server-preview-fingerprint"}}]
+    verify=[call for call in calls if "/candidates/" in call["path"]][0]
+    assert verify["body"]["review_confirmed"] is True
+    assert "content_sha256" not in verify["body"]["candidate"]
+    assert "verification" not in verify["body"]["candidate"]
+    assert any(call["method"]=="GET" and call["path"]=="/source_sync/status"
+               for call in calls[calls.index(commits[0])+1:])
+
+
+def test_editing_candidate_invalidates_exact_preview(page):
+    prepare_candidate_preview(page)
+    page.get_by_label("יישוב", exact=True).fill("יישוב סינתטי")
+    assert page.get_by_role("button", name="אשר קליטה של רשומה זו", exact=True).count()==0
+    assert page.evaluate("window.apiCalls.filter(c=>c.path.endsWith('/commit')).length")==0
