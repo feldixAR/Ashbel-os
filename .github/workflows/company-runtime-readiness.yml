@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/company-completion
+    paths:
+      - .github/workflows/company-runtime-readiness.yml
+      - scripts/runtime_admin.py
   workflow_dispatch:
 
 permissions:
