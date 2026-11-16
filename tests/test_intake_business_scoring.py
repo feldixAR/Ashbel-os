@@ -76,3 +76,35 @@ def test_missing_fields_names_action_blockers():
     assert "מידות" in missing
     assert "תמונות" in missing
     assert "שלב פרויקט" in missing
+
+
+def test_explicit_english_aluminum_words_are_case_insensitive():
+    from api.routes.intake import _classify_aluminum_intent
+    for text in ('aluminum belgian window', 'ALUMINIUM windows', 'AlUmInUm',
+                 'Request: (aluminium) windows.'):
+        intent, _, points, confidence = _classify_aluminum_intent(text)
+        assert intent == 'explicit_aluminum', text
+        assert points == 35
+        assert confidence == 'high'
+
+
+def test_belgian_window_without_material_does_not_imply_aluminum():
+    from api.routes.intake import _classify_aluminum_intent
+    for text in ('belgian window', 'steel belgian window', 'Steel Belgian Window',
+                 'prealuminum', 'aluminiumworks', 'aluminumized'):
+        assert _classify_aluminum_intent(text)[0] != 'explicit_aluminum', text
+        result = _business_score({'work_type': text}, {'ready_for_proposal': True})
+        assert result['aluminum_intent'] != 'explicit_aluminum'
+        assert result['score_label'] == 'skip'
+
+
+def test_explicit_english_material_preserves_business_score_thresholds():
+    record = {'name': 'Synthetic Owner', 'phone': '0501234567',
+              'email': 'owner@example.com', 'city': 'Ariel',
+              'work_type': 'Aluminium belgian window', 'project_stage': 'ready'}
+    result = _business_score(record, {'ready_for_proposal': True})
+    assert result['aluminum_intent'] == 'explicit_aluminum'
+    assert result['construction_stage'] == 'unknown'
+    assert result['score_breakdown']['intent'] == 35
+    assert result['score_total'] == 60
+    assert result['score_label'] == 'warm'

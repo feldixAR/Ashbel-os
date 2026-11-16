@@ -469,3 +469,10 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 - Prefer lightweight adapters over full-code imports.
 - Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
 - Reuse existing internal logic before adding external capability.
+
+
+## 2026-11-16 — Explicit English aluminum intake intent
+
+The intake classifier now recognizes complete English words aluminum/aluminium case-insensitively. Hebrew matching, scoring points, stage rules and business thresholds are unchanged. Belgian-window style alone does not establish aluminum material: the completion-run fixture now explicitly says aluminum belgian window. Added positive, word-boundary and steel/unspecified-material regression checks.
+
+Validation: full suite at the original master base plus this change: 544 passed, 23 subtests passed; no failures. No production action was performed.
