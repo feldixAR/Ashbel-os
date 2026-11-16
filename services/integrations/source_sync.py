@@ -99,13 +99,17 @@ def candidate_fields(raw):
     if not isinstance(raw, dict) or len(json.dumps(raw, ensure_ascii=False, allow_nan=False).encode()) > 16000:
         raise ValueError("invalid_candidate")
     required = ("source_key", "source_url", "name", "city", "project_type", "project_stage",
-                "aluminum_need", "next_action", "found_at", "published_at", "quality", "confidence")
+                "aluminum_need", "next_action", "found_at", "quality", "confidence")
     result = {}
     for key in required:
         value = raw.get(key)
         if not isinstance(value, str) or not value.strip() or len(value) > (2000 if key == "source_url" else 1000):
             raise ValueError("invalid_" + key)
         result[key] = value.strip()
+    published_at = raw.get("published_at")
+    if published_at is not None and not isinstance(published_at, str):
+        raise ValueError("invalid_published_at")
+    result["published_at"] = (published_at or "").strip()
     for key in ("phone", "email", "details"):
         value = raw.get(key, "")
         if not isinstance(value, str) or len(value) > 3000:
@@ -116,10 +120,16 @@ def candidate_fields(raw):
     if result["entity_type"] not in ENTITY_TYPES:
         raise ValueError("invalid_entity_type")
     for key in ("found_at", "published_at"):
+        if key == "published_at" and not result[key]:
+            continue
         try:
             dt.date.fromisoformat(result[key])
         except ValueError:
             raise ValueError("invalid_" + key) from None
+    result["missing_fields"] = [key for key in ("published_at", "city", "project_stage", "aluminum_need")
+                                if not result[key] or result[key] in {"לא אומת", "לא ידוע", "unknown", "not verified"}]
+    if result["missing_fields"]:
+        result["quality"] = "לא סווגה — חסרים נתונים"
     # Published contact information never grants outreach permission.
     result["contact_permission"] = "unverified"
     return result
@@ -167,6 +177,7 @@ def duplicate(candidate, rows):
     phone = normalized_phone(candidate["phone"])
     source_key = identity(candidate["source_key"])
     anchored_name = (identity(candidate["name"]), identity(candidate["city"]))
+    unknown_anchor = candidate["city"] in {"לא אומת", "לא ידוע", "unknown", "not verified"}
     expected_id = lead_id(candidate)
     for index, row in enumerate(rows, 2):
         reasons = []
@@ -182,7 +193,7 @@ def duplicate(candidate, rows):
                 pass
         if phone and any(normalized_phone(row[p]) == phone for p in (8, 15) if row[p]):
             reasons.append("phone")
-        if all(anchored_name) and any(
+        if not unknown_anchor and all(anchored_name) and any(
             (identity(row[n]), identity(row[c])) == anchored_name
             for n, c in ((7, 5), (30, 29))
         ):

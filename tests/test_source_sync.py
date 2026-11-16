@@ -335,3 +335,13 @@ def test_expired_unused_preview_and_before_write_failure_can_be_prepared_again()
     assert prepared["status"] == "prepared"
     assert sync.commit_append(prepared["operation_id"], prepared["preview_hash"], sheet)["status"] == "committed"
     assert sheet.appends == 1
+
+
+@pytest.mark.parametrize("published", ["", None])
+def test_unknown_source_publication_date_stays_missing_and_review_hash_remains_consistent(published):
+    raw = facts(); raw["published_at"] = published; raw["city"] = "לא אומת"
+    normalized = sync.candidate_fields(raw)
+    assert normalized["published_at"] == "" and "published_at" in normalized["missing_fields"]
+    assert "city" in normalized["missing_fields"] and normalized["quality"] == "לא סווגה — חסרים נתונים"
+    assert sync.crm_row(normalized)[40] == ""
+    assert sync.digest(normalized) == sync.digest(sync.candidate_fields(normalized))

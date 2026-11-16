@@ -22,7 +22,7 @@ All endpoints require the existing owner API authentication.
 4. The preview returns operation_id, preview_hash, row[44] and expiry. POST /api/source_sync/{operation_id}/commit requires the exact preview_hash. It acquires the durable workbook lease, rechecks source changes and duplicates, issues one RAW append with INSERT_ROWS, and reads back the exact new row. Existing cells are never updated. Spreadsheet action dates are numeric date serials.
 5. A verified append becomes committed; an opportunity.discovered event is published idempotently. Event-publication failures may retry independently without repeating the append. An approved draft or published contact detail never grants outreach permission.
 
-Candidate facts include source_key, source_url, name, city, project_type, project_stage, aluminum_need, next_action, found_at and published_at (ISO dates), quality, confidence, optional entity_type (לקוח/ספק/מתקין/שותף עסקי), phone, email and details. Do not fill unknown facts with invented values. Verification expires after 24 hours; unused previews expire after 30 minutes.
+Candidate facts include source_key, source_url, name, city, project_type, project_stage, aluminum_need, next_action, found_at (required ISO date), published_at (ISO date or empty/null when unknown), quality, confidence, optional entity_type (לקוח/ספק/מתקין/שותף עסקי), phone, email and details. Do not fill unknown facts with invented values. Unknown publication dates remain empty and appear in missing_fields; unverified location/stage/need prevents promotion to a qualified opportunity. Verification expires after 24 hours; unused previews expire after 30 minutes.
 
 ## Uncertain outcomes and recovery
 
