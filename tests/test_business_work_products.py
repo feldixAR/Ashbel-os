@@ -309,3 +309,24 @@ def test_unchanged_newer_observation_advances_watermark_and_blocks_older_artifac
     final = next(row for row in list_work_items() if row["id"] == item["id"])
     assert final["artifact"]["open_loops"][0]["subject"] == "A"
     assert final["version"] == reported["version"] and final["status"] == "reported_complete"
+
+
+def test_quote_numbers_are_namespaced_by_supplier_not_globally_unique():
+    q1, q2 = quote("supplier-one"), quote("supplier-two")
+    q1["quote_id"] = q2["quote_id"] = "123"
+    out = purchase_comparison(dict(purchase_quotes=[q1, q2]))
+    assert len(out["quotes"]) == 2 and out["independent_supplier_count"] == 2
+    assert out["same_scope_comparison_available"] is True
+    assert all(row["eligible_for_comparison"] for row in out["quotes"])
+
+
+def test_complete_document_package_does_not_claim_engineering_or_production_release():
+    out = engineering_review(dict(specification_approved=True,
+        manufacturer_specification_ref="https://example.invalid/manufacturer",
+        site_measurement_ref="https://example.invalid/measurements",
+        quote_lines=[dict(quantity=1, width_mm=1000, height_mm=1000, system="synthetic",
+                         glass="synthetic", source_ref="https://example.invalid/spec")]))
+    assert out["package_complete"] is True
+    assert out["production_ready"] is False
+    assert out["compatibility_verified_by_this_runtime"] is False
+    assert out["release_requires_qualified_engineering_signoff"] is True
