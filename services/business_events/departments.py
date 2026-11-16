@@ -35,7 +35,7 @@ def roles_for(event_type):
     roles = {'pmo', 'knowledge', 'finance', 'strategy'}
     if event_type in {'customer.updated', 'opportunity.discovered', 'message.received', 'message.status'}:
         roles.add('sales')
-    if event_type in {'quote.received', 'supplier.updated'}:
+    if event_type in {'quote.received', 'supplier.updated', 'opportunity.discovered', 'customer.updated'}:
         roles.update(('engineering', 'procurement'))
     if event_type == 'opportunity.discovered':
         roles.add('marketing')
@@ -139,6 +139,24 @@ class DepartmentExpert(BaseAgent):
             result.update(status='action' if violations else 'no_change',
                           summary='נמצאו הפרות המחייבות חסימה.' if violations else 'ההכרעה עומדת בשערי מקור, הרשאה וכסף.',
                           passed=not violations, violations=violations)
+        if self.role != 'auditor':
+            from services.business_events.work_products import build_artifact
+            from services.business_events.advisory import advise
+            artifact = build_artifact(self.role, event, context)
+            titles = {'sales': 'צעד המכירה הבא', 'engineering': 'בדיקת מפרט ופתחים',
+                      'procurement': 'השוואת רכש', 'finance': 'עלויות, רווח וגבייה',
+                      'marketing': 'אימות הזדמנות ומקור', 'strategy': 'כשירות הפעלה קבלנית',
+                      'pmo': 'משימות פתוחות ומועדים', 'knowledge': 'רצף מידע ואסמכתאות'}
+            artifact.update(title=titles[self.role], summary=result['summary'],
+                            missing=artifact.get('missing', result.get('missing', [])))
+            artifact['advisory'] = advise(self.role, event, artifact) if self.role in {'sales', 'strategy'} else {'status': 'not_requested', 'executed': False}
+            result['artifact'] = artifact
+            if self.role == 'finance' and not artifact['missing']:
+                result.update(status='action', summary='נבנו תרחישי תרומה גולמית מתוך אסמכתאות; אין הכרה ברווח נקי או התאמת בנק.')
+                result['artifact']['summary'] = result['summary']
+                result['missing'] = []
+            if self.role == 'engineering':
+                result['missing'] = artifact['missing']
         return result
 
 
