@@ -5,7 +5,7 @@
 const Shell = (() => {
   'use strict';
 
-  let _tab     = 'leads';
+  let _tab     = 'company';
   let _intelOpen = false;
 
   // ── Boot ──────────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ const Shell = (() => {
     _initCmdBar();
     _refreshTodayStrip();
     _loadIntelRail();
-    switchTab('leads');
+    switchTab('company');
     setInterval(_refreshTodayStrip, 30_000);
     setInterval(_refreshBell, 30_000);
     if (typeof UploadModal !== 'undefined') UploadModal.init();
