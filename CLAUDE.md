@@ -135,7 +135,7 @@ WhatsApp / Dashboard UI
 | Variable | Source | Notes |
 |----------|--------|-------|
 | `DATABASE_URL` | Railway PostgreSQL add-on | Auto-injected by Railway |
-| `OS_API_KEY` | Railway secret | Required for all API routes (`Ashbel2026`) |
+| `OS_API_KEY` | Railway secret | Required for all API routes (configured hosting secret) |
 | `SECRET_KEY` | Railway secret | Flask session key |
 | `ANTHROPIC_API_KEY` | Railway secret | For AI-powered engines |
 | `BUSINESS_ID` | Railway env | Set to `ashbel` (default if unset) |
@@ -469,3 +469,8 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 - Prefer lightweight adapters over full-code imports.
 - Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
 - Reuse existing internal logic before adding external capability.
+
+
+## 2026-11-16 — Published credential reference cleanup
+
+Removed the literal API-key example from tracked docs, environment sample, local tool permissions, and middleware comments. Hosting must supply a unique secret. If the published value is active, rotate OS_API_KEY through secure Railway access; removing current-file references does not erase git history or revoke credentials. No key was tested, rotated, or used against production.

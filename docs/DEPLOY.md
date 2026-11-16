@@ -33,7 +33,7 @@ See `.env.example` for the full list. Minimum required for production:
 | Variable | Required | Notes |
 |----------|----------|-------|
 | `DATABASE_URL` | Yes | Auto-injected by Railway PostgreSQL add-on |
-| `OS_API_KEY` | Yes | Auth for all API routes — set to `Ashbel2026` |
+| `OS_API_KEY` | Yes | Auth for all API routes — configured hosting secret |
 | `SECRET_KEY` | Yes | Flask session key |
 | `ANTHROPIC_API_KEY` | Yes | AI agents (agents fall back gracefully if missing) |
 | `BUSINESS_ID` | No | Defaults to `ashbel` if unset |
@@ -60,7 +60,7 @@ curl https://ashbel-os-production.up.railway.app/api/version
 
 # Authenticated command
 curl -X POST https://ashbel-os-production.up.railway.app/api/command \
-  -H "X-API-Key: Ashbel2026" \
+  -H "X-API-Key: ${OS_API_KEY:?Set OS_API_KEY securely}" \
   -H "Content-Type: application/json" \
   -d '{"command":"הצג לידים"}'
 ```
