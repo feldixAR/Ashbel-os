@@ -3,12 +3,13 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import pytest
 
 
-def test_source_sync_claim_is_shared_across_processes_and_survives_restart(tmp_path):
+def _claim_case(tmp_path, database_url=None):
     root = Path(__file__).resolve().parents[1]
     environment = {**os.environ, "PYTHONPATH": str(root), "ENVIRONMENT": "test",
-                   "DATABASE_URL": "sqlite:///" + str(tmp_path / "source-sync.sqlite"),
+                   "DATABASE_URL": database_url or "sqlite:///" + str(tmp_path / "source-sync.sqlite"),
                    "BUSINESS_ID": "synthetic-sync-processes",
                    "ASHBEL_SOURCE_SPREADSHEET_ID": "synthetic-process-workbook-000000"}
     setup = """from services.storage.db import create_all_tables, get_session
@@ -39,3 +40,12 @@ print('won' if _claim(_operation('synthetic-operation')) else 'lost')
                             text=True, capture_output=True, timeout=30)
     assert replay.returncode == 0, replay.stderr
     assert replay.stdout.strip().splitlines()[-1] == "lost"
+
+
+def test_source_sync_claim_is_shared_across_processes_and_survives_restart(tmp_path):
+    _claim_case(tmp_path)
+
+
+@pytest.mark.skipif(not os.getenv("TEST_POSTGRES_URL"), reason="disposable PostgreSQL service not configured")
+def test_source_sync_claim_is_shared_on_postgres(tmp_path):
+    _claim_case(tmp_path, os.environ["TEST_POSTGRES_URL"])

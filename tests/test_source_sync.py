@@ -309,3 +309,12 @@ def test_crm_action_date_is_a_sheet_date_number_and_formula_text_is_not_executed
     candidate = sync.candidate_fields(facts())
     candidate["name"] = "=SYNTHETIC_FORMULA()"
     assert sync.crm_row(candidate)[7] == "=SYNTHETIC_FORMULA()"
+
+
+def test_duplicate_evidence_keeps_real_row_number_across_blank_rows():
+    candidate = reviewed()
+    existing = [""] * 44
+    existing[12], existing[28] = "existing-after-blank", candidate["source_url"]
+    sheet = Sheet([[], existing])
+    result = sync.prepare_append(candidate, sheet)
+    assert result["status"] == "duplicate" and result["duplicate"]["row_hint"] == 3

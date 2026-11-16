@@ -154,8 +154,8 @@ def snapshot(values):
     headers = tuple(str(x).strip() for x in values[0])
     if headers != HEADERS or any(not isinstance(row, list) or len(row) > 44 for row in values):
         raise ValueError("source_schema_mismatch")
-    rows = [list(map(str, row)) + [""] * (44 - len(row)) for row in values[1:]
-            if any(str(v).strip() for v in row)]
+    # Preserve blank row positions so duplicate evidence points to the real CRM row.
+    rows = [list(map(str, row)) + [""] * (44 - len(row)) for row in values[1:]]
     ids = [r[12] for r in rows if r[12]]
     if len(ids) != len(set(ids)):
         raise ValueError("existing_duplicate_lead_ids")
