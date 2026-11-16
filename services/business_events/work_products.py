@@ -55,14 +55,15 @@ def purchase_comparison(facts):
     # quote identity is held for review rather than counted or selected.
     deduplicated, identities = [], {}
     for row in rows:
-        quote_id = row.get("quote_id")
-        if not isinstance(quote_id, str) or not quote_id.strip():
+        quote_id, supplier_id = row.get("quote_id"), row.get("supplier_id")
+        identity = (supplier_id, quote_id) if isinstance(supplier_id, str) and isinstance(quote_id, str) else None
+        if identity is None or not quote_id.strip() or not supplier_id.strip():
             deduplicated.append(row)
-        elif quote_id not in identities:
-            identities[quote_id] = row
+        elif identity not in identities:
+            identities[identity] = row
             deduplicated.append(row)
-        elif identities[quote_id] != row:
-            existing = identities[quote_id]
+        elif identities[identity] != row:
+            existing = identities[identity]
             existing["eligible_for_comparison"] = False
             existing["missing"] = list(dict.fromkeys(existing["missing"] + ["quote_identity_conflict"]))
     rows = deduplicated
@@ -102,7 +103,9 @@ def engineering_review(facts):
     if any(row["missing"] for row in schedule):
         missing.append("opening_schedule_gaps")
     return {"opening_schedule": schedule, "missing": missing,
-            "production_ready": not missing, "automatic_series_substitution": False,
+            "package_complete": not missing, "production_ready": False,
+            "release_requires_qualified_engineering_signoff": True,
+            "compatibility_verified_by_this_runtime": False, "automatic_series_substitution": False,
             "pricing_mode": "source_replay_only_no_manufacturer_formula",
             "historical_sale_quotes": [q for q in facts.get("historical_sale_quotes", [])[:20] if isinstance(q, dict)]}
 
