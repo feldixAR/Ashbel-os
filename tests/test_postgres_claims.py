@@ -110,3 +110,35 @@ print(json.dumps(result))
     assert sum(result == {"executed": True} for result in results) == 1
     replay = json.loads(run(script))
     assert "already_claimed" in json.dumps(replay)
+
+
+def test_postgres_two_events_share_one_stable_followup_set_under_worker_concurrency():
+    project = "synthetic-concurrent-work-" + uuid.uuid4().hex
+    base_event = dict(source="synthetic_work_ci", source_ref="https://example.invalid/ci-work",
+                      occurred_at="2026-11-17T01:00:00+00:00", event_type="opportunity.discovered",
+                      facts={"project_id": project, "contact_permission": "unverified"})
+    events = [{**base_event, "source_event_id": project + "-" + str(i)} for i in range(2)]
+    ids = json.loads(run("""import json
+from services.business_events.runtime import ingest_event
+print(json.dumps([ingest_event(event)['id'] for event in %r]))
+""" % events))
+    context = dict(health="read_ok", snapshot_sha256="synthetic", capacity_state="unknown",
+                   lead_count=1, work_count=0, actions=[], decisions=[], source_ranges=[])
+    outputs = compete("""import json
+from services.business_events.runtime import process_pending
+print(json.dumps(process_pending(context=%r)))
+""" % context)
+    analyzed = [row for rows in outputs for row in rows if row['status'] == 'analyzed']
+    assert {row['id'] for row in analyzed} == set(ids)
+    assert len(analyzed) == 2
+    assert all(row['status'] in {'analyzed', 'not_claimed'} for rows in outputs for row in rows)
+    count = int(run("""from services.storage.db import get_session
+from services.storage.models.task import TaskModel
+with get_session() as session:
+    rows = session.query(TaskModel).filter(
+        TaskModel.type == 'business_work_item',
+        TaskModel.input_data['entity_ref'].as_string() == %r).all()
+    assert all(row.status != 'done' for row in rows)
+    print(len(rows))
+""" % project))
+    assert count == 8
