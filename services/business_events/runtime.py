@@ -51,7 +51,7 @@ def _validate(envelope):
         stamp = dt.datetime.fromisoformat(envelope['occurred_at'].replace('Z', '+00:00'))
         if stamp.tzinfo is None:
             raise ValueError()
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, AttributeError):
         raise ValueError('invalid_occurred_at') from None
     # Received time is distinct from source occurrence time; retain both.
     data = {key: envelope[key].strip() for key in ('source', 'source_event_id', 'source_ref')}
@@ -115,10 +115,20 @@ def _claim(event_id, clock):
 
 def _finish(event_id, token, **values):
     with get_session() as s:
-        return s.execute(update(BusinessEventModel).where(
+        count = s.execute(update(BusinessEventModel).where(
             BusinessEventModel.id == event_id, BusinessEventModel.business_id == tenant(),
             BusinessEventModel.lease_token == token, BusinessEventModel.status == 'processing',
-        ).values(lease_token=None, lease_until=None, **values)).rowcount == 1
+        ).values(lease_token=None, lease_until=None, **values)).rowcount
+        if count == 1 and values.get('status') == 'analyzed' and values.get('output'):
+            from services.business_events.work_items import persist_work_items
+            row = s.get(BusinessEventModel, event_id)
+            output = dict(values['output'])
+            ids = persist_work_items(s, _serialize(row), output)
+            output['work_item_ids'] = ids
+            output['ceo_decision'] = {**output['ceo_decision'], 'work_item_ids': ids}
+            # Assign JSON afresh; SQLAlchemy does not track nested mutation.
+            row.output = output
+        return count == 1
 
 
 def _run_role(role, event, context, trace_id, previous=None):
