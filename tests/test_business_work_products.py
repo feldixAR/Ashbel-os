@@ -229,3 +229,18 @@ def test_malformed_source_fact_shapes_are_rejected_before_execution(key, value):
     with pytest.raises(ValueError, match="invalid_" + key):
         rt.ingest_event(event)
     assert rt.recent_events() == [] and list_work_items() == []
+
+
+def test_source_snapshot_preserves_canonical_link_and_identifier_without_inventing_missing_url():
+    c = context()
+    c.update(spreadsheet_id="synthetic_sheet_identifier_1234567890", fetched_at="2026-11-17T00:00:00+00:00")
+    first = rt.enqueue_source_snapshot(c)
+    event = rt.get_event(first["id"])
+    assert event["source_ref"] == "https://docs.google.com/spreadsheets/d/synthetic_sheet_identifier_1234567890/edit"
+    assert event["facts"]["spreadsheet_id"] == c["spreadsheet_id"]
+    assert event["facts"]["source_url"] == event["source_ref"]
+    c.update(spreadsheet_id="../invalid", snapshot_sha256="synthetic-sha-without-sheet")
+    missing = rt.get_event(rt.enqueue_source_snapshot(c)["id"])
+    assert missing["source_ref"] == "existing_crm_snapshot"
+    assert missing["facts"]["source_url"] is None
+    assert missing["facts"]["spreadsheet_id"] is None
