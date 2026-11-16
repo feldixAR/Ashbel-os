@@ -469,3 +469,10 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 - Prefer lightweight adapters over full-code imports.
 - Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
 - Reuse existing internal logic before adding external capability.
+
+
+## 2026-11-16 — Approval/delivery truth correction
+
+HTTP approvals, shared Telegram resolution, and lead_ops/execute now emit LEAD_OUTREACH_APPROVED, not LEAD_OUTREACH_SENT. Approval logs remain, but no contact attempt or follow-up is invented. Both body and draft_body are supported; HTTP responses state sent_outreach=false. The existing confirmed-delivery event/handler remains unchanged. Regression coverage traverses actual dispatcher and persisted CRM state across three approval surfaces and both body formats. Production was read-only verified at 895d059 (health db=true); this change is not deployed.
+
+Validation: targeted approval/Telegram/cross-surface tests: 54 passed, 6 subtests passed. Full suite: 541 passed, 2 pre-existing intake failures in tests/test_completion_run.py (also reproduced before the fix and in isolation); no new failures.

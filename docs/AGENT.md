@@ -122,7 +122,7 @@ All outreach drafts have `requires_approval: True`. No sensitive action may exec
 1. An `ApprovalModel` record in the DB
 2. Explicit `approve` action via `/api/approvals/<id>` (REST) or Telegram inline keyboard
 3. ActivityModel log entry on resolution
-4. `LEAD_OUTREACH_SENT` event emitted on approval
+4. `LEAD_OUTREACH_APPROVED` records draft approval only; `LEAD_OUTREACH_SENT` is reserved for confirmed delivery. Approval must preserve attempts, last_contact and follow-up state.
 
 UI-initiated approvals use `POST /api/approvals/create` (Phase 21) — same approval model, same audit trail.
 

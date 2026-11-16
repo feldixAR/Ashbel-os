@@ -183,7 +183,7 @@ class TestTelegramApprovalLoop(unittest.TestCase):
         self.assertGreater(len(acts), 0,
                            "No ActivityModel logged after Telegram approval")
 
-    def test_approve_emits_outreach_sent_event(self):
+    def test_approve_emits_outreach_approved_event(self):
         from events.event_bus import event_bus
         import events.event_types as ET
         seen = []
@@ -202,8 +202,8 @@ class TestTelegramApprovalLoop(unittest.TestCase):
                 "channel": "whatsapp",
             })
             _client().post("/api/telegram/webhook", json=_cbq("approve", aid))
-            self.assertIn(ET.LEAD_OUTREACH_SENT, seen,
-                          f"LEAD_OUTREACH_SENT not emitted; saw: {seen}")
+            self.assertIn(ET.LEAD_OUTREACH_APPROVED, seen,
+                          f"LEAD_OUTREACH_APPROVED not emitted; saw: {seen}")
         finally:
             event_bus.publish = original
 
