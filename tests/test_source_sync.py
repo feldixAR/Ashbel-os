@@ -318,3 +318,20 @@ def test_duplicate_evidence_keeps_real_row_number_across_blank_rows():
     sheet = Sheet([[], existing])
     result = sync.prepare_append(candidate, sheet)
     assert result["status"] == "duplicate" and result["duplicate"]["row_hint"] == 3
+
+
+def test_expired_unused_preview_and_before_write_failure_can_be_prepared_again():
+    sheet = Sheet(); candidate = reviewed()
+    preview = sync.prepare_append(candidate, sheet)
+    with get_session() as session:
+        session.get(SourceSyncOperation, preview["operation_id"]).expires_at = \
+            (sync.now() - dt.timedelta(minutes=1)).isoformat()
+    renewed = sync.prepare_append(candidate, sheet)
+    assert renewed["status"] == "prepared" and renewed["expires_at"] > sync.now().isoformat()
+    with patch.object(sheet, "read", side_effect=PermissionError("private")):
+        failed = sync.commit_append(renewed["operation_id"], renewed["preview_hash"], sheet)
+    assert failed["status"] == "read_failed" and sheet.appends == 0
+    prepared = sync.prepare_append(candidate, sheet)
+    assert prepared["status"] == "prepared"
+    assert sync.commit_append(prepared["operation_id"], prepared["preview_hash"], sheet)["status"] == "committed"
+    assert sheet.appends == 1

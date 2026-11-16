@@ -315,6 +315,17 @@ def prepare_append(raw, client=None):
         with get_session() as session:
             operation = session.query(SourceSyncOperation).filter_by(
                 business_id=tenant(), preview_hash=preview_hash).one()
+            # Before-write failures and unused expired previews are safe to
+            # prepare again. Ambiguous/in-flight writes are never reset here.
+            if operation.status in {"read_failed", "stale_preview"} or (
+                    operation.status == "prepared" and operation.expires_at < now().isoformat()):
+                changed = session.execute(update(SourceSyncOperation).where(
+                    SourceSyncOperation.id == operation.id,
+                    SourceSyncOperation.status == operation.status,
+                ).values(status="prepared", claim_token=None, error_code=None,
+                         expires_at=(now() + dt.timedelta(minutes=30)).isoformat())).rowcount
+                session.expire(operation)
+                session.refresh(operation)
     return {"operation_id": operation.id, "status": operation.status, "preview_hash": preview_hash,
             "expires_at": operation.expires_at, "recipient_outreach_permission": "unverified",
             "row": expected, "appended": False}
