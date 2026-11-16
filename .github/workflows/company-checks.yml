@@ -31,10 +31,10 @@ jobs:
       ASHBEL_BUSINESS_EVENTS_ENABLED: "false"
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: pip
@@ -42,9 +42,14 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Full isolated regression suite
         run: python -m pytest -q --junitxml=test-results.xml
+      - name: Repeat concurrent claim checks after contention fix
+        run: |
+          for attempt in 1 2 3; do
+            python -m pytest -q tests/test_scheduler_claims.py::test_workers_and_fresh_process_replay_invoke_exactly_once tests/test_business_events.py::test_multi_process_claims_are_exclusive
+          done
       - name: Preserve test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: company-regression-results
           path: test-results.xml
@@ -55,7 +60,7 @@ jobs:
     timeout-minutes: 10
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:dd2bf3ce2dc83a81674cf7f217fcfd8a5009a4b325dda5b843bfee82a06cff6f
         env:
           POSTGRES_DB: ashbel_ci
           POSTGRES_USER: ci
@@ -74,10 +79,10 @@ jobs:
       PYTHONPATH: .
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: pip
@@ -87,7 +92,7 @@ jobs:
         run: python -m pytest -q tests/test_postgres_claims.py --junitxml=postgres-results.xml
       - name: Preserve PostgreSQL results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: company-postgres-results
           path: postgres-results.xml
