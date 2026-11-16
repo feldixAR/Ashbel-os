@@ -47,9 +47,25 @@ class ClaudeTaskModel(Base, TimestampMixin):
     # Orchestration source — audit tagging (openclaw / direct / gpt / mcp)
     orchestration_source = Column(String(60), nullable=True, index=True)
 
+    def _execution_truth(self):
+        fallback = {"business_outcome": "not_verified", "execution_verified": False,
+                    "tool_execution_available": False,
+                    "interpretation": "legacy_status_is_not_business_evidence"}
+        try:
+            from services.storage.db import get_session
+            from services.storage.models.task import TaskModel
+            with get_session() as session:
+                evidence = session.query(TaskModel).filter_by(
+                    type="claude_result_evidence", parent_task_id=self.id
+                ).order_by(TaskModel.created_at.desc()).first()
+                return {**fallback, **(evidence.output_data if evidence else {})}
+        except Exception:
+            return fallback
+
     def to_response(self) -> dict:
         """Minimal public shape returned to callers."""
         return {
+            **self._execution_truth(),
             "task_id":        self.id,
             "status":         self.status,
             "sensitive":      self.sensitive,
@@ -66,6 +82,7 @@ class ClaudeTaskModel(Base, TimestampMixin):
         """Compact stable shape for GPT connector read tools."""
         updated = self.updated_at or self.created_at
         return {
+            **self._execution_truth(),
             "task_id":      self.id,
             "intent":       self.instruction,
             "preview":      self.preview_plan,
