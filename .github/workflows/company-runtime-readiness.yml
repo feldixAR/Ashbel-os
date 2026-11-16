@@ -65,6 +65,13 @@ jobs:
                       if payload.get("errors"):
                           return None, [str(e.get("extensions", {}).get("code", "graphql_error")) for e in payload["errors"]]
                       return payload.get("data"), None
+                  except urllib.error.HTTPError as exc:
+                      try:
+                          payload = json.load(exc)
+                          codes = [str(e.get("extensions", {}).get("code", "graphql_error")) for e in payload.get("errors", [])]
+                      except Exception:
+                          codes = ["non_json_response"]
+                      return None, ["http_" + str(exc.code), *codes]
                   except Exception as exc:
                       return None, [type(exc).__name__]
               project_headers = {"Project-Access-Token": token}
@@ -75,7 +82,7 @@ jobs:
                   report["railway_project_matches"] = scope["projectToken"]["projectId"] == target_project
               else:
                   headers = {"Authorization": "Bearer " + token}
-                  report["railway_token_kind"] = "account_or_workspace"
+                  report["railway_token_kind"] = "unverified_account_or_workspace_candidate"
                   report["railway_project_matches"] = True
               if report["railway_project_matches"]:
                   data, errors = query("query($id: String!) { project(id: $id) { id services { edges { node { id name } } } environments { edges { node { id name } } } } }", {"id": target_project}, headers)
