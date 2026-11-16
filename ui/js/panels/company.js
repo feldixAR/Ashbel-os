@@ -19,6 +19,7 @@ const CompanyPanel = (() => {
     name:'שם',subject:'נושא',description:'פירוט',action:'פעולה',status:'מצב',label:'פרט',
     amount:'סכום',cost:'עלות',price:'מחיר',quantity:'כמות',unit:'יחידה',
     source_ref:'מקור',evidence_ref:'אסמכתה',source_url:'מקור',next_action:'הפעולה הבאה',
+    city:'יישוב',project_type:'סוג פרויקט',project_stage:'שלב הפרויקט',aluminum_need:'צורך באלומיניום',phone:'טלפון',email:'דוא״ל',
     code:'סוג פעולה',manufacturing:'ייצור',installation:'התקנה',ancillary_costs:'עלויות נלוות',
     payment_terms:'תנאי תשלום',warranty:'אחריות',profit:'רווח',revenue:'מחיר מכירה',
     collected_ils:'גבייה מאומתת',verified_contractor_profit_ils:'רווח קבלני מאומת'};
@@ -144,6 +145,105 @@ const CompanyPanel = (() => {
     }
     return card;
   }
+
+  function candidateCard(candidate, feedback, refresh) {
+    const card=element('article',null,'company-card');
+    card.append(element('h4',candidate.title||candidate.name||'מועמד לבדיקה'));
+    if(candidate.source_url)card.append(link('פתח מקור לבדיקה',candidate.source_url));
+    card.append(element('p','המועמד טרם נשמר ב־CRM. פרטי קשר פומביים אינם הרשאת פנייה.'));
+    if(!candidate.task_id)return card;
+    const expanded=element('details'); expanded.append(element('summary','בדוק פרטים והכן קליטה'));
+    const form=element('form'), inputs={};
+    const field=(key,label,value,type='text')=>{
+      const wrap=element('label',label), input=element('input'); input.type=type;
+      input.value=value||''; input.maxLength=1000;
+      input.required=!['phone','email','published_at','details'].includes(key);
+      wrap.append(input);form.append(wrap);inputs[key]=input;
+    };
+    const found=new Date(candidate.found_at);
+    if(!Number.isFinite(found.getTime())){
+      card.append(element('p','חסר תאריך איתור תקין; יש לבדוק את המקור לפני קליטה.'));return card;
+    }
+    const foundDate=found.toLocaleDateString('en-CA',{timeZone:'Asia/Jerusalem'});
+    const published=new Date(candidate.source_published_text||'');
+    const publishedDate=Number.isFinite(published.getTime())?published.toISOString().slice(0,10):'';
+    field('name','שם האדם או החברה',candidate.title||'');
+    field('city','יישוב','לא אומת');
+    field('project_type','סוג פרויקט','לא אומת');
+    field('project_stage','שלב הפרויקט','לא אומת');
+    field('aluminum_need','הצורך באלומיניום לפי המקור','לא אומת');
+    field('next_action','הפעולה הבאה','בדיקת התאמה והכנת הצעד הבא לאישור');
+    field('quality','איכות ההזדמנות','נמוכה — טרם הוכשרה');
+    field('confidence','רמת ביטחון בפרטים','נמוכה');
+    field('published_at','תאריך פרסום, אם מופיע במקור',publishedDate,'date');
+    field('phone','טלפון שפורסם במקור','', 'tel');
+    field('email','דוא״ל שפורסם במקור','', 'email');
+    const entityLabel=element('label','סוג רשומה'),entity=element('select');
+    ['לקוח','ספק','מתקין','שותף עסקי'].forEach(value=>{
+      const option=element('option',value);option.value=value;entity.append(option);
+    });entityLabel.append(entity);form.append(entityLabel);
+    const confirmationLabel=element('label',null,'company-confirmation'),confirmation=element('input');
+    confirmation.type='checkbox';confirmation.required=true;
+    confirmationLabel.append(confirmation,element('span','בדקתי את המקור ואימתתי את הפרטים שמופיעים כאן, כולל פרטי קשר שפורסמו בו.'));
+    form.append(confirmationLabel);
+    const submit=element('button','אמת מקור והצג תצוגה מקדימה','btn btn-primary');submit.type='submit';
+    const localFeedback=element('p');localFeedback.setAttribute('role','status');
+    const previewArea=element('div');form.append(submit,localFeedback,previewArea);
+    let preview=null;
+    form.addEventListener('input',()=>{preview=null;previewArea.replaceChildren();});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(busy.has(candidate.task_id))return;
+      busy.add(candidate.task_id);submit.disabled=true;preview=null;previewArea.replaceChildren();
+      try {
+        const facts={source_key:'PUBLIC-'+candidate.task_id,source_url:candidate.source_url,
+          found_at:foundDate,entity_type:entity.value};
+        Object.entries(inputs).forEach(([key,input])=>facts[key]=input.value.trim());
+        const review=await API.post('/source_discovery/candidates/'+encodeURIComponent(candidate.task_id)+'/verify',
+          {candidate:facts,review_confirmed:confirmation.checked});
+        if(!review.success){localFeedback.textContent=reason(review);return;}
+        const response=await API.post('/source_sync/preview',{candidate:review.data.candidate});
+        if(!response.success){localFeedback.textContent=reason(response);return;}
+        preview=response.data;
+        if(preview.status==='duplicate'){
+          localFeedback.textContent='נמצאה רשומה קיימת. המועמד לא ייקלט כליד חדש.';return;
+        }
+        if(preview.status!=='prepared'||!preview.operation_id||!preview.preview_hash||!Array.isArray(preview.row)){
+          localFeedback.textContent='לא התקבלה תצוגה מקדימה תקינה; לא תתבצע כתיבה.';return;
+        }
+        localFeedback.textContent='המקור נקרא והפרטים נקשרו לתצוגה זו. עדיין לא נכתבה רשומה.';
+        const box=section('הפרטים שיישמרו ב־CRM');
+        const row=preview.row;
+        box.append(details({name:row[7],city:row[5],project_type:row[34],project_stage:row[3],
+          aluminum_need:row[35],next_action:row[10],phone:row[15],email:row[16],source_url:row[28]}));
+        box.append(element('p','הרשאת פנייה: לא אומתה. קליטה זו אינה שולחת הודעה.'));
+        const commit=button('אשר קליטה של רשומה זו',async()=>{
+          const exact=preview;
+          if(!exact||busy.has(candidate.task_id))return;
+          busy.add(candidate.task_id);commit.disabled=true;
+          try{
+            const result=await API.post('/source_sync/'+encodeURIComponent(exact.operation_id)+'/commit',
+              {preview_hash:exact.preview_hash});
+            if(!result.success){localFeedback.textContent=reason(result);return;}
+            const state=result.data?.status;
+            if(state==='committed'){
+              const check=await API.get('/source_sync/status');
+              const stored=(check.data?.operations||[]).find(x=>x.id===exact.operation_id);
+              if(check.success&&stored?.status==='committed'){
+                feedback.textContent='קליטת הרשומה אומתה במאגר.';refresh();
+              }else localFeedback.textContent='הבקשה התקבלה; יש לרענן ולאמת את מצב הקליטה לפני ניסיון נוסף.';
+            }else if(state==='duplicate')localFeedback.textContent='הרשומה כבר קיימת; לא נוסף ליד חדש.';
+            else if(state==='uncertain')localFeedback.textContent='מצב הכתיבה אינו ודאי. אין לשלוח שוב; השתמש בבדיקת הרשומה שנשמרה.';
+            else localFeedback.textContent='לא אומתה קליטה. רענן ובדוק את החסם לפני ניסיון נוסף.';
+            preview=null;
+          }finally{busy.delete(candidate.task_id);commit.disabled=false;}
+        },true);
+        box.append(commit);previewArea.append(box);
+      }finally{busy.delete(candidate.task_id);submit.disabled=false;}
+    });
+    form.className='company-review';expanded.append(form);card.append(expanded);return card;
+  }
+
   async function render(host) {
     const current=++generation;
     host.replaceChildren();
@@ -196,13 +296,7 @@ const CompanyPanel = (() => {
         finally{busy.delete('scan');scan.disabled=false;}
       });
       sources.append(scan);
-      candidates.forEach(candidate=>{
-        const card=element('article',null,'company-card');
-        card.append(element('h4',candidate.name||candidate.title||'מועמד לבדיקה'));
-        if(candidate.source_url)card.append(link('פתח מקור לבדיקה',candidate.source_url));
-        card.append(element('p','אימות מקור ופרטי ההזדמנות נדרש לפני קליטה.'));
-        sources.append(card);
-      });
+      candidates.forEach(candidate=>sources.append(candidateCard(candidate,feedback,()=>render(host))));
     }else sources.append(element('p','סריקת המקורות טרם חוברה או אינה זמינה.'));
     const operations=sync.success?(sync.data?.operations||[]):null;
     if(operations){
