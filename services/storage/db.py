@@ -110,6 +110,7 @@ def create_all_tables() -> None:
     # Final completion run — safe lead import reports
     import services.storage.models.import_run     # noqa
     import services.storage.models.scheduler_run  # durable scheduled occurrence claims
+    import services.storage.models.business_event  # durable business-event inbox
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")

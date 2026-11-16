@@ -88,6 +88,8 @@ class AgentRegistry:
         ]:
             self.register(agent)
 
+        from services.business_events.departments import register_department_experts
+        register_department_experts()
         self._fallback = GenericTaskAgent()
 
         # Batch 3: load dynamic agents from DB
