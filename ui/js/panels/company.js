@@ -10,7 +10,7 @@ const CompanyPanel = (() => {
   const statuses = {pending:'ממתין לניתוח', processing:'בניתוח', analyzed:'נותח ונבדק',
     blocked:'חסום', retry:'ממתין לניסיון נוסף', dead_letter:'נדרש טיפול בתקלה',
     review_required:'נדרשת ביקורת', created:'פתוח', approval_pending:'ממתין לאישור',
-    reported_complete:'דווח ביצוע — נדרשת אסמכתה', cancelled:'בוטל',
+    reported_complete:'בוצע לפי דיווח — לא אומת עצמאית', cancelled:'בוטל',
     prepared:'מוכן לקליטה', committed:'קליטה אומתה', duplicate:'קיים במאגר',
     uncertain:'נדרשת בדיקת כתיבה', no_change:'אין שינוי', missing_data:'חסר מידע', action:'נדרש טיפול'};
   const labels = {title:'תוצר',summary:'סיכום',missing:'מידע חסר',steps:'הצעדים הבאים',
@@ -100,10 +100,16 @@ const CompanyPanel = (() => {
         const response=await API.post('/business_events/work_items/'+encodeURIComponent(item.id)+'/review',
           {expected_version:item.version,action,note:note.value,evidence_ref:evidence.value});
         if (!response.success) {feedback.textContent=reason(response);return;}
+        const posted=response.data?.item;
         const read=await API.get('/business_events/work_items?limit=100');
         const stored=(read.data?.items||[]).find(x=>x.id===item.id);
         const expected={report_complete:'reported_complete',cancel:'cancelled',reopen:'created'}[action];
-        if (!read.success || !stored || stored.version<=item.version || stored.status!==expected) {
+        const evidenceMatches=action!=='report_complete'||(
+          posted?.completion_evidence?.note===note.value.trim()&&
+          posted?.completion_evidence?.evidence_ref===evidence.value.trim()&&
+          JSON.stringify(stored?.completion_evidence)===JSON.stringify(posted.completion_evidence));
+        if (!read.success || !posted || posted.id!==item.id || posted.version!==item.version+1 ||
+            !stored || stored.version!==posted.version || stored.status!==expected || !evidenceMatches) {
           feedback.textContent='הבקשה התקבלה, אך השמירה טרם אומתה. רענן לפני פעולה נוספת.';return;
         }
         feedback.textContent='השמירה אומתה בקריאה חוזרת.'; onVerified();
@@ -221,6 +227,7 @@ const CompanyPanel = (() => {
           const exact=preview;
           if(!exact||busy.has(candidate.task_id))return;
           busy.add(candidate.task_id);commit.disabled=true;
+          preview=null; // one attempt only; reconcile ambiguous writes before any new preview
           try{
             const result=await API.post('/source_sync/'+encodeURIComponent(exact.operation_id)+'/commit',
               {preview_hash:exact.preview_hash});
@@ -236,7 +243,7 @@ const CompanyPanel = (() => {
             else if(state==='uncertain')localFeedback.textContent='מצב הכתיבה אינו ודאי. אין לשלוח שוב; השתמש בבדיקת הרשומה שנשמרה.';
             else localFeedback.textContent='לא אומתה קליטה. רענן ובדוק את החסם לפני ניסיון נוסף.';
             preview=null;
-          }finally{busy.delete(candidate.task_id);commit.disabled=false;}
+          }finally{busy.delete(candidate.task_id);commit.disabled=true;}
         },true);
         box.append(commit);previewArea.append(box);
       }finally{busy.delete(candidate.task_id);submit.disabled=false;}
