@@ -44,7 +44,7 @@ window.API = {
    window.apiCalls.push({method:'POST',path,body});
    if(path.endsWith('/review')){
      if(window.reviewFails) return {success:false,_status:409};
-     window.work={...window.work,status:'reported_complete',version:2};
+     window.work={...window.work,status:'reported_complete',version:2,completion_evidence:{note:body.note.trim(),evidence_ref:body.evidence_ref.trim(),kind:'owner_reported'}};
      return {success:true,data:{item:{...window.work}}};
    }
    if(path==='/business_events/poll')return {success:true,data:{source_health:window.pollHealth}};
@@ -73,7 +73,7 @@ def test_specific_work_review_uses_version_and_readback(page):
     page.get_by_label("מה בוצע או מה השתנה?").fill("נבדק המפרט הסינתטי")
     page.get_by_label("קישור לאסמכתה או לתיעוד").fill("https://example.invalid/evidence")
     page.get_by_role("button", name="שמור דיווח", exact=True).click()
-    page.get_by_text("דווח ביצוע — נדרשת אסמכתה", exact=True).wait_for()
+    page.get_by_text("בוצע לפי דיווח — לא אומת עצמאית", exact=True).wait_for()
     calls = page.evaluate("window.apiCalls")
     writes = [call for call in calls if call["method"] == "POST"]
     assert len(writes) == 1
@@ -159,3 +159,20 @@ def test_editing_candidate_invalidates_exact_preview(page):
     page.get_by_label("יישוב", exact=True).fill("יישוב סינתטי")
     assert page.get_by_role("button", name="אשר קליטה של רשומה זו", exact=True).count()==0
     assert page.evaluate("window.apiCalls.filter(c=>c.path.endsWith('/commit')).length")==0
+
+
+def test_concurrent_change_cannot_be_mistaken_for_own_review_readback(page):
+    page.evaluate("""
+const originalGet=window.API.get.bind(window.API);
+window.API.get=async(path)=>{
+ const result=await originalGet(path);
+ if(path.includes('/work_items')&&window.work.version===2)result.data.items[0]={...window.work,version:3};
+ return result;
+};
+""")
+    page.get_by_role("button", name="דווח ביצוע", exact=True).click()
+    page.get_by_label("מה בוצע או מה השתנה?").fill("בדיקה")
+    page.get_by_label("קישור לאסמכתה או לתיעוד").fill("https://example.invalid/evidence")
+    page.get_by_role("button", name="שמור דיווח", exact=True).click()
+    page.get_by_text("הבקשה התקבלה, אך השמירה טרם אומתה. רענן לפני פעולה נוספת.", exact=True).wait_for()
+    assert page.get_by_text("השמירה אומתה בקריאה חוזרת.", exact=True).count()==0
