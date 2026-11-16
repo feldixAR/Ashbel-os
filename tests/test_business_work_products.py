@@ -195,7 +195,8 @@ def test_new_source_reopens_changed_artifact_without_duplicate_tasks_or_verified
     newer = envelope("second-observation");newer["occurred_at"] = "2026-11-17T00:01:00+00:00"
     next_context = context()
     next_context["actions"] = [dict(subject="synthetic-open-loop", action="verify quote", owner="synthetic-owner",
-                                     due_date="2026-11-18", disposition="actionable", evidence={"range": "synthetic"})]
+                                     due_date="2026-11-18", disposition="actionable", kind="supplier",
+                                     blocked_reasons=[], evidence={"range": "synthetic"})]
     new_id = rt.ingest_event(newer)["id"]
     assert rt.process_event(new_id, context=next_context)["status"] == "analyzed"
     updated = list_work_items()
