@@ -44,8 +44,19 @@ unknown does not mean available. An active blocking record wins over a positive
 record. They hold advanced pricing while showroom/specification selection is
 pending. Conflicting actions remain visible with block reasons but are excluded
 from proposed daily priorities. These are planning constraints, not execution
-permissions. Queue ordering is preserved; this patch makes no claim to intelligent
-ranking, date parsing, or comprehensive resolution of Hebrew free text.
+permissions. Specification holds apply to customer/project tasks; references to
+a showroom in supplier or document-management notes do not block supplier work.
+
+Every source task retains its evidence and a disposition: actionable, future,
+waiting, needs_review, blocked or completed. Only actionable tasks enter today's
+priorities. Explicit ISO or Israeli dates are compared with the snapshot date in
+Asia/Jerusalem; future dates do not generate early work recommendations. Pending
+showroom/specification work waits unless the task explicitly arranges the visit.
+When capacity is unknown/blocked, supplier work is promoted ahead of other
+available tasks; remaining available tasks sort by recognized due date and then
+source order. Existing follow-ups are not blanket-blocked by capacity.
+This is a narrow deterministic projection, not comprehensive Hebrew free-text
+understanding, calendar scheduling or a general intelligent ranking engine.
 
 Proposal statuses retain source wording; approved draft is not delivery, proposal
 value is not collected revenue, and proposed commission is not collected
@@ -56,9 +67,13 @@ Other project history, Drive documents and chat decisions are outside this read.
 
 ## Verification and rollback
 
-Synthetic tests cover capacity/spec holds, source provenance, stable fingerprints,
-schema failure, duplicate/truncated sources, queue boundary, redacted failures
-and integration with the existing planner. No customer fixture is committed.
+Synthetic tests cover capacity/spec scope, supplier priority, future/waiting/review
+dispositions, Jerusalem dates, source provenance, stable fingerprints, schema
+failure, duplicate/truncated sources, queue boundary, redacted failures and
+integration with the existing planner. No customer fixture is committed.
+An actual connector-read snapshot was also replayed outside git: this verifies
+the projection against the observed layout, not the credentialed adapter or live
+provider connection. No customer snapshot is stored in the repository or tests.
 Live connection is **not verified** until deployed with approved credentials and
 observed against the intended workbook. Then test a read, inspect hash/counts and
 source rows, test denied access, and confirm no Google writes or outbound actions.
