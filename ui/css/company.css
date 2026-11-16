@@ -16,7 +16,9 @@
 .company-artifact dd { margin: 4px 0 4px 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
 .company-review { margin: 12px 0; padding: 12px; background: var(--surface2); border-radius: var(--radius); }
 .company-review label { display: block; font-size: 13px; margin: 12px 0; }
-.company-review input,.company-review textarea { display: block; width: 100%; min-height: 44px; padding: 10px; font-size: 16px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface); color: var(--text); box-sizing: border-box; }
+.company-review input,.company-review textarea,.company-review select { display: block; width: 100%; min-height: 44px; padding: 10px; font-size: 16px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface); color: var(--text); box-sizing: border-box; }
 .company-review textarea { min-height: 88px; resize: vertical; }
 .company-review input[type=url] { direction: ltr; text-align: left; }
 @media (max-width: 640px) { .company-section { padding: 12px; } .company-actions { flex-direction: column; } .company-actions button { width: 100%; } }
+.company-confirmation { display: flex !important; align-items: center; gap: 10px; min-height: 44px; }
+.company-review input[type=checkbox] { width: 24px; min-height: 24px; flex: 0 0 24px; }
