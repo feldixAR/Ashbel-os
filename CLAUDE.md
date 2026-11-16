@@ -469,3 +469,13 @@ Always optimize for maximum token efficiency without reducing code quality, corr
 - Prefer lightweight adapters over full-code imports.
 - Before using external capability, record: source, purpose, scope, trust level, approval sensitivity, integration point.
 - Reuse existing internal logic before adding external capability.
+
+## Session checkpoint — 2026-11-16: source context (branch only)
+
+- Added opt-in read-only Sheets context to existing daily-plan entry points;
+  no source writes, duplicate CRM import, deployment or external messages.
+- Fixed ranges, schema/section boundary checks, source hash and row evidence;
+  supplier capacity unknown/blocked holds acquisition, pending specification holds pricing.
+- Draft approval never establishes delivery; proposal amounts never establish collected commission.
+- Live connection remains unverified pending dedicated readonly credentials and workbook Viewer access.
+- Setup, limits and rollback: `docs/BUSINESS_SOURCE_CONTEXT.md`.
