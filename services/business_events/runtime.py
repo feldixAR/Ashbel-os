@@ -237,11 +237,16 @@ def process_pending(limit=20, context=None):
 def enqueue_source_snapshot(context):
     if context.get('health') != 'read_ok' or not context.get('snapshot_sha256'):
         return None
+    spreadsheet_id = context.get('spreadsheet_id')
+    valid_id = isinstance(spreadsheet_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{20,150}', spreadsheet_id)
+    source_url = f'https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit' if valid_id else None
     return ingest_event({'source': 'existing_google_crm', 'source_event_id': context['snapshot_sha256'],
-                         'event_type': 'source.snapshot', 'source_ref': context.get('spreadsheet_id', 'existing_crm'),
+                         'event_type': 'source.snapshot', 'source_ref': source_url or 'existing_crm_snapshot',
                          'occurred_at': context['fetched_at'],
                          'facts': {'snapshot_sha256': context['snapshot_sha256'], 'lead_count': context['lead_count'],
-                                   'work_count': context['work_count']}})
+                                   'work_count': context['work_count'],
+                                   'spreadsheet_id': spreadsheet_id if valid_id else None,
+                                   'source_url': source_url}})
 
 
 def poll_source_and_process():
