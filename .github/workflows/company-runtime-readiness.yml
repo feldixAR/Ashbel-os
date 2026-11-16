@@ -54,7 +54,7 @@ jobs:
                   report["runtime_api_auth_error"] = type(exc).__name__
           print(json.dumps(report, sort_keys=True))
           if os.getenv("RAILWAY_TOKEN"):
-              endpoint = "https://backboard.railway.com/graphql/v2"
+              endpoint = "https://backboard.railway.app/graphql/v2"
               token = os.environ["RAILWAY_TOKEN"]
               target_project = "55ba9ac0-209d-41c2-a8b6-33ca02b13787"
               def query(query_text, variables, headers):
@@ -78,10 +78,12 @@ jobs:
               scope, errors = query("query { projectToken { projectId environmentId } }", {}, project_headers)
               if scope and scope.get("projectToken"):
                   headers = project_headers
+                  report["railway_api_host"] = "backboard.railway.app"
                   report["railway_token_kind"] = "project"
                   report["railway_project_matches"] = scope["projectToken"]["projectId"] == target_project
               else:
                   headers = {"Authorization": "Bearer " + token}
+                  report["railway_api_host"] = "backboard.railway.app"
                   report["railway_token_kind"] = "unverified_account_or_workspace_candidate"
                   report["railway_project_matches"] = True
               if report["railway_project_matches"]:
