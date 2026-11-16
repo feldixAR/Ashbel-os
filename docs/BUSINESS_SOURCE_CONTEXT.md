@@ -3,8 +3,13 @@
 This opt-in adapter reads the existing Google Sheets CRM, without importing its
 rows into PostgreSQL, writing Google cells, contacting people or creating jobs.
 The existing daily-plan command, CRM planner and scheduled daily-plan job use the
-same projection when enabled. Other engines are not converted or protected by
-this change; this is not a claim of a fully synchronized autonomous company.
+same projection when enabled. CEO revenue insights, bottleneck analysis, next
+action, report and compound analysis also use this source, without consulting
+the local revenue snapshot or daily report. Compound analysis reads one snapshot
+rather than combining three potentially different provider reads. Missing source
+returns a blocked failed result, not an all-clear or empty-revenue claim. Other
+engines are not converted or protected by this change; this is not a claim of a
+fully synchronized autonomous company.
 
 ## Connection
 

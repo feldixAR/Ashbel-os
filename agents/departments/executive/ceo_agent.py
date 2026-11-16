@@ -66,6 +66,9 @@ class CEOAgent(BaseAgent):
     # ── Report ────────────────────────────────────────────────────────────────
 
     def _generate_report(self, task: TaskModel) -> ExecutionResult:
+        from services.integrations.business_source import enabled
+        if enabled():
+            return self._source_action("generate_report")
         from engines.reporting_engine import daily_summary, build_text_report
         summary = daily_summary()
         report  = build_text_report(summary)
@@ -118,6 +121,9 @@ class CEOAgent(BaseAgent):
     # ── Revenue actions (Batch 4) ─────────────────────────────────────────────
 
     def _revenue_action(self, task: TaskModel) -> ExecutionResult:
+        from services.integrations.business_source import enabled
+        if enabled():
+            return self._source_action(task.action)
         from engines.revenue_engine import revenue_snapshot, build_revenue_report
 
         snap = revenue_snapshot()
@@ -197,6 +203,48 @@ class CEOAgent(BaseAgent):
         return ExecutionResult(success=True, message="דוח הכנסות נוצר",
                                output={"report": report})
 
+    def _source_action(self, action: str) -> ExecutionResult:
+        """CEO projections share the read-only source; never consult old CRM here."""
+        from collections import Counter
+        from services.integrations.business_source import load_business_context, context_plan
+        context = load_business_context()
+        plan = context_plan(context)
+        common = {"business_context": context, "recommendations_only": True,
+                  "pipeline_value": None, "collected_commission_ils": None}
+        if context.get("health") != "read_ok":
+            return ExecutionResult(success=False, message=plan["top_action"],
+                                   output={**common, "blocked": True, "action": action,
+                                           "error": "business_source_unavailable"})
+        decisions = context["decisions"]
+        next_actions = [{"priority": i + 1, "lead": item["subject"],
+                         "action": item["action"], "channel": None,
+                         "due": item["due"], "owner": item["owner"],
+                         "urgency": "review_before_execution", "evidence": item["evidence"]}
+                        for i, item in enumerate(plan["priority_items"][:3])]
+        if action == "revenue_insights":
+            insights = [plan["top_action"], "סכומי הצעות אינם גבייה או עמלה שנגבתה."]
+            return ExecutionResult(success=True, message="\n".join(insights), output={
+                **common, "insights": insights, "total_leads": context["lead_count"],
+                "hot_leads": None, "conversion_est": None, "opportunities": next_actions})
+        if action == "bottleneck_analysis":
+            bottlenecks = [{"category": item["code"], "count": None,
+                            "suggestion": item["instruction"], "evidence": item["evidence"]}
+                           for item in decisions]
+            message = "\n".join(item["suggestion"] for item in bottlenecks) or "לא זוהה חסם בכללים הצרים שנבדקו; יתר התחומים טרם אומתו."
+            return ExecutionResult(success=True, message=message, output={
+                **common, "bottlenecks": bottlenecks,
+                "status_dist": dict(Counter(a["disposition"] for a in context["actions"]))})
+        if action == "next_best_action":
+            message = plan["top_action"] + "\n" + "\n".join(a["action"] for a in next_actions)
+            return ExecutionResult(success=True, message=message, output={**common, "next_actions": next_actions})
+        report = (f"{plan['top_action']}\n"
+                  f"מקור נקרא: {context['fetched_at']} | עדכניות עובדות: לא אומתה\n"
+                  f"משימות פתוחות במקור: {sum(a['disposition'] != 'completed' for a in context['actions'])}\n"
+                  "גבייה ועמלה שנגבתה: לא אומתו\n" + "\n".join(a["action"] for a in next_actions))
+        return ExecutionResult(success=True, message=report, output={
+            **common, "report": report, "plan": plan,
+            "compound": action == "compound_analysis"})
+
     # ── Development ───────────────────────────────────────────────────────────
 
     def _dev_action(self, task: TaskModel) -> ExecutionResult:
@@ -236,6 +284,9 @@ class CEOAgent(BaseAgent):
         Run revenue insights + bottleneck analysis + next_best_action in parallel
         and merge into a unified strategic summary.
         """
+        from services.integrations.business_source import enabled
+        if enabled():
+            return self._source_action("compound_analysis")
         from orchestration.task_manager import task_manager
         import uuid as _uuid
 

@@ -229,3 +229,62 @@ def test_due_dates_use_jerusalem_and_completed_tasks_keep_evidence():
     context = interpret_snapshot(data, "synthetic", "2026-11-16T12:00:00+00:00")
     assert context["actions"][0]["disposition"] == "completed"
     assert context["actions"][0]["evidence"]["range"] == "'תור עבודה'!A2:H2"
+
+
+@pytest.mark.parametrize("action", ["revenue_insights", "bottleneck_analysis", "next_best_action", "generate_report", "compound_analysis"])
+def test_ceo_source_actions_never_use_old_crm(monkeypatch, action):
+    from types import SimpleNamespace
+    from agents.departments.executive.ceo_agent import CEOAgent
+    monkeypatch.setenv("ASHBEL_SOURCE_CONTEXT_ENABLED", "true")
+    data = fixture()
+    data["valueRanges"][1]["values"][1][3] = "פתוח"
+    data["valueRanges"][1]["values"][1][5] = "טרם הוכשרה חלופה"
+    source = interpret_snapshot(data, "synthetic", "2026-11-16T12:00:00+00:00")
+    task_type = "summarization" if action == "generate_report" else "strategy" if action == "compound_analysis" else "revenue"
+    task = SimpleNamespace(id="synthetic-task", type=task_type, action=action)
+    with patch("services.integrations.business_source.load_business_context", return_value=source) as load, \
+         patch("engines.revenue_engine.revenue_snapshot", side_effect=AssertionError("old CRM")), \
+         patch("engines.reporting_engine.daily_summary", side_effect=AssertionError("old report")):
+        result = CEOAgent().execute(task)
+    assert result.success is True
+    assert result.output["business_context"]["capacity_state"] == "unknown"
+    assert result.output["pipeline_value"] is None
+    assert result.output["collected_commission_ils"] is None
+    load.assert_called_once()
+    assert "פנה אליהם היום" not in result.message
+    expected = {"revenue_insights": "insights", "bottleneck_analysis": "bottlenecks", "next_best_action": "next_actions", "generate_report": "report", "compound_analysis": "plan"}
+    assert expected[action] in result.output
+
+
+@pytest.mark.parametrize("action", ["revenue_insights", "bottleneck_analysis", "next_best_action", "generate_report", "compound_analysis"])
+def test_ceo_without_provider_is_blocked(monkeypatch, action):
+    from types import SimpleNamespace
+    from agents.departments.executive.ceo_agent import CEOAgent
+    monkeypatch.setenv("ASHBEL_SOURCE_CONTEXT_ENABLED", "true")
+    monkeypatch.delenv("ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON", raising=False)
+    task_type = "summarization" if action == "generate_report" else "strategy" if action == "compound_analysis" else "revenue"
+    task = SimpleNamespace(id="synthetic-task", type=task_type, action=action)
+    with patch("engines.revenue_engine.revenue_snapshot", side_effect=AssertionError("old CRM")), \
+         patch("engines.reporting_engine.daily_summary", side_effect=AssertionError("old report")):
+        result = CEOAgent().execute(task)
+    assert result.success is False
+    assert result.output["blocked"] is True
+    assert result.output["error"] == "business_source_unavailable"
+    assert result.output["pipeline_value"] is None
+
+
+def test_ceo_disabled_keeps_existing_revenue_and_report_paths(monkeypatch):
+    from types import SimpleNamespace
+    from agents.departments.executive.ceo_agent import CEOAgent
+    monkeypatch.setenv("ASHBEL_SOURCE_CONTEXT_ENABLED", "false")
+    ceo = CEOAgent()
+    with patch.object(ceo, "_source_action", side_effect=AssertionError("source disabled")), \
+         patch("engines.revenue_engine.revenue_snapshot", return_value=SimpleNamespace(next_actions=[])) as old, \
+         patch("engines.reporting_engine.daily_summary", return_value={"legacy": True}) as summary, \
+         patch("engines.reporting_engine.build_text_report", return_value="legacy report"):
+        result = ceo.execute(SimpleNamespace(type="revenue", action="next_best_action", id="synthetic"))
+        report = ceo.execute(SimpleNamespace(type="summarization", action="generate_report", id="synthetic"))
+    old.assert_called_once()
+    summary.assert_called_once()
+    assert result.success is True
+    assert report.output["report"] == "legacy report"
