@@ -1,0 +1,124 @@
+name: Existing runtime readiness
+
+on:
+  push:
+    branches:
+      - feat/company-completion
+    paths:
+      - .github/workflows/company-runtime-readiness.yml
+      - scripts/runtime_admin.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-existing-connections:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+      OS_API_KEY: ${{ secrets.OS_API_KEY }}
+      ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON: ${{ secrets.ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Check configured access without disclosing credential values
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.error
+          report = {"inspection_only": True, "production_mutation": False}
+          for name in ("RAILWAY_TOKEN", "RAILWAY_PROJECT_ID", "OS_API_KEY", "ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON"):
+              report[name.lower() + "_configured"] = bool(os.getenv(name))
+          base = "https://ashbel-os-production.up.railway.app"
+          for label, path in (("health", "/api/health"), ("version", "/api/version")):
+              try:
+                  with urllib.request.urlopen(base + path, timeout=20) as response:
+                      data = json.load(response)
+                      if label == "health":
+                          report["health_http"] = response.status
+                          report["database_reachable"] = data.get("data", {}).get("db") is True
+                      else:
+                          body = data.get("data", data)
+                          report["deployed_commit"] = body.get("commit") or body.get("commit_sha") or body.get("git_sha") or body.get("version")
+              except Exception as exc:
+                  report[label + "_error"] = type(exc).__name__
+          if os.getenv("OS_API_KEY"):
+              request = urllib.request.Request(base + "/api/system/scheduler",
+                                                headers={"X-API-Key": os.environ["OS_API_KEY"]})
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      report["runtime_api_auth_http"] = response.status
+              except urllib.error.HTTPError as exc:
+                  report["runtime_api_auth_http"] = exc.code
+              except Exception as exc:
+                  report["runtime_api_auth_error"] = type(exc).__name__
+          print(json.dumps(report, sort_keys=True))
+          if os.getenv("RAILWAY_TOKEN"):
+              endpoint = "https://backboard.railway.app/graphql/v2"
+              token = os.environ["RAILWAY_TOKEN"]
+              target_project = "55ba9ac0-209d-41c2-a8b6-33ca02b13787"
+              def query(query_text, variables, headers):
+                  request = urllib.request.Request(endpoint, data=json.dumps({"query": query_text, "variables": variables}).encode(), headers={"Content-Type": "application/json", **headers})
+                  try:
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          payload = json.load(response)
+                      if payload.get("errors"):
+                          return None, [str(e.get("extensions", {}).get("code", "graphql_error")) for e in payload["errors"]]
+                      return payload.get("data"), None
+                  except urllib.error.HTTPError as exc:
+                      try:
+                          payload = json.load(exc)
+                          codes = [str(e.get("extensions", {}).get("code", "graphql_error")) for e in payload.get("errors", [])]
+                      except Exception:
+                          codes = ["non_json_response"]
+                      return None, ["http_" + str(exc.code), *codes]
+                  except Exception as exc:
+                      return None, [type(exc).__name__]
+              project_headers = {"Project-Access-Token": token}
+              scope, errors = query("query { projectToken { projectId environmentId } }", {}, project_headers)
+              if scope and scope.get("projectToken"):
+                  headers = project_headers
+                  report["railway_api_host"] = "backboard.railway.app"
+                  report["railway_token_kind"] = "project"
+                  report["railway_project_matches"] = scope["projectToken"]["projectId"] == target_project
+              else:
+                  headers = {"Authorization": "Bearer " + token}
+                  report["railway_api_host"] = "backboard.railway.app"
+                  report["railway_token_kind"] = "unverified_account_or_workspace_candidate"
+                  report["railway_project_matches"] = True
+              if report["railway_project_matches"]:
+                  data, errors = query("query($id: String!) { project(id: $id) { id services { edges { node { id name } } } environments { edges { node { id name } } } } }", {"id": target_project}, headers)
+                  if data and data.get("project"):
+                      report["railway_project_access"] = True
+                      project = data["project"]
+                      environments = [e["node"] for e in project["environments"]["edges"]]
+                      production = [e for e in environments if e["name"].lower() == "production"]
+                      report["production_environment_count"] = len(production)
+                      report["services"] = []
+                      if len(production) == 1:
+                          for edge in project["services"]["edges"][:10]:
+                              service = edge["node"]
+                              values, errors = query("query($projectId: String!, $environmentId: String!, $serviceId: String) { variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId) }", {"projectId": target_project, "environmentId": production[0]["id"], "serviceId": service["id"]}, headers)
+                              if not values or not isinstance(values.get("variables"), dict):
+                                  continue
+                              variables = values["variables"]
+                              if variables.get("RAILWAY_PUBLIC_DOMAIN") == "ashbel-os-production.up.railway.app" or service["name"].lower() in ("ashbel-os", "ashbelos"):
+                                  result = {"service_id": service["id"], "environment_id": production[0]["id"], "name": service["name"]}
+                                  for name in ("OS_API_KEY", "DATABASE_URL", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "ASHBEL_SHEETS_SERVICE_ACCOUNT_JSON", "ASHBEL_SHEETS_WRITER_SERVICE_ACCOUNT_JSON"):
+                                      result[name.lower() + "_configured"] = bool(variables.get(name))
+                                  report["services"].append(result)
+                                  key = variables.get("OS_API_KEY")
+                                  if key:
+                                      request = urllib.request.Request(base + "/api/system/scheduler", headers={"X-API-Key": key})
+                                      try:
+                                          with urllib.request.urlopen(request, timeout=20) as response:
+                                              result["runtime_api_auth_http"] = response.status
+                                      except urllib.error.HTTPError as exc:
+                                          result["runtime_api_auth_http"] = exc.code
+                                      except Exception as exc:
+                                          result["runtime_api_auth_error"] = type(exc).__name__
+                              del variables
+                  else:
+                      report["railway_project_access"] = False
+                      report["railway_error_codes"] = errors
+              print(json.dumps({"hosting_readonly_inspection": report}, sort_keys=True))

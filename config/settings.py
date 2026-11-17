@@ -41,9 +41,13 @@ DATABASE_URL: str = os.getenv(
     "sqlite:///./data/ashbal_dev.db"
 )
 
-# Railway injects postgres:// but SQLAlchemy needs postgresql://
+# Use the installed psycopg2 driver explicitly. SQLAlchemy's default driver
+# for a bare PostgreSQL URL can change across versions (2.1 selects psycopg).
+# Preserve an explicitly configured driver and the rest of the URL verbatim.
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 DB_POOL_SIZE     = int(os.getenv("DB_POOL_SIZE",     "5"))
 DB_MAX_OVERFLOW  = int(os.getenv("DB_MAX_OVERFLOW",  "10"))

@@ -48,8 +48,32 @@ def _record_last_run(job_id: str) -> None:
 
 # ── Job implementations ───────────────────────────────────────────────────────
 
+def _company_mode():
+    return any(os.getenv(name, "").lower() == "true" for name in (
+        "ASHBEL_BUSINESS_EVENTS_ENABLED", "ASHBEL_SOURCE_CONTEXT_ENABLED",
+        "ASHBEL_SOURCE_SYNC_ENABLED", "ASHBEL_SOURCE_DISCOVERY_ENABLED",
+        "ASHBEL_PRICING_SOURCE_ENABLED",
+    ))
+
+
+def _legacy_enabled(name):
+    # Existing manual endpoints retain their own approval/authentication paths.
+    # Scheduled importing/sending is never implicitly authorized by credentials.
+    return os.getenv(name, "").lower() == "true" and not _company_mode()
+
 def _job_followup():
-    """Send due follow-ups for all active goals."""
+    """Process governed business events when enabled; otherwise legacy goals."""
+    from services.business_events.runtime import enabled as business_events_enabled
+    if business_events_enabled():
+        from services.business_events.runtime import poll_source_and_process
+        from services.integrations.source_sync import retry_event_publications
+        try:
+            retry_event_publications()
+        except Exception as exc:
+            log.warning("[Scheduler] publication retry unavailable: %s", type(exc).__name__)
+        return poll_source_and_process()
+    if not _legacy_enabled("ASHBEL_LEGACY_SCHEDULED_OUTREACH_ENABLED"):
+        return {"status": "blocked", "reason": "legacy_scheduled_outreach_not_enabled", "outreach_sent": False}
     try:
         from services.storage.repositories.goal_repo import GoalRepository
         from engines.outreach_engine import outreach_engine
@@ -87,11 +111,32 @@ def _job_followup():
 
 def _job_daily_plan():
     """Build and log the daily revenue plan."""
+    # Public discovery reuses the existing maps_scan slot; do not launch a
+    # second scanner here or call the obsolete, unimplemented discovery path.
     try:
         from engines.outreach_engine import outreach_engine
         from engines.revenue_engine   import revenue_snapshot
         from events.event_bus import event_bus
         import events.event_types as ET
+
+        from services.integrations.business_source import enabled, load_business_context, context_plan
+        if enabled():
+            source_context = load_business_context()
+            plan = context_plan(source_context)
+            from services.business_events.runtime import enabled as business_events_enabled
+            if business_events_enabled():
+                from services.business_events.runtime import enqueue_source_snapshot, process_pending
+                enqueue_source_snapshot(source_context)
+                from services.integrations.pricing_source import enqueue_pricing_events
+                enqueue_pricing_events()
+                process_pending(context=source_context)
+            event_bus.publish(ET.SCHEDULER_JOB_RAN, payload={
+                "job": "daily_plan", "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "plan": plan,
+            })
+            log.info("[Scheduler] source_context health=%s", plan["business_context"]["health"])
+            _record_last_run("daily_plan")
+            return
 
         summary  = outreach_engine.build_daily_summary()
         snap     = revenue_snapshot()
@@ -290,7 +335,11 @@ def _job_maintenance():
 
 
 def _job_gmail_scan():
-    """Scan Gmail inbox for new aluminum leads. Runs every 30 min."""
+    """Legacy Gmail importer; governed company mode never imports a second CRM."""
+    from services.business_events.runtime import enabled as business_events_enabled
+    from services.integrations.business_source import enabled as source_context_enabled
+    if _company_mode() or not _legacy_enabled("ASHBEL_LEGACY_SCHEDULED_INTAKE_ENABLED"):
+        return {"status": "blocked", "reason": "governed_source_intake_required", "local_crm_imported": 0}
     try:
         from services.integrations.gmail_listener import scan_inbox
         result = scan_inbox(max_results=20)
@@ -302,7 +351,14 @@ def _job_gmail_scan():
 
 
 def _job_maps_scan():
-    """Scrape Google Maps for leads in key cities. Runs daily 06:00 IL."""
+    """Existing daily source slot; opt-in public feeds replace legacy Maps intake."""
+    from services.integrations.source_discovery import enabled, scan_sources
+    if enabled():
+        return scan_sources()
+    from services.business_events.runtime import enabled as business_events_enabled
+    from services.integrations.business_source import enabled as source_context_enabled
+    if _company_mode() or not _legacy_enabled("ASHBEL_LEGACY_SCHEDULED_INTAKE_ENABLED"):
+        return {"status": "blocked", "reason": "public_source_discovery_disabled", "local_crm_imported": 0}
     try:
         from services.integrations.lead_scraper import scrape, CATEGORIES
         cities = ["נס ציונה", "רחובות", "ראשון לציון", "תל אביב"]
@@ -329,6 +385,8 @@ def _job_lead_followup_proposals():
     creates an ApprovalModel for human review via Telegram.
     Publishes LEAD_FOLLOWUP_PROPOSED for each.
     """
+    if _company_mode():
+        return {"status": "blocked", "reason": "source_work_items_are_authoritative", "proposals_created": 0}
     try:
         import datetime as _dt
         from services.storage.repositories.lead_repo import LeadRepository
@@ -434,19 +492,25 @@ def start():
 
             il_tz = pytz.timezone("Asia/Jerusalem")
             sched = BackgroundScheduler(timezone=il_tz)
+            from scheduler.job_claim import run_scheduled_once
+
+            def add_claimed_job(callback, **options):
+                job_id = options["id"]
+                sched.add_job(run_scheduled_once, args=[job_id, callback], **options)
 
             # Follow-up every 4 hours
-            sched.add_job(
+            add_claimed_job(
                 _job_followup,
                 trigger="interval",
                 hours=4,
+                start_date=datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
                 id="followup",
                 replace_existing=True,
                 misfire_grace_time=600,
             )
 
             # Daily plan every morning at 07:30 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_daily_plan,
                 trigger="cron",
                 hour=7, minute=30,
@@ -456,7 +520,7 @@ def start():
             )
 
             # Learning cycle every night at 23:00 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_learning_cycle,
                 trigger="cron",
                 hour=23, minute=0,
@@ -466,7 +530,7 @@ def start():
             )
 
             # Telegram delivery every morning at 08:00 IL (Axis 6)
-            sched.add_job(
+            add_claimed_job(
                 _job_telegram_delivery,
                 trigger="cron",
                 hour=8, minute=0,
@@ -476,7 +540,7 @@ def start():
             )
 
             # Daily learning report every evening at 20:00 IL (Batch 10.1)
-            sched.add_job(
+            add_claimed_job(
                 _job_daily_learning_report,
                 trigger="cron",
                 hour=20, minute=0,
@@ -486,7 +550,7 @@ def start():
             )
 
             # Maintenance agent: Sunday 07:00 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_maintenance,
                 trigger="cron",
                 day_of_week="sun", hour=7, minute=0,
@@ -496,17 +560,18 @@ def start():
             )
 
             # Gmail scan every 30 min
-            sched.add_job(
+            add_claimed_job(
                 _job_gmail_scan,
                 trigger="interval",
                 hours=0, minutes=30,
+                start_date=datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
                 id="gmail_scan",
                 replace_existing=True,
                 misfire_grace_time=300,
             )
 
             # Maps lead scrape daily at 06:00 IL
-            sched.add_job(
+            add_claimed_job(
                 _job_maps_scan,
                 trigger="cron",
                 hour=6, minute=0,
@@ -516,7 +581,7 @@ def start():
             )
 
             # Lead follow-up proposals daily at 09:00 IL (Phase 13)
-            sched.add_job(
+            add_claimed_job(
                 _job_lead_followup_proposals,
                 trigger="cron",
                 hour=9, minute=0,
@@ -576,7 +641,14 @@ def status() -> dict:
     except Exception:
         pass
 
+    try:
+        from scheduler.job_claim import recent_claims
+        claims = recent_claims()
+    except Exception:
+        claims = []
+
     return {
+        "recent_claims": claims,
         "running":   _started,
         "jobs":      jobs_info,
         "last_runs": last_runs,

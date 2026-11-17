@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>AshbelOS — Operating Console</title>
-  <link rel="stylesheet" href="/ui/css/app.css?v=p29" />
+  <link rel="stylesheet" href="/ui/css/app.css?v=p30" />
   <link rel="stylesheet" href="/ui/css/import_review.css?v=bir1" />
+  <link rel="stylesheet" href="/ui/css/company.css?v=p30" />
 </head>
 <body>
 
@@ -138,7 +139,8 @@
     <!-- Main work surface -->
     <section class="work-surface">
       <div class="work-tabs" id="workTabs">
-        <button class="wt active" data-tab="leads">👥 לידים</button>
+        <button class="wt active" data-tab="company">החברה</button>
+        <button class="wt" data-tab="leads">👥 לידים</button>
         <button class="wt" data-tab="approvals">⚑ אישורים</button>
         <button class="wt" data-tab="queue">📤 תור שליחה</button>
         <button class="wt" data-tab="meetings">📅 מפגשים</button>
@@ -189,8 +191,8 @@
 
   <!-- 7. Bottom navigation (mobile only) -->
   <nav class="bottom-nav" id="bottomNav">
-    <button class="bn-item active" data-tab="leads" onclick="Shell.switchTab('leads')">
-      <span class="bn-icon">👥</span><span class="bn-label">לידים</span>
+    <button class="bn-item active" data-tab="company" onclick="Shell.switchTab('company')">
+      <span class="bn-icon">◎</span><span class="bn-label">החברה</span>
     </button>
     <button class="bn-item" data-tab="approvals" onclick="Shell.switchTab('approvals')">
       <span class="bn-icon">⚑</span>
@@ -211,13 +213,14 @@
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=p29"></script>
-<script src="/ui/js/components/toast.js?v=p29"></script>
-<script src="/ui/js/components/ui.js?v=p29"></script>
+<script src="/ui/js/api.js?v=p30"></script>
+<script src="/ui/js/components/toast.js?v=p30"></script>
+<script src="/ui/js/components/ui.js?v=p30"></script>
 <script src="/ui/js/components/upload_modal.js?v=bir1"></script>
-<script src="/ui/js/components/draft_modal.js?v=p29"></script>
-<script src="/ui/js/shell.js?v=p29"></script>
-<script src="/ui/js/panels/console.js?v=p29"></script>
+<script src="/ui/js/components/draft_modal.js?v=p30"></script>
+<script src="/ui/js/shell.js?v=p30"></script>
+<script src="/ui/js/panels/company.js?v=p30"></script>
+<script src="/ui/js/panels/console.js?v=p30"></script>
 
 </body>
 </html>

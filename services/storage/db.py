@@ -3,6 +3,7 @@ Database engine, session factory, and lifecycle management.
 Supports SQLite (dev) and PostgreSQL (production) transparently.
 """
 import logging
+import sqlite3
 from contextlib import contextmanager
 from typing import Generator
 
@@ -23,16 +24,31 @@ def _build_engine():
         # SQLite — single-threaded pool, enable WAL for concurrent reads
         engine = create_engine(
             DATABASE_URL,
-            connect_args={"check_same_thread": False},
+            connect_args={"check_same_thread": False, "timeout": 30},
             poolclass=StaticPool,
             echo=DB_ECHO_SQL,
         )
         @event.listens_for(engine, "connect")
         def set_sqlite_pragmas(dbapi_conn, _):
             cursor = dbapi_conn.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
+            try:
+                # WAL is an optimization, not the coordination guarantee.
+                # Changing journal mode can raise SQLITE_BUSY immediately when
+                # independent workers start together. Keep native transactional
+                # uniqueness available even if this optimization is contended.
+                cursor.execute("PRAGMA busy_timeout=250")
+                if cursor.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+                    try:
+                        cursor.execute("PRAGMA journal_mode=WAL")
+                    except sqlite3.OperationalError as exc:
+                        code = getattr(exc, "sqlite_errorcode", None)
+                        if code is None or (code & 255) not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                            raise
+                        log.info("SQLite WAL mode change deferred: database busy")
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.execute("PRAGMA foreign_keys=ON")
+            finally:
+                cursor.close()
         return engine
 
     # PostgreSQL — connection pool
@@ -109,6 +125,9 @@ def create_all_tables() -> None:
     import services.storage.models.lead_discovery # noqa
     # Final completion run — safe lead import reports
     import services.storage.models.import_run     # noqa
+    import services.storage.models.scheduler_run  # durable scheduled occurrence claims
+    import services.storage.models.business_event  # durable business-event inbox
+    import services.storage.models.source_sync  # append journal and workbook lease
     Base.metadata.create_all(bind=engine)
     _run_column_migrations()
     log.info("Database tables ready.")

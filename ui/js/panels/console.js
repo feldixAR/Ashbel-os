@@ -19,7 +19,7 @@ const Console = (() => {
     const el = _el();
     if (!el) return;
     el.innerHTML = `<div class="work-loading"><div class="wl-spinner"></div></div>`;
-    const fn = { leads: _leads, approvals: _approvals, queue: _queue, growth: _growth, meetings: _meetings }[tabId];
+    const fn = { leads: _leads, approvals: _approvals, queue: _queue, growth: _growth, meetings: _meetings, company: el => CompanyPanel.render(el) }[tabId];
     if (fn) fn(el);
   }
 

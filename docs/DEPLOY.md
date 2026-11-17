@@ -33,7 +33,7 @@ See `.env.example` for the full list. Minimum required for production:
 | Variable | Required | Notes |
 |----------|----------|-------|
 | `DATABASE_URL` | Yes | Auto-injected by Railway PostgreSQL add-on |
-| `OS_API_KEY` | Yes | Auth for all API routes — set to `Ashbel2026` |
+| `OS_API_KEY` | Yes | Auth for all API routes — configured hosting secret |
 | `SECRET_KEY` | Yes | Flask session key |
 | `ANTHROPIC_API_KEY` | Yes | AI agents (agents fall back gracefully if missing) |
 | `BUSINESS_ID` | No | Defaults to `ashbel` if unset |
@@ -60,7 +60,7 @@ curl https://ashbel-os-production.up.railway.app/api/version
 
 # Authenticated command
 curl -X POST https://ashbel-os-production.up.railway.app/api/command \
-  -H "X-API-Key: Ashbel2026" \
+  -H "X-API-Key: ${OS_API_KEY:?Set OS_API_KEY securely}" \
   -H "Content-Type: application/json" \
   -d '{"command":"הצג לידים"}'
 ```
@@ -100,3 +100,12 @@ Never force-push to `master`.
 Schema migrations run automatically on startup via `db.py:_run_column_migrations()`.
 Uses `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — safe to run repeatedly.
 No manual migration steps required.
+
+
+## Durable scheduler claims (2026-11-16)
+
+All nine scheduled callbacks claim `(job_id, occurrence slot)` in the shared database before invoking their job. Daily/weekly jobs use the Asia/Jerusalem calendar date; interval jobs use fixed UTC buckets and epoch-anchored schedules, so worker startup times do not create separate occurrences. `create_all_tables()` creates the additive `scheduler_runs` table before scheduler startup. A database coordination failure blocks invocation.
+
+Claims survive worker restarts. A process crash retains `claimed`; an uncaught exception records `failed`; normal callback return records `returned`, which is not proof of business success or delivery. Existing jobs may catch their own errors. Inspect `recent_claims` on `/api/system/scheduler` alongside application logs; existing `last_runs` alone does not prove success.
+
+This provides at-most-once invocation per slot, not guaranteed completion. Do not automatically delete or retry an ambiguous claim: check for side effects first and recover the specific job under operator control. Manual run-now endpoints keep their existing explicit behavior and are outside scheduled claim enforcement. Retain claim history; no production rows are deleted by this change.
