@@ -111,7 +111,7 @@ def test_missing_source_and_mobile_layout_are_explicit(page):
 
 
 def prepare_candidate_preview(page):
-    page.evaluate("""
+    page.evaluate("""() => {
 window.candidates=[{task_id:'synthetic-candidate',title:'הזדמנות סינתטית',source_url:'https://example.invalid/primary',found_at:'2026-11-17T08:00:00Z'}];
 const originalPost=window.API.post.bind(window.API);
 window.API.post=async(path,body)=>{
@@ -129,6 +129,7 @@ window.API.post=async(path,body)=>{
  }
  return originalPost(path,body);
 };
+}
 """)
     page.evaluate("CompanyPanel.render(document.getElementById('workPane'))")
     page.get_by_text("בדוק פרטים והכן קליטה", exact=True).click()
@@ -162,13 +163,14 @@ def test_editing_candidate_invalidates_exact_preview(page):
 
 
 def test_concurrent_change_cannot_be_mistaken_for_own_review_readback(page):
-    page.evaluate("""
+    page.evaluate("""() => {
 const originalGet=window.API.get.bind(window.API);
 window.API.get=async(path)=>{
  const result=await originalGet(path);
  if(path.includes('/work_items')&&window.work.version===2)result.data.items[0]={...window.work,version:3};
  return result;
 };
+}
 """)
     page.get_by_role("button", name="דווח ביצוע", exact=True).click()
     page.get_by_label("מה בוצע או מה השתנה?").fill("בדיקה")
