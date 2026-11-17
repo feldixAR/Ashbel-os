@@ -1,0 +1,12 @@
+[
+  {
+    "type": "ckan_active_sites",
+    "name": "משרד העבודה — אתרי בנייה פעילים באזורי אסיף",
+    "url": "https://data.gov.il/api/3/action/datastore_search?resource_id=b072e36c-a53b-49e1-be08-4a608fcf4638&fields=work_id%2Csite_name%2Cexecutor_name%2Ccity_name%2Cbuild_types&filters=%7B%22city_name%22%3A%5B%22%D7%A9%D7%A2%D7%A8%D7%99+%D7%AA%D7%A7%D7%95%D7%95%D7%94%22%2C%22%D7%90%D7%95%D7%A8%D7%A0%D7%99%D7%AA%22%2C%22%D7%A4%D7%93%D7%95%D7%90%D7%9C%22%2C%22%D7%A2%D7%9C%D7%99+%D7%96%D7%94%D7%91%22%2C%22%D7%99%D7%A7%D7%99%D7%A8%22%2C%22%D7%A0%D7%95%D7%A4%D7%99%D7%9D%22%2C%22%D7%90%D7%A8%D7%99%D7%90%D7%9C%22%2C%22%D7%A8%D7%97%D7%9C%D7%99%D7%9D%22%2C%22%D7%AA%D7%A4%D7%95%D7%97%22%2C%22%D7%9E%D7%92%D7%93%D7%9C%D7%99%D7%9D%22%2C%22%D7%A2%D7%9C%D7%99%22%2C%22%D7%A7%D7%A8%D7%A0%D7%99+%D7%A9%D7%95%D7%9E%D7%A8%D7%95%D7%9F%22%2C%22%D7%90%D7%9C%D7%A4%D7%99+%D7%9E%D7%A0%D7%A9%D7%94%22%2C%22%D7%A7%D7%93%D7%95%D7%9E%D7%99%D7%9D%22%2C%22%D7%A2%D7%A5+%D7%90%D7%A4%D7%A8%D7%99%D7%9D%22%2C%22%D7%A8%D7%90%D7%A9+%D7%94%D7%A2%D7%99%D7%9F%22%2C%22%D7%A6%D7%95%D7%A4%D7%99%D7%9D%22%2C%22%D7%91%D7%A0%D7%99%D7%9E%D7%99%D7%A0%D7%94%22%2C%22%D7%91%D7%A0%D7%99%D7%9E%D7%99%D7%A0%D7%94-%D7%92%D7%91%D7%A2%D7%AA+%D7%A2%D7%93%D7%94%22%2C%22%D7%91%D7%99%D7%AA+%D7%90%D7%A8%D7%99%D7%94%22%2C%22%D7%A8%D7%A2%D7%A0%D7%A0%D7%94%22%5D%7D&limit=500&sort=work_id+asc",
+    "allowed_link_hosts": [
+      "data.gov.il"
+    ],
+    "confirmed_public": true,
+    "terms_reviewed": true
+  }
+]

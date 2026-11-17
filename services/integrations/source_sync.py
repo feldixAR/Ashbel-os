@@ -209,8 +209,11 @@ def lead_id(candidate):
 
 
 def crm_row(candidate):
+    status = ("מועמד חיצוני — מקור אומת, התאמה טרם אומתה"
+              if any(key in candidate.get("missing_fields", []) for key in ("city", "project_stage", "aluminum_need"))
+              else "הזדמנות חיצונית מאומתת — אין הרשאת פנייה")
     fields = {
-        "עדיפות": "3", "סטטוס": "הזדמנות חיצונית מאומתת — אין הרשאת פנייה",
+        "עדיפות": "3", "סטטוס": status,
         "תאריך פעולה": (dt.date.fromisoformat(candidate["found_at"]) - dt.date(1899, 12, 30)).days, "שלב בנייה": candidate["project_stage"],
         "אזור ויישוב": candidate["city"], "מה ביקש": candidate["aluminum_need"],
         "שם הלקוח": candidate["name"], "פעולה הבאה": candidate["next_action"],

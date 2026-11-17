@@ -45,7 +45,17 @@ def sources():
         name = str(entry.get("name", "")).strip()
         if not name or len(name) > 150:
             raise ValueError("invalid_feed_name")
-        result.append({"name": name, "url": url, "allowed_link_hosts": hosts})
+        kind = entry.get("type", "rss")
+        if kind not in {"rss", "ckan_active_sites"}:
+            raise ValueError("unsupported_source_type")
+        if kind == "ckan_active_sites":
+            from services.integrations.active_construction_source import SOURCE_URL
+            if url != canonical_url(SOURCE_URL) or hosts != ["data.gov.il"]:
+                raise ValueError("registry_source_not_allowlisted")
+        source = {"name": name, "url": url, "allowed_link_hosts": hosts}
+        if kind != "rss":
+            source["type"] = kind
+        result.append(source)
     return result
 
 
@@ -139,7 +149,8 @@ def parse_feed(source, content):
 def _save(candidate):
     task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, tenant() + ":" + candidate["source_url"]))
     task = TaskModel(id=task_id, type=TYPE, action="review_primary_public_source",
-                     status="approval_pending", priority=5, model_used="public_feed_parser",
+                     status="approval_pending", priority=5,
+                     model_used="public_ckan_parser" if candidate.get("source_kind") == "ckan_active_sites" else "public_feed_parser",
                      input_data={"business_id": tenant(), "source_url": candidate["source_url"],
                                  "external_execution": False}, output_data=candidate)
     try:
@@ -161,7 +172,12 @@ def scan_sources(fetcher=None):
     results = []
     for source in configured:
         try:
-            candidates = parse_feed(source, fetcher(source))
+            content = fetcher(source)
+            if source.get("type") == "ckan_active_sites":
+                from services.integrations.active_construction_source import parse
+                candidates = parse(source, content)
+            else:
+                candidates = parse_feed(source, content)
             count = sum(_save(candidate) for candidate in candidates)
             results.append({"name": source["name"], "status": "observed",
                             "candidate_count": len(candidates), "newly_observed": count})
@@ -204,6 +220,9 @@ def verify_candidate(task_id, raw, review_confirmed, fetcher=None):
     content = (fetcher or _fetch)({**configured, "url": candidate["source_url"]})
     if not isinstance(content, bytes) or not content or len(content) > 2_000_000:
         raise ValueError("primary_source_unavailable")
+    if configured.get("type") == "ckan_active_sites":
+        from services.integrations.active_construction_source import verify_primary
+        verify_primary(observation, candidate["source_url"], content)
     checked_at = dt.datetime.now(dt.timezone.utc).isoformat()
     verification = {
         "method": "owner_verified", "reviewer": "authenticated_owner",

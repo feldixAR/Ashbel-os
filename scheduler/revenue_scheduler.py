@@ -52,6 +52,7 @@ def _company_mode():
     return any(os.getenv(name, "").lower() == "true" for name in (
         "ASHBEL_BUSINESS_EVENTS_ENABLED", "ASHBEL_SOURCE_CONTEXT_ENABLED",
         "ASHBEL_SOURCE_SYNC_ENABLED", "ASHBEL_SOURCE_DISCOVERY_ENABLED",
+        "ASHBEL_PRICING_SOURCE_ENABLED",
     ))
 
 
@@ -126,6 +127,8 @@ def _job_daily_plan():
             if business_events_enabled():
                 from services.business_events.runtime import enqueue_source_snapshot, process_pending
                 enqueue_source_snapshot(source_context)
+                from services.integrations.pricing_source import enqueue_pricing_events
+                enqueue_pricing_events()
                 process_pending(context=source_context)
             event_bus.publish(ET.SCHEDULER_JOB_RAN, payload={
                 "job": "daily_plan", "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),

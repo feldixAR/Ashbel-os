@@ -12,6 +12,24 @@ This is an opt-in bridge into the existing CRM, not another contact database. Pu
 
 No reviewed public feeds are enabled by default. “Not configured” is not a successful scan.
 
+Legacy scheduled Gmail/Maps intake and outreach are disabled unless the specific
+`ASHBEL_LEGACY_SCHEDULED_INTAKE_ENABLED` or
+`ASHBEL_LEGACY_SCHEDULED_OUTREACH_ENABLED` opt-in is true. Any active company
+source/event/pricing component still blocks those legacy paths. Existing manual
+authenticated operations keep their approval contracts.
+
+## Pricing source events
+
+Enable `ASHBEL_PRICING_SOURCE_ENABLED=true` with an explicit
+`ASHBEL_PRICING_SPREADSHEET_ID` for the existing pricing workbook. The same
+dedicated Viewer service account must have Viewer access to that workbook.
+`'מחירי מקור'!A4:T2000` is read with exact schema and unformatted values;
+content-stable quote events are ingested through the existing daily plan and
+governed follow-up/poll paths. Changed source content yields a new event while
+unchanged reads deduplicate. Included lines and alternatives remain separate;
+unknown values remain null. A sum of source rows is not verification of the
+PDF grand total, a signed contract, procurement cost, profit or collection.
+
 The existing daily maps/source scheduler slot runs the opt-in observer instead of creating another timer. In governed company/source mode, disabled discovery and Gmail intake never fall back to legacy local-CRM imports. Feed entries remain candidate_unverified in the task queue. The observer never appends to CRM, downloads attachments, follows redirects, authenticates to social networks or obtains contact permission.
 
 ## Owner review and append
@@ -35,3 +53,42 @@ Known before-write read failures and expired unused previews can be prepared aga
 ## Verification limits
 
 Synthetic tests verify protocol, auth, error handling, real separate-process claims and SQL compatibility against disposable SQLite/PostgreSQL services. They do not prove access to the business workbook, active source permissions or deployment. Production activation still requires the scoped credentials, a verified workbook identity, approved public-source configuration and an actual append/readback/event trace. No live credential or customer fixture belongs in Git.
+
+## Official construction registry source (reviewed 2026-11-17)
+
+`config/public_sources.example.json` contains one ready configuration for the
+Ministry of Labor **active construction sites** resource on data.gov.il. Use its
+JSON value for `ASHBEL_PUBLIC_SOURCE_FEEDS_JSON` with the existing opt-in
+`ASHBEL_SOURCE_DISCOVERY_ENABLED=true`. This reuses the existing source scanner
+and its scheduled slot; no extra scheduler or CRM is created.
+
+- Official resource: `b072e36c-a53b-49e1-be08-4a608fcf4638`, package
+  `bddf37d6-5300-4179-bc0b-f2577fbc3a30`.
+- Source metadata: `https://data.gov.il/api/3/action/resource_show?id=b072e36c-a53b-49e1-be08-4a608fcf4638`.
+  Its package reports `license_id=other-open`, no separate license URL.
+- The official portal's current license at
+  `https://data.gov.il/terms-of-use` permits commercial and noncommercial reuse,
+  requires source attribution, and excludes privacy-infringing use. The portal
+  describes automated API access at `https://data.gov.il/about`.
+- Only the fixed `datastore_search` endpoint/resource is allowed. Requests
+  select `work_id,site_name,executor_name,city_name,build_types` and the existing
+  twenty service areas (including the official Binyamina–Givat Ada name).
+  Foreman names, IDs, sanctions and contact data are not requested or stored.
+- Schema changes, unexpected fields/cities, missing records and a response above
+  the bounded 500-record regional limit block ingestion rather than silently
+  claiming complete coverage. TLS/IP pinning, byte bounds and no redirects or
+  retries are inherited from the existing scanner.
+- A live read on the review date returned HTTP200, 182 regional records and the
+  five expected fields. These are public registry **candidates**, not 182 leads,
+  not evidence of an open aluminum requirement, not a verified building stage,
+  and never permission to contact anyone. No live records are committed as
+  fixtures or used to enrich private identities.
+- Each candidate retains Ministry of Labor/data.gov.il attribution and a
+  source URL that queries its exact `work_id`. Specific review re-fetches that
+  bounded primary JSON and verifies the exact record before normal CRM preview.
+  Publication date remains unknown because this resource has no per-project
+  publication timestamp. Snapshot freshness is not project freshness.
+
+The scanner remains optional. It does not automatically append these observations
+to the CRM or send outreach. A source becoming unavailable is a source error,
+not an empty successful scan or proof that no projects exist.

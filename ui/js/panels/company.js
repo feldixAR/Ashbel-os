@@ -23,8 +23,28 @@ const CompanyPanel = (() => {
     code:'סוג פעולה',manufacturing:'ייצור',installation:'התקנה',ancillary_costs:'עלויות נלוות',
     payment_terms:'תנאי תשלום',warranty:'אחריות',profit:'רווח',revenue:'מחיר מכירה',
     collected_ils:'גבייה מאומתת',verified_contractor_profit_ils:'רווח קבלני מאומת'};
+  Object.assign(labels, {
+    signed_sale_ex_vat_ils:'מחיר בחוזה חתום — ₪ לפני מע״מ',recorded_collection_ils:'סכום באסמכתאות גבייה — ₪',
+    business_net_profit_ils:'רווח עסקי מאומת — ₪',monthly_operating_profit_target_ils:'יעד רווח תפעולי חודשי — ₪',
+    gross_contribution_ex_vat_ils:'תרומה גולמית לפני הוצאות העסק — ₪',gross_margin_percent:'שיעור תרומה גולמית — אחוזים',
+    total_ex_vat_ils:'עלות כוללת לפני מע״מ — ₪',costs_ex_vat_ils:'רכיבי עלות לפני מע״מ — ₪',
+    manufacturing_ils:'ייצור — ₪',installation_ils:'התקנה — ₪',ancillary_ils:'נלוות — ₪',
+    nominal_area_m2:'שטח נומינלי — מ״ר',line_id:'פרט',system:'סדרה',glass:'זיגוג',
+    quote_id:'מזהה הצעה',supplier_id:'ספק',historical_sale_quotes:'הצעות מקור — אינן מחיר רכש',
+    opening_schedule:'ריכוז פתחים',approved_specification:'מפרט מאושר',
+    manufacturer_size_load_glass_compatibility:'אימות התאמה להוראות היצרן',verified_site_measurements:'מידות שאומתו באתר',
+    opening_schedule_gaps:'השלמות בריכוז הפתחים',signed_sale_contract:'חוזה מכירה חתום',
+    matching_contract_and_purchase_scope:'התאמת היקף חוזה להיקף הרכש',verified_comparable_procurement_costs:'עלויות רכש מאומתות וברות השוואה',
+    collection_evidence:'אסמכתאות גבייה',collection_identity:'מזהה אסמכתה',conflicting_receipt_identity:'בירור סתירה באסמכתאות',
+    contact_permission:'הרשאת פנייה',supplier_capacity:'קיבולת ספק',verified_purchase_costs:'עלויות רכש מאומתות',
+    collection_source_refs:'מקורות גבייה',receipt_count:'מספר אסמכתאות',receipt_identity_conflicts:'סתירות במזהי אסמכתאות',
+    source_claimed_verified:'סומן כמאומת במקור — נדרשת אסמכתה',unverified:'לא אומת',
+    source_backed_receipt_facts_not_bank_reconciliation:'לפי אסמכתאות שנקלטו — ללא התאמה לבנק',
+    reconcile_customer_payment_schedule_with_supplier_and_installer_terms:'יש להתאים תקבולי לקוח לתשלומים לספק ולמתקין'
+  });
   const hiddenKeys = new Set(['permissions','task_id','agent_id','source_fingerprint','context_fingerprint',
-    'mode','execution','execution_scope','model_used','fingerprint','business_id']);
+    'mode','execution','execution_scope','model_used','fingerprint','business_id','event_type','entity',
+    'evidence_basis','source_event_id','fact_fingerprint','snapshot_fingerprint','source_ranges','retention','pricing_mode']);
   let generation = 0;
   const busy = new Set();
 
@@ -60,7 +80,7 @@ const CompanyPanel = (() => {
   }
   function details(value, depth=0) {
     if (value===null || value===undefined) return element('span','לא אומת');
-    if (typeof value !== 'object') return element('span',typeof value==='boolean'?(value?'כן':'לא'):String(value));
+    if (typeof value !== 'object') return element('span',typeof value==='boolean'?(value?'כן':'לא'):(labels[value]||String(value)));
     const list=element('dl',null,'company-artifact');
     if (depth>4) return element('span','פרטים נוספים זמינים בתיעוד האירוע.');
     Object.entries(value).filter(([k])=>!hiddenKeys.has(k)).forEach(([key,child])=>{
@@ -123,7 +143,7 @@ const CompanyPanel = (() => {
     card.append(status(item.status));
     if (item.source_ref) card.append(link('פתח מקור',item.source_ref));
     card.append(artifact(item.artifact));
-    if (item.missing?.length) card.append(element('p','חסר: '+item.missing.join(' · '),'company-missing'));
+    if (item.missing?.length) card.append(element('p','חסר: '+item.missing.map(value=>labels[value]||value).join(' · '),'company-missing'));
     const actions=element('div',null,'company-actions');
     if (!['reported_complete','cancelled'].includes(item.status)) {
       actions.append(button('דווח ביצוע',()=>reviewForm(card,item,'report_complete',onVerified),true));
@@ -156,6 +176,7 @@ const CompanyPanel = (() => {
     const card=element('article',null,'company-card');
     card.append(element('h4',candidate.title||candidate.name||'מועמד לבדיקה'));
     if(candidate.source_url)card.append(link('פתח מקור לבדיקה',candidate.source_url));
+    if(candidate.found_at)card.append(element('p','תצפית מ־'+new Date(candidate.found_at).toLocaleDateString('he-IL')+'; נדרש אימות עדכני במקור.'));
     card.append(element('p','המועמד טרם נשמר ב־CRM. פרטי קשר פומביים אינם הרשאת פנייה.'));
     if(!candidate.task_id)return card;
     const expanded=element('details'); expanded.append(element('summary','בדוק פרטים והכן קליטה'));
@@ -251,14 +272,14 @@ const CompanyPanel = (() => {
     form.className='company-review';expanded.append(form);card.append(expanded);return card;
   }
 
-  async function render(host) {
+  async function render(host, notice='') {
     const current=++generation;
     host.replaceChildren();
     const root=element('div',null,'company-panel'); root.dir='rtl';
     const heading=section('החברה — החלטות ותוצרים');
     heading.append(element('p','מה נדרש עכשיו, מי מטפל, ואילו תוצרים נשמרו. אישור טיוטה או ניתוח אינם ביצוע עסקי.'));
     const controls=element('div',null,'company-actions');
-    const feedback=element('p'); feedback.setAttribute('role','status');
+    const feedback=element('p',notice); feedback.setAttribute('role','status');
     const poll=button('בדוק כעת את המקורות והאירועים',async()=>{
       if(busy.has('poll'))return;
       busy.add('poll');poll.disabled=true;
@@ -268,7 +289,10 @@ const CompanyPanel = (() => {
         if(result.data?.source_health && result.data.source_health!=='read_ok'){
           feedback.textContent='מקור הנתונים אינו מחובר או אינו זמין; לא הוצג ביצוע חדש.';return;
         }
-        render(host);
+        const pricingHealth=result.data?.pricing_source?.health;
+        const pricingNotice=pricingHealth==='disabled'?'קריאת המחירון טרם הופעלה.':
+          (pricingHealth&&pricingHealth!=='read_ok'?'מקור ה־CRM נקרא, אך עדכוני המחירון עדיין חסומים. יש לבדוק את חיבורו.':'');
+        render(host,pricingNotice);
       } finally {busy.delete('poll');poll.disabled=false;}
     },true);
     controls.append(poll,button('רענן תוצרים',()=>render(host)));

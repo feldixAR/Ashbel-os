@@ -343,6 +343,7 @@ def test_unknown_source_publication_date_stays_missing_and_review_hash_remains_c
     normalized = sync.candidate_fields(raw)
     assert normalized["published_at"] == "" and "published_at" in normalized["missing_fields"]
     assert "city" in normalized["missing_fields"] and normalized["quality"] == "לא סווגה — חסרים נתונים"
+    assert sync.crm_row(normalized)[1].startswith("מועמד חיצוני")
     assert sync.crm_row(normalized)[40] == ""
     assert sync.digest(normalized) == sync.digest(sync.candidate_fields(normalized))
 

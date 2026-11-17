@@ -256,4 +256,7 @@ def poll_source_and_process():
     from services.integrations.business_source import load_business_context
     context = load_business_context()
     enqueue_source_snapshot(context)
-    return {'source_health': context.get('health'), 'results': process_pending(context=context)}
+    from services.integrations.pricing_source import enqueue_pricing_events
+    pricing = enqueue_pricing_events()
+    return {'source_health': context.get('health'), 'pricing_source': pricing,
+            'results': process_pending(context=context)}
