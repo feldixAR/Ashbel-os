@@ -35,7 +35,7 @@ def roles_for(event_type):
     roles = {'pmo', 'knowledge', 'finance', 'strategy'}
     if event_type in {'customer.updated', 'opportunity.discovered', 'message.received', 'message.status'}:
         roles.add('sales')
-    if event_type in {'quote.received', 'supplier.updated'}:
+    if event_type in {'quote.received', 'supplier.updated', 'opportunity.discovered', 'customer.updated'}:
         roles.update(('engineering', 'procurement'))
     if event_type == 'opportunity.discovered':
         roles.add('marketing')
@@ -136,9 +136,44 @@ class DepartmentExpert(BaseAgent):
                 violations.append('unproven_collection')
             if not departments or any(not d.get('evidence') for d in departments.values()):
                 violations.append('missing_department_evidence')
+            for role_name, department in departments.items():
+                artifact = department.get('artifact', {})
+                if artifact.get('business_net_profit_ils') is not None:
+                    violations.append('net_profit_not_proven')
+                advice = artifact.get('advisory', {})
+                if advice.get('business_execution') is True:
+                    violations.append('advice_crossed_execution_boundary')
+                if role_name == 'engineering' and artifact.get('production_ready') is True:
+                    if (facts.get('specification_approved') is not True
+                            or not facts.get('manufacturer_specification_ref')
+                            or not facts.get('site_measurement_ref')):
+                        violations.append('production_without_source_gates')
+                if role_name == 'finance' and artifact.get('signed_sale_ex_vat_ils') is not None:
+                    contract = facts.get('contract', {})
+                    if (contract.get('document_kind') != 'signed_customer_contract'
+                            or contract.get('verified') is not True or not contract.get('source_ref')):
+                        violations.append('sale_contract_not_proven')
             result.update(status='action' if violations else 'no_change',
                           summary='נמצאו הפרות המחייבות חסימה.' if violations else 'ההכרעה עומדת בשערי מקור, הרשאה וכסף.',
                           passed=not violations, violations=violations)
+        if self.role != 'auditor':
+            from services.business_events.work_products import build_artifact
+            from services.business_events.advisory import advise
+            artifact = build_artifact(self.role, event, context)
+            titles = {'sales': 'צעד המכירה הבא', 'engineering': 'בדיקת מפרט ופתחים',
+                      'procurement': 'השוואת רכש', 'finance': 'עלויות, רווח וגבייה',
+                      'marketing': 'אימות הזדמנות ומקור', 'strategy': 'כשירות הפעלה קבלנית',
+                      'pmo': 'משימות פתוחות ומועדים', 'knowledge': 'רצף מידע ואסמכתאות'}
+            artifact.update(title=titles[self.role], summary=result['summary'],
+                            missing=artifact.get('missing', result.get('missing', [])))
+            artifact['advisory'] = advise(self.role, event, artifact) if self.role in {'sales', 'strategy'} else {'status': 'not_requested', 'executed': False}
+            result['artifact'] = artifact
+            if self.role == 'finance' and not artifact['missing']:
+                result.update(status='action', summary='נבנו תרחישי תרומה גולמית מתוך אסמכתאות; אין הכרה ברווח נקי או התאמת בנק.')
+                result['artifact']['summary'] = result['summary']
+                result['missing'] = []
+            if self.role == 'engineering':
+                result['missing'] = artifact['missing']
         return result
 
 

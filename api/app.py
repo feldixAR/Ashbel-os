@@ -91,6 +91,9 @@ def create_app() -> Flask:
     from api.routes.business_events import bp as business_events_bp
     app.register_blueprint(business_events_bp, url_prefix='/api')
 
+    from api.routes.source_sync import bp as source_sync_bp
+    app.register_blueprint(source_sync_bp, url_prefix="/api")
+
     # Auth key — OS_API_KEY only (Batch 7: API_KEY fallback removed)
     _active_key = os.getenv("OS_API_KEY", "")
     print(f"Auth: OS_API_KEY Check: {_active_key[:3] if _active_key else 'MISSING'}...")

@@ -26,11 +26,16 @@ Schema:
 {
   "summary":       "<one-paragraph description of what was done or what should be done>",
   "changed_files": ["<relative/path/file.py>", ...],
-  "diff_available": false
+  "diff_available": false,
+  "outcome": "analysis_only | blocked",
+  "missing": ["<missing source or capability>"]
 }
 
 Rules:
-- If you cannot fulfill the instruction, set summary to explain why and changed_files to [].
+- This Messages API adapter has no repository, CRM, browser or execution tools. It can only analyze supplied text.
+- If sources or tools needed for the requested result are absent, set outcome to blocked, list missing capabilities and changed_files to [].
+- Otherwise set outcome to analysis_only. Never report business completion, delivery, a file change or payment.
+- changed_files must remain [] and diff_available must remain false because no tool executed.
 - Never include keys outside the schema.
 - Respect allowed_paths if provided: only reference files within those paths.
 """
@@ -206,7 +211,9 @@ def _execute(task_id: str) -> dict:
             diff_available=result.get("diff_available", False),
             error=None,
         )
-        _notify_telegram(task_id, result.get("summary", ""))
+        _persist_result_truth(task_id, result)
+        # A provider response is analysis, not verified business completion.
+        # No outbound notification is emitted by this text-only adapter.
     except Exception as exc:
         log.exception(f"[Dispatch] provider error for {task_id}")
         _repo.update(task_id, status="failed", completed_at=_now(), error=str(exc))
@@ -303,11 +310,38 @@ def _parse_response(raw: str) -> dict:
                 text = text[4:]
             text = text.rsplit("```", 1)[0].strip()
         data = json.loads(text)
+        if not isinstance(data, dict):
+            raise ValueError("result_schema")
+        outcome = data.get("outcome")
+        if outcome not in {"analysis_only", "blocked"}:
+            outcome = "not_verified"
+        missing = data.get("missing", [])
+        if not isinstance(missing, list) or any(not isinstance(x, str) for x in missing):
+            missing = ["result_schema"]
         return {
-            "summary":        str(data.get("summary", "")),
-            "changed_files":  [str(p) for p in data.get("changed_files", [])],
-            "diff_available": bool(data.get("diff_available", False)),
+            "summary": str(data.get("summary", "")),
+            # The Messages API has no tools; model assertions cannot prove edits.
+            "changed_files": [], "diff_available": False,
+            "business_outcome": outcome, "missing": missing[:20],
+            "execution_verified": False, "tool_execution_available": False,
         }
-    except (json.JSONDecodeError, KeyError, TypeError):
-        log.warning("[Dispatch] response was not valid JSON — using as plaintext summary")
-        return {"summary": raw, "changed_files": [], "diff_available": False}
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return {"summary": raw, "changed_files": [], "diff_available": False,
+                "business_outcome": "not_verified", "missing": ["structured_result"],
+                "execution_verified": False, "tool_execution_available": False}
+
+
+def _persist_result_truth(task_id, result):
+    """Store structured transport-vs-business truth in the existing task ledger."""
+    from services.storage.db import get_session
+    from services.storage.models.task import TaskModel
+    from services.storage.models.base import new_uuid
+    with get_session() as session:
+        session.add(TaskModel(
+            id=new_uuid(), type="claude_result_evidence", action="analysis_result",
+            status="done", parent_task_id=task_id, model_used="anthropic_text_only",
+            output_data={"business_outcome": result.get("business_outcome", "not_verified"),
+                         "missing": result.get("missing", []),
+                         "execution_verified": False, "tool_execution_available": False,
+                         "interpretation": "completed_means_provider_response_only"},
+        ))

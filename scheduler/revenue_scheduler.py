@@ -48,12 +48,31 @@ def _record_last_run(job_id: str) -> None:
 
 # ── Job implementations ───────────────────────────────────────────────────────
 
+def _company_mode():
+    return any(os.getenv(name, "").lower() == "true" for name in (
+        "ASHBEL_BUSINESS_EVENTS_ENABLED", "ASHBEL_SOURCE_CONTEXT_ENABLED",
+        "ASHBEL_SOURCE_SYNC_ENABLED", "ASHBEL_SOURCE_DISCOVERY_ENABLED",
+    ))
+
+
+def _legacy_enabled(name):
+    # Existing manual endpoints retain their own approval/authentication paths.
+    # Scheduled importing/sending is never implicitly authorized by credentials.
+    return os.getenv(name, "").lower() == "true" and not _company_mode()
+
 def _job_followup():
     """Process governed business events when enabled; otherwise legacy goals."""
     from services.business_events.runtime import enabled as business_events_enabled
     if business_events_enabled():
         from services.business_events.runtime import poll_source_and_process
+        from services.integrations.source_sync import retry_event_publications
+        try:
+            retry_event_publications()
+        except Exception as exc:
+            log.warning("[Scheduler] publication retry unavailable: %s", type(exc).__name__)
         return poll_source_and_process()
+    if not _legacy_enabled("ASHBEL_LEGACY_SCHEDULED_OUTREACH_ENABLED"):
+        return {"status": "blocked", "reason": "legacy_scheduled_outreach_not_enabled", "outreach_sent": False}
     try:
         from services.storage.repositories.goal_repo import GoalRepository
         from engines.outreach_engine import outreach_engine
@@ -91,12 +110,8 @@ def _job_followup():
 
 def _job_daily_plan():
     """Build and log the daily revenue plan."""
-    if os.getenv('ASHBEL_DISCOVERY_ENABLED', '').lower() == 'true':
-        try:
-            from services.integrations.source_discovery import run_configured_discovery
-            run_configured_discovery()
-        except Exception as exc:
-            log.warning('[Scheduler] source discovery blocked: %s', type(exc).__name__)
+    # Public discovery reuses the existing maps_scan slot; do not launch a
+    # second scanner here or call the obsolete, unimplemented discovery path.
     try:
         from engines.outreach_engine import outreach_engine
         from engines.revenue_engine   import revenue_snapshot
@@ -317,7 +332,11 @@ def _job_maintenance():
 
 
 def _job_gmail_scan():
-    """Scan Gmail inbox for new aluminum leads. Runs every 30 min."""
+    """Legacy Gmail importer; governed company mode never imports a second CRM."""
+    from services.business_events.runtime import enabled as business_events_enabled
+    from services.integrations.business_source import enabled as source_context_enabled
+    if _company_mode() or not _legacy_enabled("ASHBEL_LEGACY_SCHEDULED_INTAKE_ENABLED"):
+        return {"status": "blocked", "reason": "governed_source_intake_required", "local_crm_imported": 0}
     try:
         from services.integrations.gmail_listener import scan_inbox
         result = scan_inbox(max_results=20)
@@ -329,7 +348,14 @@ def _job_gmail_scan():
 
 
 def _job_maps_scan():
-    """Scrape Google Maps for leads in key cities. Runs daily 06:00 IL."""
+    """Existing daily source slot; opt-in public feeds replace legacy Maps intake."""
+    from services.integrations.source_discovery import enabled, scan_sources
+    if enabled():
+        return scan_sources()
+    from services.business_events.runtime import enabled as business_events_enabled
+    from services.integrations.business_source import enabled as source_context_enabled
+    if _company_mode() or not _legacy_enabled("ASHBEL_LEGACY_SCHEDULED_INTAKE_ENABLED"):
+        return {"status": "blocked", "reason": "public_source_discovery_disabled", "local_crm_imported": 0}
     try:
         from services.integrations.lead_scraper import scrape, CATEGORIES
         cities = ["נס ציונה", "רחובות", "ראשון לציון", "תל אביב"]
@@ -356,6 +382,8 @@ def _job_lead_followup_proposals():
     creates an ApprovalModel for human review via Telegram.
     Publishes LEAD_FOLLOWUP_PROPOSED for each.
     """
+    if _company_mode():
+        return {"status": "blocked", "reason": "source_work_items_are_authoritative", "proposals_created": 0}
     try:
         import datetime as _dt
         from services.storage.repositories.lead_repo import LeadRepository

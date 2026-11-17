@@ -45,13 +45,21 @@ def _validate(envelope):
         raise ValueError('invalid_event_type')
     if not isinstance(envelope.get('facts', {}), dict):
         raise ValueError('invalid_facts')
+    facts = envelope.get('facts', {})
+    for key, limit in (('quote_lines', 200), ('purchase_quotes', 20),
+                       ('historical_sale_quotes', 20), ('collections', 100)):
+        if key in facts and (not isinstance(facts[key], list) or len(facts[key]) > limit
+                             or any(not isinstance(row, dict) for row in facts[key])):
+            raise ValueError('invalid_' + key)
+    if 'contract' in facts and not isinstance(facts['contract'], dict):
+        raise ValueError('invalid_contract')
     if len(json.dumps(envelope, ensure_ascii=False, allow_nan=False).encode()) > 65536:
         raise ValueError('event_too_large')
     try:
         stamp = dt.datetime.fromisoformat(envelope['occurred_at'].replace('Z', '+00:00'))
         if stamp.tzinfo is None:
             raise ValueError()
-    except (ValueError, TypeError, KeyError):
+    except (ValueError, TypeError, KeyError, AttributeError):
         raise ValueError('invalid_occurred_at') from None
     # Received time is distinct from source occurrence time; retain both.
     data = {key: envelope[key].strip() for key in ('source', 'source_event_id', 'source_ref')}
@@ -115,10 +123,20 @@ def _claim(event_id, clock):
 
 def _finish(event_id, token, **values):
     with get_session() as s:
-        return s.execute(update(BusinessEventModel).where(
+        count = s.execute(update(BusinessEventModel).where(
             BusinessEventModel.id == event_id, BusinessEventModel.business_id == tenant(),
             BusinessEventModel.lease_token == token, BusinessEventModel.status == 'processing',
-        ).values(lease_token=None, lease_until=None, **values)).rowcount == 1
+        ).values(lease_token=None, lease_until=None, **values)).rowcount
+        if count == 1 and values.get('status') == 'analyzed' and values.get('output'):
+            from services.business_events.work_items import persist_work_items
+            row = s.get(BusinessEventModel, event_id)
+            output = dict(values['output'])
+            ids = persist_work_items(s, _serialize(row), output)
+            output['work_item_ids'] = ids
+            output['ceo_decision'] = {**output['ceo_decision'], 'work_item_ids': ids}
+            # Assign JSON afresh; SQLAlchemy does not track nested mutation.
+            row.output = output
+        return count == 1
 
 
 def _run_role(role, event, context, trace_id, previous=None):
@@ -219,11 +237,16 @@ def process_pending(limit=20, context=None):
 def enqueue_source_snapshot(context):
     if context.get('health') != 'read_ok' or not context.get('snapshot_sha256'):
         return None
+    spreadsheet_id = context.get('spreadsheet_id')
+    valid_id = isinstance(spreadsheet_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{20,150}', spreadsheet_id)
+    source_url = f'https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit' if valid_id else None
     return ingest_event({'source': 'existing_google_crm', 'source_event_id': context['snapshot_sha256'],
-                         'event_type': 'source.snapshot', 'source_ref': context.get('spreadsheet_id', 'existing_crm'),
+                         'event_type': 'source.snapshot', 'source_ref': source_url or 'existing_crm_snapshot',
                          'occurred_at': context['fetched_at'],
                          'facts': {'snapshot_sha256': context['snapshot_sha256'], 'lead_count': context['lead_count'],
-                                   'work_count': context['work_count']}})
+                                   'work_count': context['work_count'],
+                                   'spreadsheet_id': spreadsheet_id if valid_id else None,
+                                   'source_url': source_url}})
 
 
 def poll_source_and_process():
