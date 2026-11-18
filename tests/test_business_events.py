@@ -290,3 +290,24 @@ def test_healthy_processing_leases_do_not_starve_pending_batch():
     new=rt.ingest_event(envelope('new'))['id']
     results=rt.process_pending(limit=1,context=context())
     assert len(results)==1 and results[0]['id']==new and results[0]['status']=='analyzed'
+
+
+def test_supplier_event_resolves_existing_procurement_work_item_only(monkeypatch):
+    from services.business_events.runtime import ingest_event, process_event, get_event
+    from services.integrations import crm_writeback
+    monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_ENABLED', 'true')
+    monkeypatch.setattr(crm_writeback, 'write_review_note', lambda event, context, decision: {'status': 'verified', 'replayed': False, 'cell': "'תור עבודה'!F16"} if decision.get('code') == 'review_supplier_work_item' else {'status': 'blocked', 'reason': 'wrong_target'})
+    context_data = context()
+    context_data['actions'] = [{'subject': 'פיילוט קבלן ראשי — רכש ייצור + צוות התקנה', 'kind': 'supplier', 'action': 'השוואה', 'disposition': 'actionable', 'blocked_reasons': [], 'due_date': None, 'evidence': {'range': "'תור עבודה'!A16:H16"}}]
+    event = envelope('meeting-imad-yosef-20261118')
+    event.update(event_type='supplier.updated', source='owner_internal', source_ref='existing_crm_work_item_16', facts={'work_item_subject': 'פיילוט קבלן ראשי — רכש ייצור + צוות התקנה', 'supplier_meeting': '18.11.2026', 'external_contact_authorized': False})
+    e = ingest_event(event)
+    assert process_event(e['id'], context=context_data)['status'] == 'analyzed'
+    out = get_event(e['id'])['output']
+    assert out['ceo_decision']['code'] == 'review_supplier_work_item'
+    assert out['source_writeback']['status'] == 'verified'
+    assert out['independent_auditor']['passed'] is True
+    assert out['external_execution'] is False
+    assert len(out['departments']) >= 6
+    assert ingest_event(event)['duplicate'] is True
+    assert process_event(e['id'], context=context_data)['status'] == 'not_claimed'
