@@ -77,3 +77,10 @@ def test_denies_unconfigured_and_unapproved_sources_before_transport(monkeypatch
     monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_SOURCE', 'internal-source')
     assert write_review_note(event, {}, {}) == {'status': 'blocked', 'reason': 'event_source_not_allowed'}
     assert write_review_note({**event, 'event_type': 'message.received'}, {}, {})['status'] == 'not_attempted'
+
+
+def test_supplier_event_rejects_unapproved_source_before_network(monkeypatch):
+    monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_ENABLED', 'true')
+    monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_SOURCE', 'approved_owner_event')
+    assert write_review_note({'event_type': 'supplier.updated', 'source': 'unapproved'}, {}, {}) == {
+        'status': 'blocked', 'reason': 'event_source_not_allowed'}
