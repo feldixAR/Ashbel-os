@@ -6,13 +6,15 @@ and checks the CEO decision against the role outputs and evidence.
 from agents.base.base_agent import BaseAgent
 from services.execution.executor import ExecutionResult
 
-ROLES = ('sales', 'engineering', 'procurement', 'finance', 'marketing',
+ROLES = ('sales', 'engineering', 'procurement', 'pricing', 'operations', 'finance', 'marketing',
          'strategy', 'pmo', 'knowledge', 'auditor')
 
 CONTRACTS = {
     'sales': 'Verify contact permission and prepare the next message decision without sending.',
     'engineering': 'Check approved specification before pricing or production; never invent manufacturer formulas.',
     'procurement': 'Check supplier capacity and comparability of procurement scope, not historical selling prices.',
+    'pricing': 'Compare manufacturing estimates and a reported quote on a pre-tax basis.',
+    'operations': 'Check installation estimate, scope, delivery and warranty before commitment.',
     'finance': 'Separate proposals, procurement, ancillary costs and collections; unknown amounts remain null.',
     'marketing': 'Check source provenance, deduplication and contact permission before lead expansion.',
     'strategy': 'Check direct-contractor feasibility including manufacturing, installation, liability and cash flow.',
@@ -37,11 +39,25 @@ def roles_for(event_type):
         roles.add('sales')
     if event_type in {'quote.received', 'supplier.updated'}:
         roles.update(('engineering', 'procurement'))
+    if event_type == 'supplier.updated':
+        roles.update(('sales', 'pricing', 'operations'))
     if event_type == 'opportunity.discovered':
         roles.add('marketing')
     if event_type == 'source.snapshot':
         roles.update(ROLES[:-1])
     return [role for role in ROLES[:-1] if role in roles]
+
+
+def supplier_prices(event):
+    if event['event_type'] != 'supplier.updated':
+        return {}
+    prices = event.get('facts', {}).get('prices_ils_ex_vat')
+    if not isinstance(prices, dict):
+        return {}
+    fields = ('manufacturing_oral', 'opening', 'manufacturing_estimate',
+              'installation_low', 'installation_high', 'scenario_sale', 'market_quote', 'market_floor')
+    return {field: prices[field] for field in fields
+            if type(prices.get(field)) is int and 0 < prices[field] <= 100_000_000}
 
 
 class DepartmentExpert(BaseAgent):
@@ -82,8 +98,17 @@ class DepartmentExpert(BaseAgent):
             result['actions'].append({'code': code, 'requires_owner_approval': False, **extra})
         def missing(summary, *fields):
             result.update(status='missing_data', summary=summary, missing=list(fields))
+        prices = supplier_prices(event)
         if self.role == 'sales':
-            if event['event_type'] == 'message.status':
+            if event['event_type'] == 'supplier.updated':
+                if all(key in prices for key in ('scenario_sale', 'market_quote', 'market_floor')):
+                    result['market_reference_ils_ex_vat'] = {key: prices[key]
+                        for key in ('scenario_sale', 'market_quote', 'market_floor')}
+                    action('להשוות מחירי מכירה על תכולה זהה לפני שינוי הצעה ללקוח.',
+                           'compare_like_for_like', execution='internal_preparation_only')
+                else:
+                    missing('נדרשים מחיר מכירה לתרחיש ומחירי השוואה.', 'market_references')
+            elif event['event_type'] == 'message.status':
                 action('לתעד תשובת ספק שירות כהתקבל מידע, ללא המצאת מסירה.', 'reconcile_provider_status', execution='proposal_only')
             elif event['event_type'] == 'message.received':
                 action('לסווג תשובה נכנסת ולהכין תגובה לאישור, ללא שליחה אוטומטית.', 'review_inbound', execution='proposal_only')
@@ -94,19 +119,56 @@ class DepartmentExpert(BaseAgent):
         elif self.role == 'engineering':
             if facts.get('specification_approved') is not True:
                 missing('נדרש מפרט מאושר לפני תמחור מתקדם או ייצור.', 'approved_specification')
+                if event['event_type'] == 'supplier.updated':
+                    action('לבדוק שקילות חלופה לסדרה מורכבת לפי מידות, פרזול, ביצועים ואחריות.',
+                           'check_system_equivalence', execution='internal_preparation_only')
             else:
                 action('להשוות מפרט מאושר לשורות הצעת מקור; אין נוסחת ייצור אוטומטית.', 'source_quote_review', execution='proposal_only')
         elif self.role == 'procurement':
-            if context.get('capacity_state') != 'confirmed':
+            if 'manufacturing_oral' in prices:
+                result['oral_manufacturing_ils_ex_vat'] = prices['manufacturing_oral']
+                action('לאמת הצעת ייצור בכתב על אותו מפרט ולברר הובלה, זמינות ואחריות.',
+                       'verify_written_supplier_quote', execution='internal_preparation_only')
+            elif context.get('capacity_state') != 'confirmed':
                 action('להכשיר ספק ייצור וקיבולת; קשר חיצוני והעברת חומר דורשים אישור.', 'qualify_supplier', execution='internal_preparation_only')
             else:
                 action('להשוות הצעות רכש על מפרט זהה, תכולה ותנאי אחריות.', 'compare_verified_purchase_quotes', execution='proposal_only')
+        elif self.role == 'pricing':
+            keys = ('manufacturing_oral', 'opening', 'manufacturing_estimate')
+            if all(key in prices for key in keys):
+                oral, opening, estimate = (prices[key] for key in keys)
+                result['manufacturing_comparison'] = {
+                    'oral_ils_ex_vat': oral, 'opening_ils_ex_vat': opening,
+                    'estimate_ils_ex_vat': estimate, 'opening_reduction_ils': opening - oral,
+                    'estimate_gap_pct': round(100 * (estimate - oral) / estimate, 1),
+                    'calibration_ratio_only': round(oral / estimate, 3),
+                }
+                action('לשמור את היחס לכיול פנימי בלבד עד להשוואות נוספות.',
+                       'record_calibration_sample', execution='internal_preparation_only')
+            else:
+                missing('נדרשים מחיר פתיחה, מחיר שדווח ואומדן מחירון.', 'manufacturing_comparison')
+        elif self.role == 'operations':
+            low, high = prices.get('installation_low'), prices.get('installation_high')
+            if low is not None and high is not None and low <= high:
+                result['installation_estimate_ils_ex_vat'] = [low, high]
+                action('לאמת הצעת התקנה ותכולת מדידה, פריקה, איטום, גמר ואחריות.',
+                       'verify_installation_scope', execution='internal_preparation_only')
+            else:
+                missing('נדרש טווח התקנה תקין.', 'installation_estimate')
         elif self.role == 'finance':
             # Sales prices, proposed commissions and ready-for-proposal flags never
             # become contractor procurement costs or collections.
             missing('אין להכיר גבייה או רווח מאומת מתוך הצעה; נדרשות עלויות רכש ואסמכתאות.',
                     'verified_purchase_costs', 'ancillary_costs', 'payment_terms', 'collection_evidence')
             result['financial_truth'] = {'collected_ils': None, 'verified_contractor_profit_ils': None}
+            keys = ('manufacturing_oral', 'installation_low', 'installation_high', 'scenario_sale')
+            if all(key in prices for key in keys):
+                oral, low, high, sale = (prices[key] for key in keys)
+                if low <= high:
+                    result['scenario_ils_ex_vat'] = {
+                        'manufacturing_plus_installation': [oral + low, oral + high],
+                        'gap_before_other_costs': [sale - oral - high, sale - oral - low],
+                    }
         elif self.role == 'marketing':
             if context.get('capacity_state') != 'confirmed':
                 missing('אפשר לחקור הזדמנויות; אין להרחיב פניות לפני אימות קיבולת והרשאה.', 'supplier_capacity', 'contact_permission')
@@ -134,6 +196,11 @@ class DepartmentExpert(BaseAgent):
                 violations.append('external_execution_not_proven')
             if decision.get('collected_ils') is not None:
                 violations.append('unproven_collection')
+            review = decision.get('supplier_review')
+            if review and (not all(role in departments for role in roles_for(event['event_type']))
+                           or review.get('disposition') != 'hold_commitment'
+                           or departments['finance']['financial_truth']['verified_contractor_profit_ils'] is not None):
+                violations.append('unverified_supplier_commitment')
             if not departments or any(not d.get('evidence') for d in departments.values()):
                 violations.append('missing_department_evidence')
             result.update(status='action' if violations else 'no_change',

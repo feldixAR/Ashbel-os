@@ -193,6 +193,17 @@ def process_event(event_id, context=None, clock=None):
                                 summary='לבדוק פנימית את האירוע ברשומה הקיימת ולשמור על מועד המעקב.',
                                 next_action={'event_id': event_id, 'code': review_code,
                                              'execution': 'internal_review_only', 'work_item': item})
+                if supplier_update:
+                    review = {
+                        'manufacturing': departments['pricing'].get('manufacturing_comparison'),
+                        'installation': departments['operations'].get('installation_estimate_ils_ex_vat'),
+                        'market': departments['sales'].get('market_reference_ils_ex_vat'),
+                        'scenario': departments['finance'].get('scenario_ils_ex_vat'),
+                    }
+                    if all(review.values()):
+                        decision['supplier_review'] = {**review, 'disposition': 'hold_commitment'}
+                        decision['summary'] = ('להמשיך בדיקה פנימית. לפני החלטת התקשרות לאמת הצעת ייצור והתקנה בכתב, '
+                                               'להשוות תכולה, לבדוק שקילות לחלופה ולחשב עלות מלאה ותזרים.')
             else:
                 decision.update(code=resolve_code,
                                 summary='לאמת שיוך ייחודי של האירוע לרשומה קיימת לפני פעולה.',

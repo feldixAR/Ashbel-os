@@ -100,21 +100,28 @@ def test_customer_update_uses_only_an_unambiguous_existing_work_item(match_count
         assert 'work_item' not in decision['next_action']
 
 
-@pytest.mark.parametrize('event_type', ('customer.updated', 'quote.received'))
+@pytest.mark.parametrize('event_type', ('customer.updated', 'quote.received', 'supplier.updated'))
 def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypatch):
     from services.integrations.business_source import WORK_HEADERS, WORK_SECTION_END
 
     source = context()
+    kind = 'supplier' if event_type == 'supplier.updated' else 'customer'
     source['spreadsheet_id'] = 'authorized_workbook_0001'
     source['actions'].append({
-        'subject': 'customer', 'kind': 'customer', 'disposition': 'future',
+        'subject': kind, 'kind': kind, 'disposition': 'future',
         'action': 'internal follow-up', 'due_date': '2026-11-19', 'blocked_reasons': [],
         'evidence': {'range': "'תור עבודה'!A3:H3"},
     })
-    rows = [list(WORK_HEADERS), [], ['customer', 'next', 'date', 'open', 'owner', 'old note'],
+    rows = [list(WORK_HEADERS), [], [kind, 'next', 'date', 'open', 'owner', 'old note'],
             [WORK_SECTION_END]]
     event = envelope()
-    event.update(event_type=event_type, facts={'work_item_subject': 'customer'})
+    event.update(event_type=event_type, facts={'work_item_subject': kind})
+    if kind == 'supplier':
+        event['facts']['prices_ils_ex_vat'] = {
+            'manufacturing_oral': 20000, 'opening': 23000, 'manufacturing_estimate': 25000,
+            'installation_low': 3000, 'installation_high': 4000, 'scenario_sale': 32000,
+            'market_quote': 33000, 'market_floor': 31000,
+        }
     monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_ENABLED', 'true')
     monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_SOURCE', event['source'])
     monkeypatch.setenv('ASHBEL_SOURCE_SPREADSHEET_ID', source['spreadsheet_id'])
@@ -149,7 +156,14 @@ def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypat
         assert rt.process_event(first['id'], context=source)['status'] == 'not_claimed'
         session.post.assert_called_once()
         assert session.get.call_count == 3
-        assert rows[2][:5] == ['customer', 'next', 'date', 'open', 'owner']
+        assert rows[2][:5] == [kind, 'next', 'date', 'open', 'owner']
+        if kind == 'supplier':
+            assert {'sales', 'pricing', 'operations', 'procurement', 'engineering', 'finance'} <= audit['departments'].keys()
+            review = audit['ceo_decision']['supplier_review']
+            assert review['disposition'] == 'hold_commitment'
+            assert review['manufacturing']['estimate_gap_pct'] == 20
+            assert review['scenario']['gap_before_other_costs'] == [8000, 9000]
+            assert all(value in rows[2][5] for value in ('20,000', '3,000–4,000', '8,000–9,000', '0.800'))
 
 
 def test_missing_source_blocks_without_consuming_attempts_and_retry_preserves_event():

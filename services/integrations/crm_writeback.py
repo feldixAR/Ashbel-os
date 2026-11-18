@@ -95,6 +95,20 @@ def write_review_note(event, context, decision):
     kind = ('עדכון לקוח' if event['event_type'] == 'customer.updated' else
             'עדכון רכש פנימי' if event['event_type'] == 'supplier.updated' else 'קליטת הצעה')
     summary = f'{kind} עבר בדיקה פנימית. המשך בהתאם לפעולה ולמועד ברשומה.'
+    if review := decision.get('supplier_review'):
+        manufacturing, market = review['manufacturing'], review['market']
+        installation_low, installation_high = review['installation']
+        cost_low, cost_high = review['scenario']['manufacturing_plus_installation']
+        gap_low, gap_high = review['scenario']['gap_before_other_costs']
+        summary = (
+            f"בדיקת ספקים פנימית (₪ לפני מע״מ). ייצור בעל פה {manufacturing['oral_ils_ex_vat']:,}, "
+            f"פתיחה {manufacturing['opening_ils_ex_vat']:,}, אומדן {manufacturing['estimate_ils_ex_vat']:,}. "
+            f"פער {manufacturing['estimate_gap_pct']:.1f}%, יחס {manufacturing['calibration_ratio_only']:.3f} לכיול בלבד. "
+            f"התקנה באומדן {installation_low:,}–{installation_high:,}, יחד {cost_low:,}–{cost_high:,}. "
+            f"השוואות מכירה {market['market_quote']:,} ו־{market['market_floor']:,}, תכולה טרם אומתה. "
+            f"בתרחיש מכירה {market['scenario_sale']:,}, פער {gap_low:,}–{gap_high:,} לפני יתר העלויות. "
+            f"החלטה: {decision['summary']}"
+        )
     url = f'https://sheets.googleapis.com/v4/spreadsheets/{workbook}'
     work_range = quote(WORK_RANGE, safe='')
     credentials = Credentials.from_service_account_info(info, scopes=[SHEETS_SCOPE])
