@@ -177,13 +177,16 @@ def process_event(event_id, context=None, clock=None):
                     'summary': plan['top_action'], 'next_action': top,
                     'executed_external_action': False, 'collected_ils': None,
                     'requires_owner_approval': False, 'execution_scope': 'internal_analysis_and_audit_only'}
-        if event['event_type'] in {'customer.updated', 'quote.received'}:
+        if event['event_type'] in {'customer.updated', 'quote.received', 'supplier.updated'}:
             customer_update = event['event_type'] == 'customer.updated'
-            review_code = 'review_customer_work_item' if customer_update else 'review_quote_work_item'
-            resolve_code = 'resolve_customer_work_item' if customer_update else 'resolve_quote_work_item'
+            supplier_update = event['event_type'] == 'supplier.updated'
+            review_code = ('review_customer_work_item' if customer_update else
+                           'review_supplier_work_item' if supplier_update else 'review_quote_work_item')
+            resolve_code = ('resolve_customer_work_item' if customer_update else
+                            'resolve_supplier_work_item' if supplier_update else 'resolve_quote_work_item')
             subject = event['facts'].get('work_item_subject')
             matches = [item for item in context['actions'] if subject and item['subject'] == subject
-                       and item.get('kind') == 'customer']
+                       and item.get('kind') == ('supplier' if supplier_update else 'customer')]
             if len(matches) == 1:
                 item = matches[0]
                 decision.update(code=review_code,
