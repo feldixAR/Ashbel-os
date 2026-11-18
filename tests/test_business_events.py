@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import pytest
 
 os.environ.setdefault('DATABASE_URL', 'sqlite:///:memory:')
@@ -98,6 +98,58 @@ def test_customer_update_uses_only_an_unambiguous_existing_work_item(match_count
     else:
         assert decision['code'] == 'resolve_customer_work_item'
         assert 'work_item' not in decision['next_action']
+
+
+@pytest.mark.parametrize('event_type', ('customer.updated', 'quote.received'))
+def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypatch):
+    from services.integrations.business_source import WORK_HEADERS, WORK_SECTION_END
+
+    source = context()
+    source['spreadsheet_id'] = 'authorized_workbook_0001'
+    source['actions'].append({
+        'subject': 'customer', 'kind': 'customer', 'disposition': 'future',
+        'action': 'internal follow-up', 'due_date': '2026-11-19', 'blocked_reasons': [],
+        'evidence': {'range': "'תור עבודה'!A3:H3"},
+    })
+    rows = [list(WORK_HEADERS), [], ['customer', 'next', 'date', 'open', 'owner', 'old note'],
+            [WORK_SECTION_END]]
+    event = envelope()
+    event.update(event_type=event_type, facts={'work_item_subject': 'customer'})
+    monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_ENABLED', 'true')
+    monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_SOURCE', event['source'])
+    monkeypatch.setenv('ASHBEL_SOURCE_SPREADSHEET_ID', source['spreadsheet_id'])
+    monkeypatch.setenv('ASHBEL_CRM_WORK_SHEET_ID', '12')
+    monkeypatch.setenv('ASHBEL_CRM_WRITEBACK_SERVICE_ACCOUNT_JSON', json.dumps(
+        {'type': 'service_account', 'token_uri': 'https://oauth2.googleapis.com/token'}))
+
+    def get(url, **kwargs):
+        payload = ({'values': rows} if '/values/' in url else
+                   {'sheets': [{'properties': {'title': 'תור עבודה', 'sheetId': 12}}]})
+        return Mock(json=Mock(return_value=payload))
+
+    def post(url, *, json, **kwargs):
+        request = json['requests'][0]['findReplace']
+        assert request['find'] == rows[2][5]
+        assert request['range']['startRowIndex'] == 2 and request['range']['startColumnIndex'] == 5
+        rows[2][5] = request['replacement']
+        return Mock(json=Mock(return_value={'replies': [{'findReplace': {'occurrencesChanged': 1}}]}))
+
+    with patch('google.oauth2.service_account.Credentials.from_service_account_info'), \
+         patch('google.auth.transport.requests.AuthorizedSession') as transport:
+        session = transport.return_value.__enter__.return_value
+        session.get.side_effect = get
+        session.post.side_effect = post
+        first = rt.ingest_event(event)
+        result = rt.process_event(first['id'], context=source)
+        audit = rt.get_event(first['id'])['output']
+        assert result['status'] == 'analyzed' and audit['independent_auditor']['passed']
+        assert audit['source_writeback'] == {'status': 'verified', 'replayed': False, 'cell': "'תור עבודה'!F3"}
+        assert 'marketing' in audit['not_run_roles'] and audit['external_execution'] is False
+        assert rt.ingest_event(event)['duplicate']
+        assert rt.process_event(first['id'], context=source)['status'] == 'not_claimed'
+        session.post.assert_called_once()
+        assert session.get.call_count == 3
+        assert rows[2][:5] == ['customer', 'next', 'date', 'open', 'owner']
 
 
 def test_missing_source_blocks_without_consuming_attempts_and_retry_preserves_event():

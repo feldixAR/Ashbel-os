@@ -1,8 +1,8 @@
 """Persistent idempotent inbox with CAS leases, bounded retries and task traces.
 
-Processing performs local analysis and audit only. No sender, purchase or Google
-write API is reachable from this module. A reclaimed lease can repeat pure local
-computation; only the current lease can commit its result.
+Processing performs local analysis and audit. An opt-in internal CRM note uses a
+compare-and-replace request and independent readback. A reclaimed lease can
+repeat processing, but the same event marker cannot be appended twice.
 """
 import datetime as dt
 import hashlib
@@ -139,14 +139,17 @@ def _run_role(role, event, context, trace_id, previous=None):
         s.add(task)
     task.input_data = {'event': event, 'context': context, 'previous': previous or {}}
     result = agent.execute(task)
+    ended_at = now().isoformat()
     with get_session() as s:
         stored = s.get(TaskModel, task.id)
         stored.status = 'done' if result.success else 'failed'
         stored.output_data = result.output
-        stored.completed_at = now().isoformat()
+        stored.completed_at = ended_at
     if not result.success:
         raise RuntimeError('department_failed')
-    return {**result.output, 'task_id': task.id, 'agent_id': agent.agent_id}
+    return {**result.output, 'task_id': task.id, 'agent_id': agent.agent_id,
+            'started_at': task.started_at, 'ended_at': ended_at,
+            'input_ref': event['source_ref'], 'source_timestamp': event['occurred_at']}
 
 
 def process_event(event_id, context=None, clock=None):
@@ -163,7 +166,7 @@ def process_event(event_id, context=None, clock=None):
             _finish(event_id, token, status='blocked', last_error_code='business_source_unavailable',
                     attempts=max(0, event['attempts'] - 1), next_attempt_at=(clock + dt.timedelta(minutes=15)).isoformat())
             return {'id': event_id, 'status': 'blocked', 'reason': 'business_source_unavailable'}
-        from services.business_events.departments import register_department_experts, roles_for
+        from services.business_events.departments import ROLES, register_department_experts, roles_for
         register_department_experts()
         trace_id = new_uuid()
         departments = {role: _run_role(role, event, context, trace_id) for role in roles_for(event['event_type'])}
@@ -174,20 +177,23 @@ def process_event(event_id, context=None, clock=None):
                     'summary': plan['top_action'], 'next_action': top,
                     'executed_external_action': False, 'collected_ils': None,
                     'requires_owner_approval': False, 'execution_scope': 'internal_analysis_and_audit_only'}
-        if event['event_type'] == 'customer.updated':
+        if event['event_type'] in {'customer.updated', 'quote.received'}:
+            customer_update = event['event_type'] == 'customer.updated'
+            review_code = 'review_customer_work_item' if customer_update else 'review_quote_work_item'
+            resolve_code = 'resolve_customer_work_item' if customer_update else 'resolve_quote_work_item'
             subject = event['facts'].get('work_item_subject')
             matches = [item for item in context['actions'] if subject and item['subject'] == subject
                        and item.get('kind') == 'customer']
             if len(matches) == 1:
                 item = matches[0]
-                decision.update(code='review_customer_work_item',
-                                summary='לבדוק פנימית את עדכון הלקוח ברשומה הקיימת ולשמור על מועד המעקב.',
-                                next_action={'event_id': event_id, 'code': 'review_customer_work_item',
+                decision.update(code=review_code,
+                                summary='לבדוק פנימית את האירוע ברשומה הקיימת ולשמור על מועד המעקב.',
+                                next_action={'event_id': event_id, 'code': review_code,
                                              'execution': 'internal_review_only', 'work_item': item})
             else:
-                decision.update(code='resolve_customer_work_item',
-                                summary='לאמת שיוך ייחודי של עדכון הלקוח לרשומה קיימת לפני פעולה.',
-                                next_action={'event_id': event_id, 'code': 'resolve_customer_work_item',
+                decision.update(code=resolve_code,
+                                summary='לאמת שיוך ייחודי של האירוע לרשומה קיימת לפני פעולה.',
+                                next_action={'event_id': event_id, 'code': resolve_code,
                                              'execution': 'internal_review_only'})
         elif event['event_type'] == 'message.received':
             decision.update(code='review_inbound', summary=departments['sales']['summary'],
@@ -199,11 +205,15 @@ def process_event(event_id, context=None, clock=None):
                             next_action={'event_id': event_id, 'code': 'reconcile_provider_status',
                                          'execution': 'reconcile_persisted_evidence_only'})
         auditor = _run_role('auditor', event, context, trace_id, {'departments': departments, 'ceo_decision': decision})
+        from services.integrations.crm_writeback import write_review_note
+        writeback = (write_review_note(event, context, decision) if auditor['passed']
+                     else {'status': 'not_attempted', 'reason': 'audit_rejected'})
         output = {'mode': 'native_deterministic', 'departments': departments, 'ceo_decision': decision,
                   'independent_auditor': auditor, 'source_fingerprint': context['snapshot_sha256'],
-                  'source_writeback': {'status': 'not_attempted', 'reason': 'read_only_runtime'},
+                  'not_run_roles': [role for role in ROLES if role not in departments and role != 'auditor'],
+                  'source_writeback': writeback,
                   'external_execution': False}
-        status = 'analyzed' if auditor['passed'] else 'review_required'
+        status = 'analyzed' if auditor['passed'] and writeback['status'] != 'blocked' else 'review_required'
         committed = _finish(event_id, token, status=status, trace_id=trace_id, output=output,
                             next_attempt_at=None, last_error_code=None)
         return {'id': event_id, 'status': status if committed else 'lease_lost', 'trace_id': trace_id}
