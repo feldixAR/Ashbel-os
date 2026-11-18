@@ -49,7 +49,11 @@ def _record_last_run(job_id: str) -> None:
 # ── Job implementations ───────────────────────────────────────────────────────
 
 def _job_followup():
-    """Send due follow-ups for all active goals."""
+    """Process governed business events when enabled; otherwise legacy goals."""
+    from services.business_events.runtime import enabled as business_events_enabled
+    if business_events_enabled():
+        from services.business_events.runtime import poll_source_and_process
+        return poll_source_and_process()
     try:
         from services.storage.repositories.goal_repo import GoalRepository
         from engines.outreach_engine import outreach_engine
@@ -87,6 +91,12 @@ def _job_followup():
 
 def _job_daily_plan():
     """Build and log the daily revenue plan."""
+    if os.getenv('ASHBEL_DISCOVERY_ENABLED', '').lower() == 'true':
+        try:
+            from services.integrations.source_discovery import run_configured_discovery
+            run_configured_discovery()
+        except Exception as exc:
+            log.warning('[Scheduler] source discovery blocked: %s', type(exc).__name__)
     try:
         from engines.outreach_engine import outreach_engine
         from engines.revenue_engine   import revenue_snapshot
@@ -95,7 +105,13 @@ def _job_daily_plan():
 
         from services.integrations.business_source import enabled, load_business_context, context_plan
         if enabled():
-            plan = context_plan(load_business_context())
+            source_context = load_business_context()
+            plan = context_plan(source_context)
+            from services.business_events.runtime import enabled as business_events_enabled
+            if business_events_enabled():
+                from services.business_events.runtime import enqueue_source_snapshot, process_pending
+                enqueue_source_snapshot(source_context)
+                process_pending(context=source_context)
             event_bus.publish(ET.SCHEDULER_JOB_RAN, payload={
                 "job": "daily_plan", "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "plan": plan,

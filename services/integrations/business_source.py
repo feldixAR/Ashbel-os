@@ -20,6 +20,8 @@ WORK_HEADERS = ("נושא / לקוח", "פעולה נדרשת", "מועד", "ס�
                 "אחראי", "הקשר ומידע חשוב", "מקור", "קבוצה אחראית")
 LEADS_RANGE = "'לידים'!A1:AE1000"
 WORK_RANGE = "'תור עבודה'!A1:H50"
+PILOT_RANGE = "'לוח בקרה'!A84:C92"
+PILOT_SUBJECT = "פיילוט קבלן ראשי — רכש ייצור + צוות התקנה"
 WORK_SECTION_END = "מעקבי לידים"
 
 
@@ -75,6 +77,7 @@ def _read_values(spreadsheet_id: str) -> dict:
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{quote(spreadsheet_id, safe='')}/values:batchGet"
     with requests.get(url, headers={"Authorization": f"Bearer {credentials.token}"},
                       params=[("ranges", LEADS_RANGE), ("ranges", WORK_RANGE),
+                              ("ranges", PILOT_RANGE),
                               ("valueRenderOption", "FORMATTED_VALUE")],
                       timeout=(5, 15), stream=True, allow_redirects=False) as response:
         response.raise_for_status()
@@ -111,13 +114,29 @@ def _records(values: list, required: tuple, max_rows: int, max_cols: int,
     return records
 
 
+def _pilot_gate(values: list, fingerprint: str) -> dict:
+    state = "unverified"
+    if (len(values) == 9 and values[0][:1] == ["שער החלטה — פיילוט מעוז"]
+            and values[8][:1] == ["הכרעת מערכת"] and len(values[8]) >= 2):
+        result = values[8][1]
+        if result == "ממתין לנתונים":
+            state = "waiting"
+        elif result in {"עצור — מרווח או תזרים", "עצור — קלט לבדיקה"}:
+            state = "stopped"
+        elif result == "מוכן לבדיקת מנכ״ל":
+            expected = ["מתועד"] * 4 + ["הוזן", "הוזנה", "חיובי"]
+            if [row[2:3] for row in values[1:8]] == [[status] for status in expected]:
+                state = "ready_for_review"
+    return {"state": state, "evidence": {"range": PILOT_RANGE, "snapshot_sha256": fingerprint}}
+
+
 def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> dict:
     as_of = dt.datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
     if as_of.tzinfo is None:
         as_of = as_of.replace(tzinfo=dt.timezone.utc)
     today = as_of.astimezone(ZoneInfo("Asia/Jerusalem")).date()
     ranges = payload.get("valueRanges", [])
-    if len(ranges) != 2:
+    if len(ranges) not in (2, 3):
         raise ValueError("missing_ranges")
     lead_values = ranges[0].get("values", [])
     if len(lead_values) == 1000 and any(str(v).strip() for v in lead_values[-1]):
@@ -129,6 +148,7 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
         raise ValueError("duplicate_lead_ids")
     fingerprint = hashlib.sha256(json.dumps(ranges, ensure_ascii=False,
                                           sort_keys=True).encode()).hexdigest()
+    pilot = _pilot_gate(ranges[2].get("values", []) if len(ranges) == 3 else [], fingerprint)
     decisions, actions = [], []
     capacity_blocked = False
     capacity_confirmed = False
@@ -191,6 +211,13 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
             action["blocked_reasons"].append("specification_pending")
         if action["blocked_reasons"] and action["disposition"] == "actionable":
             action["disposition"] = "blocked"
+        if len(ranges) == 3 and action["subject"] == PILOT_SUBJECT and action["disposition"] != "completed":
+            action["pilot_gate"] = pilot
+            if pilot["state"] in {"stopped", "unverified"}:
+                action["disposition"] = "needs_review"
+                action["blocked_reasons"].append("pilot_gate_" + pilot["state"])
+            elif pilot["state"] == "ready_for_review" and action["disposition"] == "actionable":
+                action["action"] = "לאמת אסמכתאות, רווח ותזרים בפיילוט ולהביא להכרעת מנכ״ל."
     return {"health": "read_ok", "fetched_at": fetched_at, "source_updated_at": None,
             "source_freshness": "not_verified", "spreadsheet_id": spreadsheet_id,
             "snapshot_sha256": fingerprint, "lead_count": len(leads), "work_count": len(work),
@@ -199,7 +226,8 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
             "proposal_lead_facts_truncated": max(0, len(proposal_rows) - len(lead_facts)),
             "capacity_state": capacity_state,
             "lead_acquisition_allowed": capacity_state == "confirmed", "decisions": decisions,
-            "actions": actions, "source_ranges": [LEADS_RANGE, WORK_RANGE],
+            "actions": actions, "pilot_gate": pilot,
+            "source_ranges": [LEADS_RANGE, WORK_RANGE] + ([PILOT_RANGE] if len(ranges) == 3 else []),
             "financial_truth": {"collected_commission_ils": None,
                                 "recognition": "requires_collection_evidence"},
             "delivery_truth": "approved_draft_is_not_sent",

@@ -498,3 +498,12 @@ Removed the literal API-key example from tracked docs, environment sample, local
 The intake classifier now recognizes complete English words aluminum/aluminium case-insensitively. Hebrew matching, scoring points, stage rules and business thresholds are unchanged. Belgian-window style alone does not establish aluminum material: the completion-run fixture now explicitly says aluminum belgian window. Added positive, word-boundary and steel/unspecified-material regression checks.
 
 Validation: full suite at the original master base plus this change: 544 passed, 23 subtests passed; no failures. No production action was performed.
+
+## 2026-11-16 — Durable business-event inbox
+
+Added an opt-in durable event inbox, authenticated API, native deterministic
+registry experts and separate auditor, with persisted TaskModel provenance.
+Existing daily-plan/follow-up jobs process the inbox; enabled follow-up bypasses
+the legacy sender. CAS leases/retry/dead-letter are safe because the processing
+section has no external effects. Analysis is not business closure or writeback.
+See docs/BUSINESS_EVENTS.md. Deployment and PostgreSQL live validation pending.

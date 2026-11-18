@@ -1,0 +1,99 @@
+name: Company foundation checks
+
+on:
+  push:
+    branches:
+      - qa/company-foundation
+      - feat/durable-business-events
+  pull_request:
+    branches:
+      - master
+      - qa/company-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: company-checks-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      ENV: test
+      DATABASE_URL: "sqlite:///:memory:"
+      PYTHONPATH: .
+      ASHBEL_SOURCE_CONTEXT_ENABLED: "false"
+      ASHBEL_BUSINESS_EVENTS_ENABLED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Full isolated regression suite
+        run: python -m pytest -q --junitxml=test-results.xml
+      - name: Repeat concurrent claim checks after contention fix
+        run: |
+          for attempt in 1 2 3; do
+            python -m pytest -q tests/test_scheduler_claims.py::test_workers_and_fresh_process_replay_invoke_exactly_once tests/test_business_events.py::test_multi_process_claims_are_exclusive
+          done
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: company-regression-results
+          path: test-results.xml
+          retention-days: 7
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16@sha256:dd2bf3ce2dc83a81674cf7f217fcfd8a5009a4b325dda5b843bfee82a06cff6f
+        env:
+          POSTGRES_DB: ashbel_ci
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ashbel_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      ENV: test
+      TEST_POSTGRES_URL: postgresql://ci:disposable-ci-only@localhost:5432/ashbel_ci
+      PYTHONPATH: .
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: PostgreSQL multi-process and restart checks
+        run: python -m pytest -q tests/test_postgres_claims.py --junitxml=postgres-results.xml
+      - name: Preserve PostgreSQL results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: company-postgres-results
+          path: postgres-results.xml
+          retention-days: 7
