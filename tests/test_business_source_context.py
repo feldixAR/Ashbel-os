@@ -5,7 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from services.integrations.business_source import (
-    WORK_HEADERS, LEAD_HEADERS, interpret_snapshot, load_business_context, context_plan,
+    WORK_HEADERS, LEAD_HEADERS, PILOT_RANGE, PILOT_SUBJECT,
+    interpret_snapshot, load_business_context, context_plan,
 )
 
 
@@ -106,6 +107,42 @@ def test_source_change_changes_fingerprint():
     data = fixture()
     data["valueRanges"][1]["values"][1][1] = "בדיקת קיבולת חדשה"
     assert interpret_snapshot(data, "synthetic", "2026-11-16T12:00:00+00:00")["snapshot_sha256"] != snapshot()["snapshot_sha256"]
+
+
+@pytest.mark.parametrize(("result", "evidence_complete", "state", "disposition"), [
+    ("ממתין לנתונים", False, "waiting", "actionable"),
+    ("עצור — מרווח או תזרים", True, "stopped", "needs_review"),
+    ("מוכן לבדיקת מנכ״ל", False, "unverified", "needs_review"),
+    ("מוכן לבדיקת מנכ״ל", True, "ready_for_review", "actionable"),
+])
+def test_pilot_decision_uses_live_gate_without_granting_execution(
+        result, evidence_complete, state, disposition):
+    data = fixture()
+    data["valueRanges"][1]["values"].insert(1, [
+        PILOT_SUBJECT, "לקלוט הצעת ייצור", "2026-11-16", "פתוח",
+        "בעלים", "", "fixture:pilot", "רכש",
+    ])
+    checks = ["מתועד"] * 4 + ["הוזן", "הוזנה", "חיובי"]
+    if not evidence_complete:
+        checks[2] = "חסר"
+    data["valueRanges"].append({"values": [
+        ["שער החלטה — פיילוט מעוז", "קלט מאומת", "מצב"],
+        *[["בדיקה סינתטית", "", status] for status in checks],
+        ["הכרעת מערכת", result],
+    ]})
+
+    context = interpret_snapshot(data, "synthetic", "2026-11-16T12:00:00+00:00")
+    plan = context_plan(context)
+    pilot = context["actions"][0]
+
+    assert pilot["pilot_gate"]["state"] == state
+    assert pilot["pilot_gate"]["evidence"]["range"] == PILOT_RANGE
+    assert pilot["disposition"] == disposition
+    assert context["permissions"] == "read_only_no_external_actions"
+    assert plan["recommendations_only"] is True
+    assert (pilot in plan["priority_items"]) == (disposition == "actionable")
+    if state == "ready_for_review":
+        assert "להכרעת מנכ״ל" in pilot["action"]
 
 
 def test_closed_supplier_task_does_not_block_new_capacity():
