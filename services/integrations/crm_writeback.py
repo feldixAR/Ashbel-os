@@ -7,7 +7,7 @@ from urllib.parse import quote
 from services.integrations.business_source import WORK_HEADERS, WORK_RANGE, WORK_SECTION_END
 
 SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
-SAFE_EVENTS = {'customer.updated', 'quote.received'}
+SAFE_EVENTS = {'customer.updated', 'quote.received', 'supplier.updated'}
 
 
 def _blocked(reason):
@@ -92,7 +92,8 @@ def write_review_note(event, context, decision):
     if info.get('type') != 'service_account' or info.get('token_uri') != 'https://oauth2.googleapis.com/token':
         return _blocked('invalid_writer_credentials')
     marker = f"[ashbel-event:{event['fingerprint']}]"
-    kind = 'עדכון לקוח' if event['event_type'] == 'customer.updated' else 'קליטת הצעה'
+    kind = ('עדכון לקוח' if event['event_type'] == 'customer.updated' else
+            'עדכון רכש פנימי' if event['event_type'] == 'supplier.updated' else 'קליטת הצעה')
     summary = f'{kind} עבר בדיקה פנימית. המשך בהתאם לפעולה ולמועד ברשומה.'
     url = f'https://sheets.googleapis.com/v4/spreadsheets/{workbook}'
     work_range = quote(WORK_RANGE, safe='')
