@@ -76,6 +76,30 @@ def test_actual_department_execution_preserves_evidence_and_outbound_boundary():
     assert rt.process_event(event['id'], context=context())['status'] == 'not_claimed'
 
 
+@pytest.mark.parametrize('match_count', (0, 1, 2))
+def test_customer_update_uses_only_an_unambiguous_existing_work_item(match_count):
+    source = context()
+    item = {'subject': 'לקוח סינתטי', 'kind': 'customer', 'disposition': 'future',
+            'action': 'מעקב פנימי', 'due_date': '2026-11-19', 'blocked_reasons': [],
+            'evidence': {'range': "'תור עבודה'!A3:H3"}}
+    source['actions'].extend(item.copy() for _ in range(match_count))
+    event = envelope()
+    event.update(event_type='customer.updated', facts={'work_item_subject': item['subject']})
+    event_id = rt.ingest_event(event)['id']
+    assert rt.process_event(event_id, context=source)['status'] == 'analyzed'
+    output = rt.get_event(event_id)['output']
+    decision = output['ceo_decision']
+    assert decision['executed_external_action'] is False
+    assert decision['next_action']['execution'] == 'internal_review_only'
+    assert output['source_writeback']['status'] == 'not_attempted'
+    if match_count == 1:
+        assert decision['code'] == 'review_customer_work_item'
+        assert decision['next_action']['work_item'] == item
+    else:
+        assert decision['code'] == 'resolve_customer_work_item'
+        assert 'work_item' not in decision['next_action']
+
+
 def test_missing_source_blocks_without_consuming_attempts_and_retry_preserves_event():
     eid = rt.ingest_event(envelope())['id']
     clock = dt.datetime.now(dt.timezone.utc)

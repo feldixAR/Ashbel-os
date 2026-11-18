@@ -174,7 +174,22 @@ def process_event(event_id, context=None, clock=None):
                     'summary': plan['top_action'], 'next_action': top,
                     'executed_external_action': False, 'collected_ils': None,
                     'requires_owner_approval': False, 'execution_scope': 'internal_analysis_and_audit_only'}
-        if event['event_type'] == 'message.received':
+        if event['event_type'] == 'customer.updated':
+            subject = event['facts'].get('work_item_subject')
+            matches = [item for item in context['actions'] if subject and item['subject'] == subject
+                       and item.get('kind') == 'customer']
+            if len(matches) == 1:
+                item = matches[0]
+                decision.update(code='review_customer_work_item',
+                                summary='לבדוק פנימית את עדכון הלקוח ברשומה הקיימת ולשמור על מועד המעקב.',
+                                next_action={'event_id': event_id, 'code': 'review_customer_work_item',
+                                             'execution': 'internal_review_only', 'work_item': item})
+            else:
+                decision.update(code='resolve_customer_work_item',
+                                summary='לאמת שיוך ייחודי של עדכון הלקוח לרשומה קיימת לפני פעולה.',
+                                next_action={'event_id': event_id, 'code': 'resolve_customer_work_item',
+                                             'execution': 'internal_review_only'})
+        elif event['event_type'] == 'message.received':
             decision.update(code='review_inbound', summary=departments['sales']['summary'],
                             next_action={'event_id': event_id, 'code': 'review_inbound',
                                          'execution': 'draft_for_owner_review_only'},
