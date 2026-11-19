@@ -236,13 +236,15 @@ def test_future_waiting_and_review_tasks_preserved_but_not_proposed_now():
     rows.insert(1, ["פרויקט סינתטי עתידי", "שיחת המשך", "25.11.2026 15:00", "פתוח", "בעלים", "", "fixture:future", "מכירות"])
     rows.insert(2, ["פרויקט בבדיקה", "בדיקת מסמך", "", "לא מאומת", "בעלים", "", "fixture:review", "מכירות"])
     rows.insert(3, ["מסמכים כלליים", "סידור מסמכים", "", "פתוח", "בעלים", "כולל חומר של אולם ובחירת מפרט", "fixture:docs", "ידע"])
+    rows.insert(4, ["לקוח בהשהיה", "לפתוח מחדש רק בעקבות תגובה", "", "העסקה בהשהיה תפעולית", "בעלים", "", "fixture:hold", "מכירות"])
     context = interpret_snapshot(data, "synthetic", "2026-11-16T12:00:00+00:00")
     disposition = {a["subject"]: a["disposition"] for a in context["actions"]}
     assert disposition["פרויקט סינתטי עתידי"] == "future"
     assert disposition["פרויקט בבדיקה"] == "needs_review"
     assert disposition["פרויקט סינתטי"] == "waiting"
     assert disposition["מסמכים כלליים"] == "actionable"
-    assert len(context["actions"]) == 6
+    assert disposition["לקוח בהשהיה"] == "waiting"
+    assert len(context["actions"]) == 7
     assert {a["subject"] for a in context_plan(context)["priority_items"]} == {"ספק סינתטי", "מסמכים כלליים"}
 
 
