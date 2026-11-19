@@ -141,8 +141,8 @@ def _business_update(message, previous_event_id, pending_message):
                 subject = (previous.get("facts") or {}).get("work_item_subject")
                 matches = [item for item in items if item["subject"] == subject]
 
-    if review and len(matches) <= 1 and (review == "portfolio" or matches):
-        return _business_review(runtime, source, context, matches[0] if matches else None)
+    if review and len(matches) <= 1 and (review in {"portfolio", "deal_priorities"} or matches):
+        return _business_review(runtime, source, context, matches[0] if matches else None, review)
     if review or len(matches) != 1:
         return _error("על איזה פרויקט או ספק מדובר? אפשר לענות בשם שבו אתה משתמש בדרך כלל.", 422)
 
@@ -188,7 +188,9 @@ def _business_update(message, previous_event_id, pending_message):
 
 
 def _review_intent(words):
-    if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | (?:איזה|אילו) עסקאות | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
+    if re.search(r" (?:איזה|אילו) עסקאות ", words):
+        return "deal_priorities"
+    if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
         return "portfolio"
     if re.match(
         r"^(?:מה (?:כדאי לעשות|לעשות|עושים|המצב|מצב|הסטטוס|הצעד הבא|קורה עם)"
@@ -199,17 +201,18 @@ def _review_intent(words):
     return None
 
 
-def _business_review(runtime, source, context, item):
+def _business_review(runtime, source, context, item, review):
     snapshot = context["snapshot_sha256"]
     subject = item["subject"] if item else None
     now = runtime.now()
     day = now.astimezone(ZoneInfo("Asia/Jerusalem")).date().isoformat()
-    key = hashlib.sha256(f"{day}\n{snapshot}\n{subject}".encode()).hexdigest()
+    scope = "deal" if item else review
+    key = hashlib.sha256(f"v2\n{day}\n{snapshot}\n{scope}\n{subject}".encode()).hexdigest()
     receipt = runtime.ingest_event({
         "source": source, "source_event_id": f"chat-review-{key}",
         "source_ref": "ashbelos:owner-console", "event_type": "source.snapshot",
         "occurred_at": now.isoformat(),
-        "facts": {"review_scope": "deal" if item else "portfolio", "work_item_subject": subject,
+        "facts": {"review_scope": scope, "work_item_subject": subject,
                   "snapshot_sha256": snapshot, "external_contact_authorized": False},
     })
     event_id = receipt["id"]
