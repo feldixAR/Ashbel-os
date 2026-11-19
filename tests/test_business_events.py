@@ -203,6 +203,10 @@ def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypat
             assert '2 פתוחים' in overview['message'] and 'טרם אומתו' in overview['message']
             replay = client.post(url, json=view, headers=headers).get_json()['data']
             assert replay['duplicate'] is True and replay['trace_id'] == overview['trace_id']
+            priorities = dict(message, command='איזה עסקאות כדאי לקדם היום?')
+            result = client.post(url, json=priorities, headers=headers).get_json()['data']
+            assert result['event_id'] != overview['event_id']
+            assert 'עסקאות לקידום' in result['message'] and 'אין עסקה עם צעד זמין' in result['message']
             deal = dict(message, command='איך לקדם את customer?')
             review = client.post(url, json=deal, headers=headers).get_json()['data']
             assert review['intent'] == 'business_review' and review['context_event_id'] == review['event_id']
