@@ -105,7 +105,7 @@ def _business_update(message, previous_event_id, pending_message, *,
                 name_matches.append(item)
 
     matches = matches or name_matches
-    if not matches:
+    if not matches and review not in {"portfolio", "deal_priorities"}:
         # Use only supplier aliases already recorded by the trusted event pipeline.
         related = set()
         for event in runtime.recent_events(limit=50):
@@ -147,7 +147,14 @@ def _business_update(message, previous_event_id, pending_message, *,
     if review or len(matches) != 1:
         return _error("על איזה פרויקט או ספק מדובר? אפשר לענות בשם שבו אתה משתמש בדרך כלל.", 422)
 
-    item = matches[0]
+    return _record_owner_update(runtime, source, context, matches[0], update, source_ref, delivery_id)
+
+
+def _record_owner_update(runtime, source, context, item, update, source_ref, delivery_id=None):
+    if os.getenv("ASHBEL_CRM_WRITEBACK_ENABLED", "").lower() != "true":
+        return _error("כתיבת עדכונים ל־CRM אינה זמינה כרגע.", 503)
+    if not 1 <= len(update) <= 1800 or "[ashbel-event:" in update.lower():
+        return _error("כתוב עדכון עסקי באורך של עד 1,800 תווים.", 400)
     now = runtime.now()
     day = now.astimezone(ZoneInfo("Asia/Jerusalem")).date().isoformat()
     digest = hashlib.sha256(f"{day}\n{item['subject']}\n{update}".encode()).hexdigest()

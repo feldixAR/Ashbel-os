@@ -125,3 +125,56 @@ def test_daily_work_review_ignores_pending_project_clarification(webhook, monkey
     review.assert_called_once_with(runtime, "owner_internal", context, None, "portfolio", "ashbelos:owner-telegram")
     telegram_owner.reply.assert_called_once_with(123, 1, "המשימה הראשונה מתור העבודה")
     assert "pending_message" not in state
+
+
+def test_chat_keeps_project_writes_only_owner_reports_and_reuses_draft(webhook, monkeypatch):
+    from api.routes import owner_chat
+
+    client, headers, state = webhook
+    monkeypatch.setenv("ASHBEL_TELEGRAM_CEO_CHAT_ENABLED", "true")
+    monkeypatch.setenv("ASHBEL_CRM_WRITEBACK_SOURCE", "owner_internal")
+    monkeypatch.setattr(owner_chat.runtime, "enabled", lambda: True)
+    item = {
+        "subject": "זוג סינתטי · דוגמה",
+        "kind": "customer", "disposition": "actionable", "blocked_reasons": [],
+        "due_date": "2026-11-19", "owner": "רכז מכירות",
+        "status": "ממתינים לבחירת פרופילים",
+        "action": "לבדוק את בחירת הפרופילים. " + ("פרט משני " * 60),
+        "history": "",
+    }
+    context = {"health": "read_ok", "actions": [item], "decisions": [], "capacity_state": "confirmed"}
+    monkeypatch.setattr(owner_chat, "load_business_context", lambda: context)
+    review = Mock(return_value={"intent": "business_review", "event_id": "review"})
+    monkeypatch.setattr(owner_chat, "_review", review)
+
+    def write(runtime, source, ctx, target, text, ref):
+        target["history"] += "\nעדכון בעלים: " + text + " | החלטת מנכ״ל: בדיקה"
+        return ok({"intent": "business_update", "event_id": "write", "crm_cell": "F4"})
+
+    writer = Mock(side_effect=write)
+    monkeypatch.setattr(owner_chat, "_record_owner_update", writer)
+    model = Mock(side_effect=["שלום, אשמח לעדכון על בחירת הפרופילים.", "היי, יש עדכון על הפרופילים?"])
+    monkeypatch.setattr(owner_chat, "_model_answer", model)
+
+    messages = [
+        "מה המשימות שלי היום",
+        "ומה עם זוג סינתטי?",
+        "אמרתי לו כבר שהחלון העליון חשמלי",
+        "אמרתי לו כבר שהחלון העליון חשמלי",
+        "תכין לי הודעת WhatsApp קצרה",
+        "תנסח את זה אחרת פחות רשמי",
+        "שלח אותה",
+    ]
+    for index, text in enumerate(messages, 1):
+        assert client.post(telegram_owner.WEBHOOK_PATH, json=message(text, index), headers=headers).status_code == 200
+    replies = [call.args[2] for call in telegram_owner.reply.call_args_list]
+    assert len(replies[0]) < 250
+    assert "פרט משני" not in replies[0]
+    assert "ממתינים לבחירת פרופילים" in replies[1]
+    assert "נרשם ואומת" in replies[2]
+    assert "כבר מופיע" in replies[3]
+    assert "יש עדכון" in replies[5]
+    assert "צריך אישור" in replies[6]
+    assert model.call_args_list[1].args[1]["subject"] == item["subject"]
+    writer.assert_called_once()
+    assert writer.call_args.args[3] is item

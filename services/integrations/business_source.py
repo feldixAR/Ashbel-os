@@ -182,12 +182,13 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
                 disposition = "waiting"
             elif kind != "supplier" and re.search(r"ממתין|ממתינים|להמתין|לא ללחוץ|לא לפנות", status + " " + row["פעולה נדרשת"]):
                 disposition = "waiting"
-            elif re.search(r"לבדיקה|לא מאומת|טעון אימות", status):
+            elif re.search(r"לבדיקה|לא מאומת|טעון אימות|סתירת סטטוס|לא עסקה פתוחה מאומתת", status):
                 disposition = "needs_review"
         actions.append({"subject": row["נושא / לקוח"], "action": row["פעולה נדרשת"],
                         "due": row["מועד"], "due_date": due_date.isoformat() if due_date else None,
                         "owner": row["אחראי"], "status": status, "kind": kind,
-                        "disposition": disposition, "evidence": evidence})
+                        "disposition": disposition, "evidence": evidence,
+                        "history": row["הקשר ומידע חשוב"] if kind in {"customer", "supplier"} else ""})
     # Read-only facts retain source wording. Neither a proposal amount nor draft
     # approval proves a sent message, accepted contract, collection or commission.
     proposal_rows = [row for row in leads if row.get("מצב הצעת מחיר", "").strip()

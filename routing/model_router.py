@@ -135,7 +135,7 @@ class ModelRouter:
     @staticmethod
     def call_model(model: ModelConfig, system_prompt: str,
                    user_prompt: str, max_tokens: int = 800,
-                   use_cache: bool = False) -> str:
+                   use_cache: bool = False, *, timeout: float | None = None) -> str:
         """
         Direct call to a specific model. No routing, no fallback.
         Raises on failure — caller (fallback_policy) handles exceptions.
@@ -145,7 +145,8 @@ class ModelRouter:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
         import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        options = {"timeout": timeout, "max_retries": 0} if timeout is not None else {}
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, **options)
 
         if use_cache:
             system_block = [

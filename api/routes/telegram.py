@@ -139,11 +139,16 @@ def telegram_owner_webhook():
     trace = {}
     if text and not text.startswith("/"):
         try:
-            response, status = _business_update(
-                text, state.get("previous_event_id"), state.get("pending_message"),
-                source_ref="ashbelos:owner-telegram",
-                delivery_id=f"telegram-owner-{owner}-{message_id}",
-            )
+            ceo_enabled = os.getenv("ASHBEL_TELEGRAM_CEO_CHAT_ENABLED") == "true"
+            if ceo_enabled:
+                from api.routes.owner_chat import respond
+                response, status = respond(text, state)
+            else:
+                response, status = _business_update(
+                    text, state.get("previous_event_id"), state.get("pending_message"),
+                    source_ref="ashbelos:owner-telegram",
+                    delivery_id=f"telegram-owner-{owner}-{message_id}",
+                )
             result = response.get_json()
         except Exception as exc:
             log.warning("Telegram owner business request failed: %s", type(exc).__name__)
@@ -153,12 +158,16 @@ def telegram_owner_webhook():
             trace = result["data"]
             reply_text = trace["message"]
             state.pop("pending_message", None)
-            context_id = trace.get("context_event_id") if trace["intent"] == "business_review" else trace["event_id"]
+            context_id = trace.get("context_event_id") if trace["intent"] == "business_review" else trace.get("event_id")
             if context_id:
                 state["previous_event_id"] = context_id
+            if ceo_enabled:
+                if trace.get("subject"):
+                    state["subject"] = trace["subject"]
+                state["last_answer"] = reply_text[:1800]
         else:
             reply_text = result["error"]
-            if status == 422:
+            if status == 422 and not ceo_enabled:
                 state["pending_message"] = text if len(text) > 80 else state.get("pending_message", text)
 
     reply_id = telegram_owner.reply(owner, message_id, reply_text)
@@ -166,7 +175,7 @@ def telegram_owner_webhook():
         return _error("Telegram did not confirm delivery", 503)
     state["last_message_id"] = message_id
     MemoryStore.write(namespace, key, state, updated_by="telegram")
-    log.info("Telegram owner replied message_id=%s event_id=%s intent=%s crm_readback=%s",
+    log.log(logging.INFO if log.isEnabledFor(logging.INFO) else logging.WARNING, "Telegram owner replied message_id=%s event_id=%s intent=%s crm_readback=%s",
              reply_id, trace.get("event_id"), trace.get("intent"), bool(trace.get("crm_cell")))
     return ok({"status": "replied"})
 
