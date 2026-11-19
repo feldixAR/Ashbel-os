@@ -153,7 +153,10 @@ def test_chat_keeps_project_writes_only_owner_reports_and_reuses_draft(webhook, 
 
     writer = Mock(side_effect=write)
     monkeypatch.setattr(owner_chat, "_record_owner_update", writer)
-    model = Mock(side_effect=["שלום, אשמח לעדכון על בחירת הפרופילים.", "היי, יש עדכון על הפרופילים?"])
+    model = Mock(side_effect=[
+        {"intent": "answer", "answer": "שלום, אשמח לעדכון על בחירת הפרופילים."},
+        {"intent": "answer", "answer": "היי, יש עדכון על הפרופילים?"},
+    ])
     monkeypatch.setattr(owner_chat, "_model_answer", model)
 
     messages = [
@@ -178,3 +181,56 @@ def test_chat_keeps_project_writes_only_owner_reports_and_reuses_draft(webhook, 
     assert model.call_args_list[1].args[1]["subject"] == item["subject"]
     writer.assert_called_once()
     assert writer.call_args.args[3] is item
+
+
+def test_queue_conversation_handles_followups_and_semantic_routes(webhook, monkeypatch):
+    from api.routes import owner_chat
+
+    client, headers, state = webhook
+    monkeypatch.setenv("ASHBEL_TELEGRAM_CEO_CHAT_ENABLED", "true")
+    monkeypatch.setenv("ASHBEL_CRM_WRITEBACK_SOURCE", "owner_internal")
+    monkeypatch.setattr(owner_chat.runtime, "enabled", lambda: True)
+    task = {"kind": "customer", "disposition": "actionable", "blocked_reasons": [],
+            "owner": "מכירות", "due_date": "2026-11-19", "status": "מוכן לקידום"}
+    tasks = [dict(task, subject=f"לקוח {n}", action="להכין אומדן") for n in range(1, 7)]
+    tasks[2]["action"] = "לחייג ולאמת את הצורך"
+    tasks[3]["action"] = "לא לחייג. שיחת מעקב רק אם המפרט יתקבל"
+    tasks[5]["action"] = "להתקשר לתיאום ביקור"
+    context = {"health": "read_ok", "actions": tasks, "decisions": [], "capacity_state": "confirmed"}
+    monkeypatch.setattr(owner_chat, "load_business_context", lambda: context)
+    monkeypatch.setattr(owner_chat, "_review", Mock(return_value={"intent": "business_review", "event_id": "review"}))
+    writer = Mock()
+    monkeypatch.setattr(owner_chat, "_record_owner_update", writer)
+    model = Mock(return_value={"intent": "calls"})
+    monkeypatch.setattr(owner_chat, "_model_answer", model)
+    state["subject"] = "לקוח 3"
+
+    messages = ["מה המשימות שלי היום?", "יש אבל עוד משימות", "יש עוד?",
+                "מי השיחות הבאות", "איפה להרים את השפופרת קודם?"]
+    for index, text in enumerate(messages, 1):
+        assert client.post(telegram_owner.WEBHOOK_PATH, json=message(text, index), headers=headers).status_code == 200
+    replies = [call.args[2] for call in telegram_owner.reply.call_args_list]
+    assert "1. לקוח 1" in replies[0]
+    assert "4. לקוח 4" in replies[1] and "1. לקוח 1" not in replies[1]
+    assert "אין עוד משימות" in replies[2]
+    assert replies[3] == replies[4]
+    assert "לקוח 3" in replies[3] and "לקוח 6" in replies[3] and "לקוח 4" not in replies[3]
+    assert model.call_args.args[0] == messages[-1]
+    model.assert_called_once()
+    writer.assert_not_called()
+
+
+def test_conversation_provider_timeout_uses_valid_secondary_model(monkeypatch):
+    from api.routes import owner_chat
+    from routing.model_router import model_router
+
+    class APITimeoutError(Exception):
+        pass
+
+    provider = Mock(side_effect=[APITimeoutError(), '{"intent":"calls","answer":""}'])
+    monkeypatch.setattr(model_router, "call_model", provider)
+    result = owner_chat._model_answer("איפה להרים את השפופרת?", {}, {"as_of_date_il": "2026-11-19"}, [], None)
+    assert result == {"intent": "calls"}
+    assert [call.args[0].model_id for call in provider.call_args_list] == [
+        "claude-sonnet-4-6", "claude-haiku-4-5-20251001",
+    ]

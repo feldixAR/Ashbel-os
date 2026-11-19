@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from api.middleware import _error, ok
 from api.routes.commands import _business_review, _record_owner_update, _review_intent, _topic_words
+from api.routes.owner_chat_intent import call_limit, is_call_candidate, queue_intent
 from services.business_events import runtime
 from services.integrations.business_source import context_plan, load_business_context
 
@@ -56,16 +57,21 @@ def _review(source, context, subject=None, scope="portfolio"):
     return result.get_json()["data"] if status == 200 else None
 
 
-def _mobile_priorities(context, *, customer_only=False, exclude=None, offset=0):
+def _mobile_priorities(context, *, customer_only=False, calls=False, limit=3, exclude=None, offset=0):
     available = context["actions"]
-    if customer_only:
-        available = [item for item in available if item["kind"] == "customer"
-                     and not re.search(r"אין לחדש|לא לחייג|לא לפנות|אין לפנות|שיתוף פעולה", item["action"] + item["subject"])]
+    if calls:
+        available = [item for item in available if is_call_candidate(item)]
+    elif customer_only:
+        available = [item for item in available if item["kind"] == "customer"]
     if exclude:
         available = [item for item in available if item["subject"] != exclude]
-    plan = context_plan({**context, "actions": available})["priority_items"][offset:offset + (1 if customer_only else 3)]
+    plan = context_plan({**context, "actions": available})["priority_items"][offset:offset + limit]
     if not plan:
-        return "אין כרגע לקוח עם צעד מאומת לחיוג בתור העבודה." if customer_only else "אין עוד משימות זמינות לקידום בתור העבודה."
+        if calls:
+            return "אין כרגע לקוח עם פעולת חיוג מאומתת וזמינה בתור העבודה.", 0
+        if customer_only:
+            return "אין כרגע עסקה זמינה לקידום בתור העבודה.", 0
+        return "אין עוד משימות זמינות לקידום בתור העבודה.", 0
     lines = []
     for number, item in enumerate(plan, offset + 1):
         # Display the first complete instruction when the CRM cell includes a long checklist.
@@ -74,7 +80,27 @@ def _mobile_priorities(context, *, customer_only=False, exclude=None, offset=0):
         owner = _short(item["owner"], 33) or "טרם שויך"
         due = item.get("due_date") or "טרם נקבע"
         lines.append(f"{number}. {item['subject']}\n{_short(first, 115)}\n{why} · {owner} · {due}")
-    return "\n\n".join(lines)
+    return "\n\n".join(lines), len(plan)
+
+
+def _queue_reply(source, context, items, state, message, route):
+    words = _topic_words(message)
+    calls = route == "calls"
+    customers = calls or route == "deals"
+    data = _review(source, context, scope="deal_priorities" if customers else "portfolio")
+    if not data:
+        return _error("סקירת המשימות טרם אומתה. אפשר לנסות שוב.", 503)
+    excluded = None
+    exclusion = re.search(r"(?:עזוב(?: כרגע)?(?: את)?|בלי|חוץ מ|למעט) (.+?)(?: מי | למי |$)", words)
+    if calls and exclusion:
+        item = _spoken_item(exclusion[1], items, None)
+        excluded = item["subject"] if item else None
+    offset = state.get("task_offset", 0) if route == "more" else 0
+    text, shown = _mobile_priorities(context, customer_only=customers, calls=calls,
+                                    limit=call_limit(words) if calls else 3, exclude=excluded, offset=offset)
+    if not customers:
+        data["task_offset"] = offset + shown
+    return _receipt(data, text)
 
 
 def _recent_changes(context, source, subject):
@@ -109,8 +135,8 @@ def _model_answer(message, state, context, candidates, item):
                     if re.search(r"₪|אומדן|מתקין|חשמל|שלט", line)]
         links.update(link.rstrip(".,;)") for link in _URL.findall(raw.get("source_reference", "")))
         evidence.append({**{k: row.get(k) for k in ("subject", "action", "status", "owner", "due", "disposition")},
-                         "history_start": history[:550], "history_end": history[-1200:],
-                         "relevant_evidence": "\n".join(relevant[-4:])[-2200:], "row": raw.get("range")})
+                         "history_start": history[:350], "history_end": history[-600:],
+                         "relevant_evidence": "\n".join(relevant[-3:])[-920:], "row": raw.get("range")})
     prompt = json.dumps({"message": message, "focus": item["subject"] if item else None,
                          "last_answer": state.get("last_answer", ""),
                          "crm": evidence, "as_of": context["as_of_date_il"],
@@ -125,19 +151,31 @@ def _model_answer(message, state, context, candidates, item):
         "בתסריט תן שלבים קצרים והסתעפויות; בטיוטה להשבה תן את הנוסח בלבד. "
         "בתיקון ניסוח שכתב בעל העסק השתמש בתשובה האחרונה כטיוטה, בלי לאמץ טענות לא מתועדות. "
         "אם חסרים נתונים חיוניים שאל שאלה אחת. אין תבנית קבועה. "
-        "החזר JSON בלבד {\"answer\":\"...\"} עם עד 1000 תווים, או עד 1800 אם ביקש להרחיב."
+        "סווג לפי הכוונה, בלי תלות בניסוח מדויק: tasks לרשימת משימות, more לעמוד הבא, "
+        "calls לרשימת שיחות יוצאות, deals לעסקאות לקידום, answer לכל בקשה אחרת. "
+        "החזר JSON בלבד עם intent ו-answer. בסיווג שאינו answer השאר את answer ריק. "
+        "בתשובה רגילה עד 1000 תווים, או עד 1800 אם ביקש להרחיב."
     )
-    try:
-        payload = model_router.call_model(get_model("claude_sonnet"), system,
-                                          _PRIVATE.sub("[פרטי קשר הוסרו]", prompt), 850, timeout=12)
-        payload = payload.strip().removeprefix("```json").removesuffix("```").strip()
-        answer = json.loads(payload)["answer"]
-        if isinstance(answer, str) and answer.strip() and len(answer) <= 2100:
-            if all(url.rstrip(".,;)") in links for url in _URL.findall(answer)):
-                return answer.strip()
-    except Exception as exc:
-        log.warning("Owner conversation model unavailable: %s", type(exc).__name__)
+    user_prompt = _PRIVATE.sub("[פרטי קשר הוסרו]", prompt)
+    for model_key, timeout in (("claude_sonnet", 18), ("claude_haiku", 7)):
+        try:
+            payload = model_router.call_model(get_model(model_key), system, user_prompt, 650, timeout=timeout)
+            payload = payload.strip().removeprefix("```json").removesuffix("```").strip()
+            result = json.loads(payload)
+            intent = result.get("intent")
+            if intent in {"tasks", "more", "calls", "deals"}:
+                return {"intent": intent}
+            answer = result.get("answer")
+            if (intent in {"answer", None} and isinstance(answer, str) and 1 <= len(answer.strip()) <= 2100
+                    and all(url.rstrip(".,;)") in links for url in _URL.findall(answer))):
+                return {"intent": "answer", "answer": answer.strip()}
+            log.warning("Owner conversation model returned an invalid response: %s", model_key)
+        except Exception as exc:
+            log.warning("Owner conversation model unavailable: %s %s", model_key, type(exc).__name__)
+            if type(exc).__name__ in {"AuthenticationError", "PermissionDeniedError"}:
+                break
     return None
+
 
 
 def respond(text, state):
@@ -158,8 +196,9 @@ def respond(text, state):
     active = next((row for row in items if row["subject"] == state.get("subject")), None)
     item = _spoken_item(message, items, active)
     scope = _review_intent(f" {words} ")
-    more = bool(re.fullmatch(r"(?:תן לי )?עוד משימות", words))
-    callers = bool(re.search(r"מי (?:הלקוח הבא|כדאי להתקשר|לחייג)|למי (?:כדאי להתקשר|לחייג)", words))
+    route = queue_intent(words)
+    if route is None:
+        route = {"portfolio": "tasks", "deal_priorities": "deals"}.get(scope)
 
     if _REPORT.match(words) and "?" not in message:
         if not item:
@@ -181,14 +220,8 @@ def respond(text, state):
         explicit = _spoken_item(message, items, None)
         return _receipt(data, _recent_changes(context, source, explicit["subject"] if explicit else None))
 
-    if scope in {"portfolio", "deal_priorities"} or callers or more:
-        customer_only = callers or scope == "deal_priorities"
-        data = _review(source, context, scope="deal_priorities" if customer_only else "portfolio")
-        if not data:
-            return _error("סקירת המשימות טרם אומתה. אפשר לנסות שוב.", 503)
-        return _receipt(data, _mobile_priorities(context, customer_only=customer_only,
-                                                exclude=item["subject"] if callers and item else None,
-                                                offset=3 if more else 0))
+    if route:
+        return _queue_reply(source, context, items, state, message, route)
     correction = bool(re.match(r"^(?:התכוונתי|לא הבנת אותי)(?: |$)", words))
     if correction and not item:
         return _error("לאיזה פרויקט התכוונת?", 422)
@@ -211,10 +244,17 @@ def respond(text, state):
         candidates = [item] + [row for row in items if row != item and row["kind"] == "supplier"][:2]
     else:
         candidates = (ranked[:3] + [row for row in items if row["kind"] == "supplier" and row not in ranked[:3]])[:6]
+    result = _model_answer(message, state, context, candidates, item)
+    if result and result["intent"] != "answer":
+        return _queue_reply(source, context, items, state, message, result["intent"])
     data = _review(source, context, item, "deal") if item else _review(source, context)
     if not data:
         return _error("סקירת מקור האמת טרם אומתה. אפשר לנסות שוב.", 503)
-    reply = _model_answer(message, state, context, candidates, item)
-    if reply is None:
-        return _error("ניתוח השיחה החופשית אינו זמין כרגע. קריאת ה־CRM הצליחה.", 503)
-    return _receipt({**data, "intent": "business_conversation"}, reply, item["subject"] if item else None)
+    if result:
+        return _receipt({**data, "intent": "business_conversation"}, result["answer"], item["subject"] if item else None)
+    if item:
+        text = (f"ניתוח השיחה התעכב. מתוך ה־CRM עבור {item['subject']}:\n"
+                f"{_short(item['status'], 180)}\n\nהצעד הבא: {_short(item['action'], 180)}")
+    else:
+        text = "ניתוח השאלה התעכב. אפשר לבקש את המשימות או את השיחות הבאות ישירות מתור העבודה."
+    return _receipt({**data, "intent": "business_conversation_fallback"}, text, item["subject"] if item else None)

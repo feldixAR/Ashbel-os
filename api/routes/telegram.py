@@ -164,7 +164,10 @@ def telegram_owner_webhook():
             if ceo_enabled:
                 if trace.get("subject"):
                     state["subject"] = trace["subject"]
-                state["last_answer"] = reply_text[:1800]
+                if "task_offset" in trace:
+                    state["task_offset"] = trace["task_offset"]
+                if trace["intent"] != "business_conversation_fallback":
+                    state["last_answer"] = reply_text[:1800]
         else:
             reply_text = result["error"]
             if status == 422 and not ceo_enabled:
