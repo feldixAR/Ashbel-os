@@ -209,7 +209,7 @@ def process_event(event_id, context=None, clock=None):
                                 summary='לאמת שיוך ייחודי של האירוע לרשומה קיימת לפני פעולה.',
                                 next_action={'event_id': event_id, 'code': resolve_code,
                                              'execution': 'internal_review_only'})
-        elif event['event_type'] == 'source.snapshot' and event['facts'].get('review_scope') in {'portfolio', 'deal'}:
+        elif event['event_type'] == 'source.snapshot' and event['facts'].get('review_scope') in {'portfolio', 'deal', 'deal_priorities'}:
             decision.update(_owner_review(event, context, plan))
         elif event['event_type'] == 'message.received':
             decision.update(code='review_inbound', summary=departments['sales']['summary'],
@@ -253,16 +253,19 @@ def _owner_review(event, context, plan):
             raise ValueError("review_subject_not_unique")
         item = matches[0]
         gate = {
-            "waiting": "לשמור על תנאי ההמתנה הרשום.",
+            "waiting": "להמתין לפי התנאי הרשום בתור העבודה.",
             "future": "לשמור על מועד המעקב הרשום.",
             "blocked": "לטפל בחסם לפני קידום העסקה.",
             "needs_review": "לאמת את הנתונים החסרים לפני החלטה.",
         }.get(item["disposition"], "לקדם את הצעד המורשה הבא.")
         pilot = item.get("pilot_gate")
-        if pilot and pilot.get("state") != "ready_for_review":
-            gate = "להמשיך בבדיקה פנימית. אין בסיס להתחייבות לפני השלמת שער הרכש, ההתקנה והתזרים."
+        status = item.get("status") or "אין סטטוס מאומת"
+        if pilot and pilot["state"] != "ready_for_review":
+            gate = "להמשיך בבדיקה פנימית. אין בסיס להתחייבות לפני השלמת בדיקות הרכש, ההתקנה והתזרים."
+            status = {"waiting": "ממתין לנתוני רכש, התקנה ותזרים", "stopped": "נעצר לפי בקרת הפיילוט",
+                      "unverified": "מצב הפיילוט טרם אומת"}[pilot["state"]]
         lines = [f"מנכ״ל AshbelOS | {subject}", f"החלטה: {gate}",
-                 f"מצב לפי תור העבודה: {item.get('status') or 'אין סטטוס מאומת'}",
+                 f"מצב מאומת: {status}",
                  f"הצעד הבא: {item['action']}"]
         if item.get("owner") or item.get("due"):
             lines.append(f"אחראי: {item.get('owner') or 'לא תועד'} | מועד: {item.get('due') or 'לא תועד'}")
@@ -273,15 +276,21 @@ def _owner_review(event, context, plan):
     items = [a for a in context["actions"] if a["disposition"] != "completed"]
     counts = {key: sum(a["disposition"] == key for a in items) for key in
               ("actionable", "waiting", "future", "blocked", "needs_review")}
-    lines = ["מנכ״ל AshbelOS | תמונת העסק",
+    deals_only = facts.get("review_scope") == "deal_priorities"
+    lines = ["מנכ״ל AshbelOS | עסקאות לקידום" if deals_only else "מנכ״ל AshbelOS | תמונת העסק",
              f"תור עבודה: {len(items)} פתוחים. {counts['actionable']} זמינים לקידום, "
              f"{counts['waiting']} בהמתנה, {counts['future']} עתידיים, "
              f"{counts['blocked'] + counts['needs_review']} חסומים או טעוני בדיקה.",
              "גבייה ורווח בפועל טרם אומתו. סכומי הצעה אינם משמשים כגבייה."]
+    if deals_only:
+        from services.integrations.business_source import context_plan
+        deal_context = {**context, "actions": [item for item in items if item["kind"] == "customer"]}
+        plan = context_plan(deal_context)
     priorities = plan["priority_items"][:3]
     lines.extend(f"{i}. {item['subject']} — {item['action']}" for i, item in enumerate(priorities, 1))
     if not priorities:
-        lines.append("אין בתור צעד שניתן לקדם כעת לפי הנתונים המאומתים.")
+        lines.append("אין עסקה עם צעד זמין לקידום לפי הנתונים המאומתים." if deals_only
+                     else "אין בתור צעד שניתן לקדם כעת לפי הנתונים המאומתים.")
     if context["capacity_state"] != "confirmed":
         lines.append("יש לאמת קיבולת ספקים לפני הרחבת לידים.")
     return {"code": "owner_portfolio_review", "summary": plan["top_action"],
