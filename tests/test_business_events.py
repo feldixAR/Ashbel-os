@@ -11,13 +11,15 @@ import pytest
 os.environ.setdefault('DATABASE_URL', 'sqlite:///:memory:')
 os.environ.setdefault('ENV', 'test')
 from services.business_events import runtime as rt
-from services.storage.db import create_all_tables, get_session
+from services.storage.db import create_all_tables, engine, get_session
 from services.storage.models.business_event import BusinessEventModel
 from services.storage.models.task import TaskModel
 
 
 @pytest.fixture(autouse=True)
 def database(monkeypatch):
+    if engine.url.get_backend_name() != 'sqlite' or engine.url.database != ':memory:':
+        pytest.fail('Business event tests require an isolated in-memory SQLite database.')
     monkeypatch.setenv('BUSINESS_ID', 'ashbel')
     monkeypatch.setenv('ASHBEL_BUSINESS_EVENTS_ENABLED', 'true')
     create_all_tables()
