@@ -100,8 +100,9 @@ def test_customer_update_uses_only_an_unambiguous_existing_work_item(match_count
         assert 'work_item' not in decision['next_action']
 
 
-@pytest.mark.parametrize('event_type', ('customer.updated', 'quote.received', 'supplier.updated'))
+@pytest.mark.parametrize('event_type', ('customer.updated', 'quote.received', 'supplier.updated', 'console'))
 def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypatch):
+    from services.integrations import business_source
     from services.integrations.business_source import WORK_HEADERS, WORK_SECTION_END
 
     source = context()
@@ -146,6 +147,36 @@ def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypat
         session = transport.return_value.__enter__.return_value
         session.get.side_effect = get
         session.post.side_effect = post
+        if event_type == 'console':
+            from flask import Flask
+            from api.routes.commands import bp
+
+            app = Flask(__name__)
+            app.register_blueprint(bp, url_prefix='/api')
+            client = app.test_client()
+            monkeypatch.setenv('OS_API_KEY', 'test-console')
+            monkeypatch.setattr(business_source, 'load_business_context', lambda: source)
+            headers = {'X-API-Key': 'test-console'}
+            url = '/api/command'
+            message = {'command': 'עדכון customer: קיבלנו מפרט לבדיקה.', 'mode': 'business_update'}
+            assert client.post(url, json=message).status_code == 401
+            ambiguous = dict(message, command='יש עדכון עבור customer, ספק סינתטי.')
+            assert client.post(url, json=ambiguous, headers=headers).status_code == 422
+            assert not rt.recent_events() and session.post.call_count == 0
+            response = client.post(url, json=message, headers=headers)
+            assert response.status_code == 200
+            data = response.get_json()['data']
+            assert "מנכ״ל AshbelOS" in data['message'] and data['crm_cell'] == "'תור עבודה'!F3"
+            record = rt.get_event(data['event_id'])
+            assert record['trace_id'] == data['trace_id']
+            assert record['output']['independent_auditor']['passed'] is True
+            assert record['output']['departments'] and not record['output']['external_execution']
+            assert rows[2][5].count(message['command']) == 1 and 'החלטת מנכ״ל' in rows[2][5]
+            again = client.post(url, json=message, headers=headers).get_json()['data']
+            assert again['event_id'] == data['event_id'] and again['duplicate'] is True
+            session.post.assert_called_once()
+            return
+
         first = rt.ingest_event(event)
         result = rt.process_event(first['id'], context=source)
         audit = rt.get_event(first['id'])['output']

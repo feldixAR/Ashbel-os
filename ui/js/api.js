@@ -79,7 +79,7 @@ const API = (() => {
     systemQa: ()    => request('GET', '/system/qa'),
 
     // Command — two endpoints (legacy + new)
-    command: (cmd)  => request('POST', '/command', { command: cmd }),
+    command: (cmd, mode) => request('POST', '/command', { command: cmd, mode }),
 
     // Leads
     leads:   (params = {}) => {

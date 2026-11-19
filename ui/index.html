@@ -7,6 +7,7 @@
   <title>AshbelOS — Operating Console</title>
   <link rel="stylesheet" href="/ui/css/app.css?v=p29" />
   <link rel="stylesheet" href="/ui/css/import_review.css?v=bir1" />
+  <style>#cmdResultText { min-width: 0; white-space: pre-line; overflow-wrap: anywhere; }</style>
 </head>
 <body>
 
@@ -128,7 +129,7 @@
   <!-- 4. Command Result Bar (appears after command runs) -->
   <div class="cmd-result-bar hidden" id="cmdResultBar">
     <span class="cmd-result-icon" id="cmdResultIcon">✅</span>
-    <span class="cmd-result-text" id="cmdResultText"></span>
+    <span class="cmd-result-text" id="cmdResultText" role="status" aria-live="polite"></span>
     <button class="cmd-result-close" onclick="Shell.closeCmdResult()">✕</button>
   </div>
 
@@ -211,12 +212,12 @@
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=p29"></script>
+<script src="/ui/js/api.js?v=p30"></script>
 <script src="/ui/js/components/toast.js?v=p29"></script>
 <script src="/ui/js/components/ui.js?v=p29"></script>
 <script src="/ui/js/components/upload_modal.js?v=bir1"></script>
 <script src="/ui/js/components/draft_modal.js?v=p29"></script>
-<script src="/ui/js/shell.js?v=p29"></script>
+<script src="/ui/js/shell.js?v=p30"></script>
 <script src="/ui/js/panels/console.js?v=p29"></script>
 
 </body>

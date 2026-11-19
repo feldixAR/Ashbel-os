@@ -67,8 +67,15 @@ const Shell = (() => {
     const btn    = document.getElementById('shCmdRun');
     const bell   = document.getElementById('shBell');
     if (!input) return;
+    const businessMode = new URLSearchParams(window.location.search).get('business') === '1';
+    if (businessMode) {
+      input.placeholder = 'כתוב עדכון עסקי עם שם הפרויקט או נושא הספק';
+      input.setAttribute('aria-label', 'עדכון עסקי למנכ״ל AshbelOS');
+      btn.title = 'שלח עדכון עסקי';
+    }
 
-    async function _run() {
+    async function _run(asBusinessUpdate = businessMode) {
+      if (btn.disabled) return;
       const cmd = input.value.trim();
       if (!cmd) return;
       btn.disabled    = true;
@@ -76,7 +83,7 @@ const Shell = (() => {
       _showCmdResult('loading', 'מעבד פקודה...');
 
       try {
-        const res = await API.command(cmd);
+        const res = await API.command(cmd, asBusinessUpdate ? 'business_update' : undefined);
         const d   = res.data || {};
         const msg = d.message || (res.success ? 'בוצע' : (res.error || 'שגיאה'));
         _showCmdResult(res.success ? 'ok' : 'err', msg);
@@ -94,12 +101,12 @@ const Shell = (() => {
       }
     }
 
-    btn.addEventListener('click', _run);
+    btn.addEventListener('click', () => _run());
     input.addEventListener('keydown', e => { if (e.key === 'Enter') _run(); });
     bell.addEventListener('click', () => switchTab('approvals'));
 
     // Expose runChip for quick-command chips
-    window._shellRunCmd = _run;
+    window._shellRunCmd = () => _run(false);
   }
 
   async function runChip(cmd) {
@@ -115,7 +122,7 @@ const Shell = (() => {
     const icon  = document.getElementById('cmdResultIcon');
     const text  = document.getElementById('cmdResultText');
     icon.textContent = type === 'loading' ? '⏳' : type === 'ok' ? '✅' : '❌';
-    text.textContent = msg.slice(0, 180);
+    text.textContent = msg;
     bar.className    = `cmd-result-bar cmd-result-${type}`;
   }
 

@@ -109,6 +109,12 @@ def write_review_note(event, context, decision):
             f"בתרחיש מכירה {market['scenario_sale']:,}, פער {gap_low:,}–{gap_high:,} לפני יתר העלויות. "
             f"החלטה: {decision['summary']}"
         )
+    if event['source_ref'] == 'ashbelos:owner-console':
+        owner_update = event['facts'].get('owner_update')
+        if (not isinstance(owner_update, str) or not 1 <= len(owner_update) <= 1800
+                or len(owner_update.splitlines()) != 1 or '[ashbel-event:' in owner_update.lower()):
+            return _blocked('invalid_owner_update')
+        summary = f'עדכון בעלים: {owner_update} | החלטת מנכ״ל: {decision["summary"]}'
     url = f'https://sheets.googleapis.com/v4/spreadsheets/{workbook}'
     work_range = quote(WORK_RANGE, safe='')
     credentials = Credentials.from_service_account_info(info, scopes=[SHEETS_SCOPE])
