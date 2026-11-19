@@ -209,7 +209,9 @@ class DepartmentExpert(BaseAgent):
                 if decision.get('work_counts') != expected or sum(expected.values()) != len(work):
                     violations.append('work_counts_mismatch')
                 if len(priorities) > 3 or any(item not in work or item['disposition'] != 'actionable'
-                                              or item.get('blocked_reasons') for item in priorities):
+                                              or item.get('blocked_reasons')
+                                              or (facts.get('review_scope') == 'deal_priorities' and item['kind'] != 'customer')
+                                              for item in priorities):
                     violations.append('unverified_priorities')
             elif decision.get('review_scope') == 'deal':
                 action = decision.get('next_action') or {}
