@@ -176,6 +176,8 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
         if not completed:
             if due_date and due_date > today:
                 disposition = "future"
+            elif re.search(r"בהשהיה|בהקפאה", status):
+                disposition = "waiting"
             elif pending_spec and not re.search(r"לתאם ביקור|להפנות לאולם|לשלוח.{0,15}לאולם", row["פעולה נדרשת"]):
                 disposition = "waiting"
             elif kind != "supplier" and re.search(r"ממתין|ממתינים|להמתין|לא ללחוץ|לא לפנות", status + " " + row["פעולה נדרשת"]):
