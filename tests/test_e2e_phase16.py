@@ -32,7 +32,6 @@ os.environ["OS_API_KEY"]    = "test"
 os.environ["ENV"]           = "test"
 os.environ.pop("TELEGRAM_BOT_TOKEN",     None)   # ensure no real API calls
 os.environ.pop("TELEGRAM_CHAT_ID",       None)
-os.environ.pop("WEBHOOK_VERIFY_TOKEN",   None)   # no token check in tests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -47,10 +46,19 @@ def _app():
     return _APP
 
 def _client():
-    return _app().test_client()
+    from unittest.mock import patch
+    from flask.testing import FlaskClient
+
+    class TelegramTestClient(FlaskClient):
+        def open(self, *args, **kwargs):
+            with patch.dict(os.environ, {"WEBHOOK_VERIFY_TOKEN": "test-telegram-secret"}):
+                return super().open(*args, **kwargs)
+
+    client = TelegramTestClient(_app())
+    client.environ_base["HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN"] = "test-telegram-secret"
+    return client
 
 _AUTH = {"X-API-Key": "test"}
-_TG   = {}   # no verify token → open
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -364,6 +372,8 @@ class TestTelegramCallback(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         d = r.get_json()
         self.assertEqual(d["data"]["status"], "edit_requested")
+        from memory.memory_store import MemoryStore
+        MemoryStore.delete("telegram", "pending_edit_1")
 
     def test_callback_unknown_action_ignored(self):
         r = self.c.post("/api/telegram/webhook",

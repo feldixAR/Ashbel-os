@@ -15,6 +15,7 @@ Handles all Telegram payload types:
 Governance: Wave One approved channel. No WhatsApp/Email/Calendar touched.
 """
 import base64
+import hmac
 import logging
 import os
 
@@ -25,11 +26,11 @@ from api.middleware import ok, _error
 from orchestration.orchestrator import orchestrator
 from services.intake.normalizer import normalize_telegram
 from services.telegram_service import telegram_service
+from services import telegram_owner
 
 log = logging.getLogger(__name__)
 bp  = Blueprint("telegram", __name__)
 
-_VERIFY_TOKEN  = os.getenv("WEBHOOK_VERIFY_TOKEN", "")
 _BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 _VOICE_FALLBACK = (
@@ -43,8 +44,11 @@ _LOCATION_REPLY = "📍 מיקום התקבל ונרשם. אם תרצה פעול
 @bp.route("/telegram/webhook", methods=["POST"])
 def telegram_webhook():
     # ── Auth ──────────────────────────────────────────────────────────────
-    token = request.headers.get("X-Telegram-Token", "")
-    if _VERIFY_TOKEN and token != _VERIFY_TOKEN:
+    if os.getenv("TELEGRAM_OWNER_CHAT_ENABLED") == "true":
+        return _error("owner chat uses a different webhook", 404)
+    secret = os.getenv("WEBHOOK_VERIFY_TOKEN", "")
+    token = request.headers.get(telegram_owner.SECRET_HEADER, "")
+    if not secret or not hmac.compare_digest(token.encode(), secret.encode()):
         log.warning("[Telegram] rejected — bad token")
         return _error("unauthorized", 401)
 
@@ -94,6 +98,77 @@ def telegram_webhook():
         )
 
     return ok({"status": "ignored", "reason": "empty content"})
+
+
+@bp.route("/telegram/owner-webhook", methods=["POST"])
+def telegram_owner_webhook():
+    if os.getenv("TELEGRAM_OWNER_CHAT_ENABLED") != "true":
+        return _error("owner chat is disabled", 404)
+    secret = telegram_owner.webhook_secret()
+    received = request.headers.get(telegram_owner.SECRET_HEADER, "")
+    if not secret or not hmac.compare_digest(received.encode(), secret.encode()):
+        return _error("unauthorized", 401)
+
+    owner = telegram_owner.owner_chat_id()
+    body = request.get_json(silent=True)
+    message = body.get("message") if isinstance(body, dict) else None
+    if not isinstance(message, dict):
+        return ok({"status": "ignored"})
+    chat = message.get("chat") or {}
+    sender = message.get("from") or {}
+    if (owner is None or chat.get("type") != "private" or chat.get("id") != owner
+            or sender.get("id") != owner or sender.get("is_bot") is not False
+            or "forward_origin" in message):
+        return ok({"status": "ignored"})
+
+    message_id = message.get("message_id")
+    if type(message_id) is not int or message_id <= 0:
+        return _error("invalid Telegram message ID", 400)
+
+    from api.routes.commands import _business_update
+    from memory.memory_store import MemoryStore
+
+    namespace, key = "telegram", f"owner_chat:{owner}"
+    state = MemoryStore.read(namespace, key, default={})
+    if message_id <= state.get("last_message_id", 0):
+        return ok({"status": "duplicate"})
+
+    raw_text = message.get("text")
+    text = raw_text.strip() if isinstance(raw_text, str) else ""
+    reply_text = "אפשר לכתוב לי, למשל: מה המשימות שלי להיום? או לעדכן אותי מה חדש באחת העסקאות."
+    trace = {}
+    if text and not text.startswith("/"):
+        try:
+            response, status = _business_update(
+                text, state.get("previous_event_id"), state.get("pending_message"),
+                source_ref="ashbelos:owner-telegram",
+                delivery_id=f"telegram-owner-{owner}-{message_id}",
+            )
+            result = response.get_json()
+        except Exception as exc:
+            log.warning("Telegram owner business request failed: %s", type(exc).__name__)
+            result, status = {"error": "אירעה תקלה בבדיקת ה־CRM. אפשר לנסות שוב."}, 503
+
+        if status == 200:
+            trace = result["data"]
+            reply_text = trace["message"]
+            state.pop("pending_message", None)
+            context_id = trace.get("context_event_id") if trace["intent"] == "business_review" else trace["event_id"]
+            if context_id:
+                state["previous_event_id"] = context_id
+        else:
+            reply_text = result["error"]
+            if status == 422:
+                state["pending_message"] = text if len(text) > 80 else state.get("pending_message", text)
+
+    reply_id = telegram_owner.reply(owner, message_id, reply_text)
+    if not reply_id:
+        return _error("Telegram did not confirm delivery", 503)
+    state["last_message_id"] = message_id
+    MemoryStore.write(namespace, key, state, updated_by="telegram")
+    log.info("Telegram owner replied message_id=%s event_id=%s intent=%s crm_readback=%s",
+             reply_id, trace.get("event_id"), trace.get("intent"), bool(trace.get("crm_cell")))
+    return ok({"status": "replied"})
 
 
 # ── Sub-handlers ──────────────────────────────────────────────────────────────

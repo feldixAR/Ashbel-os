@@ -14,7 +14,6 @@ os.environ.setdefault("OS_API_KEY", "test")
 os.environ.setdefault("ENV", "test")
 os.environ.pop("TELEGRAM_BOT_TOKEN", None)
 os.environ.pop("TELEGRAM_CHAT_ID", None)
-os.environ.pop("WEBHOOK_VERIFY_TOKEN", None)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -31,7 +30,17 @@ def _app():
 
 
 def _client():
-    return _app().test_client()
+    from unittest.mock import patch
+    from flask.testing import FlaskClient
+
+    class TelegramTestClient(FlaskClient):
+        def open(self, *args, **kwargs):
+            with patch.dict(os.environ, {"WEBHOOK_VERIFY_TOKEN": "test-telegram-secret"}):
+                return super().open(*args, **kwargs)
+
+    client = TelegramTestClient(_app())
+    client.environ_base["HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN"] = "test-telegram-secret"
+    return client
 
 
 def _cbq(action: str, approval_id: str, username: str = "operator") -> dict:

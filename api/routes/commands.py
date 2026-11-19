@@ -63,7 +63,8 @@ def post_command():
     })
 
 
-def _business_update(message, previous_event_id, pending_message):
+def _business_update(message, previous_event_id, pending_message, *,
+                     source_ref="ashbelos:owner-console", delivery_id=None):
     from services.business_events import runtime
     from services.integrations.business_source import load_business_context
 
@@ -136,13 +137,13 @@ def _business_update(message, previous_event_id, pending_message):
             decision = result.get("ceo_decision") or {}
             audited_deal = (decision.get("review_scope") == "deal"
                             and (result.get("independent_auditor") or {}).get("passed") is True)
-            if (previous.get("source") == source and previous.get("source_ref") == "ashbelos:owner-console"
+            if (previous.get("source") == source and previous.get("source_ref") == source_ref
                     and previous.get("status") == "analyzed" and (writeback.get("status") == "verified" or audited_deal)):
                 subject = (previous.get("facts") or {}).get("work_item_subject")
                 matches = [item for item in items if item["subject"] == subject]
 
     if review and len(matches) <= 1 and (review in {"portfolio", "deal_priorities"} or matches):
-        return _business_review(runtime, source, context, matches[0] if matches else None, review)
+        return _business_review(runtime, source, context, matches[0] if matches else None, review, source_ref)
     if review or len(matches) != 1:
         return _error("על איזה פרויקט או ספק מדובר? אפשר לענות בשם שבו אתה משתמש בדרך כלל.", 422)
 
@@ -152,8 +153,8 @@ def _business_update(message, previous_event_id, pending_message):
     digest = hashlib.sha256(f"{day}\n{item['subject']}\n{update}".encode()).hexdigest()
     envelope = {
         "source": source,
-        "source_event_id": f"console-update-{digest}",
-        "source_ref": "ashbelos:owner-console",
+        "source_event_id": delivery_id or f"console-update-{digest}",
+        "source_ref": source_ref,
         "event_type": "supplier.updated" if item["kind"] == "supplier" else "customer.updated",
         "occurred_at": now.isoformat(),
         "facts": {"work_item_subject": item["subject"], "owner_update": update,
@@ -190,7 +191,7 @@ def _business_update(message, previous_event_id, pending_message):
 def _review_intent(words):
     if re.search(r" (?:איזה|אילו) עסקאות ", words):
         return "deal_priorities"
-    if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
+    if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | מה (?:המשימות|יש לי לעשות) (?:שלי )?להיום | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
         return "portfolio"
     if re.match(
         r"^ו?(?:מה (?:כדאי לעשות|לעשות|עושים|המצב|מצב|הסטטוס|הצעד הבא|קורה עם)"
@@ -201,16 +202,18 @@ def _review_intent(words):
     return None
 
 
-def _business_review(runtime, source, context, item, review):
+def _business_review(runtime, source, context, item, review, source_ref):
     snapshot = context["snapshot_sha256"]
     subject = item["subject"] if item else None
     now = runtime.now()
     day = now.astimezone(ZoneInfo("Asia/Jerusalem")).date().isoformat()
     scope = "deal" if item else review
     key = hashlib.sha256(f"v2\n{day}\n{snapshot}\n{scope}\n{subject}".encode()).hexdigest()
+    if source_ref != "ashbelos:owner-console":
+        key = hashlib.sha256(f"{source_ref}\n{key}".encode()).hexdigest()
     receipt = runtime.ingest_event({
         "source": source, "source_event_id": f"chat-review-{key}",
-        "source_ref": "ashbelos:owner-console", "event_type": "source.snapshot",
+        "source_ref": source_ref, "event_type": "source.snapshot",
         "occurred_at": now.isoformat(),
         "facts": {"review_scope": scope, "work_item_subject": subject,
                   "snapshot_sha256": snapshot, "external_contact_authorized": False},

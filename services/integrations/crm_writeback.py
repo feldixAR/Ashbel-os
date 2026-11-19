@@ -109,7 +109,7 @@ def write_review_note(event, context, decision):
             f"בתרחיש מכירה {market['scenario_sale']:,}, פער {gap_low:,}–{gap_high:,} לפני יתר העלויות. "
             f"החלטה: {decision['summary']}"
         )
-    if event['source_ref'] == 'ashbelos:owner-console':
+    if event['source_ref'] in {'ashbelos:owner-console', 'ashbelos:owner-telegram'}:
         owner_update = event['facts'].get('owner_update')
         if (not isinstance(owner_update, str) or not 1 <= len(owner_update) <= 1800
                 or len(owner_update.splitlines()) != 1 or '[ashbel-event:' in owner_update.lower()):
