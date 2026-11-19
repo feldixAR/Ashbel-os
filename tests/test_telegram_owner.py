@@ -50,7 +50,6 @@ def test_owner_review_and_replay(webhook, monkeypatch):
     assert client.post(telegram_owner.WEBHOOK_PATH, json=message(), headers=headers).status_code == 200
     assert client.post(telegram_owner.WEBHOOK_PATH, json=message(), headers=headers).json["data"]["status"] == "duplicate"
     assert client.post(telegram_owner.WEBHOOK_PATH, json=message("ומה עכשיו?", 2), headers=headers).status_code == 200
-    assert commands._review_intent(" מה המשימות שלי להיום ") == "portfolio"
     assert engine.call_args.args == ("ומה עכשיו?", "review", None)
     assert engine.call_args.kwargs["source_ref"] == "ashbelos:owner-telegram"
     assert state["last_message_id"] == 2
@@ -94,3 +93,35 @@ def test_registration_preserves_other_webhook(webhook, monkeypatch):
     with pytest.raises(ValueError, match="outside"):
         telegram_owner.register_webhook("app.example")
     assert [call.args[0] for call in api.call_args_list] == ["getMe", "getChat", "getWebhookInfo"]
+
+
+@pytest.mark.parametrize("text", [
+    "מה המשימות שלי היום",
+    "מה המשימות שלי להיום?",
+    "מה יש לי לעשות היום?",
+    "מה כדאי לעשות היום?",
+])
+def test_daily_work_review_ignores_pending_project_clarification(webhook, monkeypatch, text):
+    from services.business_events import runtime
+    from services.integrations import business_source
+
+    client, headers, state = webhook
+    state["pending_message"] = "מה המשימות שלי היום"
+    monkeypatch.setenv("ASHBEL_CRM_WRITEBACK_SOURCE", "owner_internal")
+    monkeypatch.setenv("ASHBEL_CRM_WRITEBACK_ENABLED", "false")
+    monkeypatch.setattr(runtime, "enabled", lambda: True)
+    context = {"health": "read_ok", "snapshot_sha256": "snapshot", "actions": []}
+    monkeypatch.setattr(business_source, "load_business_context", lambda: context)
+
+    review = Mock(side_effect=lambda *args: ok({
+        "message": "המשימה הראשונה מתור העבודה",
+        "event_id": "review-event",
+        "intent": "business_review",
+    }))
+    monkeypatch.setattr(commands, "_business_review", review)
+
+    response = client.post(telegram_owner.WEBHOOK_PATH, json=message(text), headers=headers)
+    assert response.status_code == 200
+    review.assert_called_once_with(runtime, "owner_internal", context, None, "portfolio", "ashbelos:owner-telegram")
+    telegram_owner.reply.assert_called_once_with(123, 1, "המשימה הראשונה מתור העבודה")
+    assert "pending_message" not in state

@@ -69,18 +69,18 @@ def _business_update(message, previous_event_id, pending_message, *,
     from services.integrations.business_source import load_business_context
 
     message = " ".join(message.split())
+    normalized = " " + _topic_words(message) + " "
+    review = _review_intent(normalized)
     update = message
-    if isinstance(pending_message, str) and len(message) <= 80:
+    if not review and isinstance(pending_message, str) and len(message) <= 80:
         pending = " ".join(pending_message.split())
         if pending:
             update = pending
     if not message or len(update) > 1800 or "[ashbel-event:" in update.lower():
         return _error("כתוב עדכון עסקי באורך של עד 1,800 תווים.", 400)
 
-    normalized = " " + _topic_words(message) + " "
     if re.match(r"^(?:ת?שלח|ת?פנה|ת?תקשר|ת?זמין|ת?תחייב|ת?שלם|ת?קנה)(?: |$)", normalized.strip()):
         return _error("הבקשה דורשת אישור מפורש לפנייה או להתחייבות. לא בוצעה פעולה.", 403)
-    review = _review_intent(normalized) if update == message else None
     source = os.getenv("ASHBEL_CRM_WRITEBACK_SOURCE", "").strip()
     writer_enabled = os.getenv("ASHBEL_CRM_WRITEBACK_ENABLED", "").lower() == "true"
     if not (runtime.enabled() and source and (review or writer_enabled)):
@@ -191,7 +191,11 @@ def _business_update(message, previous_event_id, pending_message, *,
 def _review_intent(words):
     if re.search(r" (?:איזה|אילו) עסקאות ", words):
         return "deal_priorities"
-    if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | מה (?:המשימות|יש לי לעשות) (?:שלי )?להיום | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
+    if re.search(
+        r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח "
+        r"| מה (?:המשימות(?: שלי)?|יש לי לעשות|כדאי לעשות|עושים) (?:ל?היום) "
+        r"| מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words
+    ):
         return "portfolio"
     if re.match(
         r"^ו?(?:מה (?:כדאי לעשות|לעשות|עושים|המצב|מצב|הסטטוס|הצעד הבא|קורה עם)"
