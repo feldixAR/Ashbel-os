@@ -126,7 +126,7 @@ def _business_update(message, previous_event_id, pending_message):
         r"^(?:ו?בנוסף|ו?גם|ובינתיים|ועדכון נוסף|הוא|היא|הם|הן|לגבי זה|קיבלתי ממנו|קיבלתי ממנה)(?: |$)", normalized.strip()
     )
     followup_review = review == "deal" and (
-        " איתו " in normalized or normalized.strip() in {"מה הצעד הבא", "איך מתקדמים", "מה עושים עכשיו"}
+        " איתו " in normalized or normalized.strip().removeprefix("ו") in {"מה הצעד הבא", "איך מתקדמים", "מה עושים עכשיו"}
     )
     if not matches and (continuation or followup_review):
         if isinstance(previous_event_id, str) and re.fullmatch(r"[0-9a-f-]{36}", previous_event_id):
@@ -193,7 +193,7 @@ def _review_intent(words):
     if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
         return "portfolio"
     if re.match(
-        r"^(?:מה (?:כדאי לעשות|לעשות|עושים|המצב|מצב|הסטטוס|הצעד הבא|קורה עם)"
+        r"^ו?(?:מה (?:כדאי לעשות|לעשות|עושים|המצב|מצב|הסטטוס|הצעד הבא|קורה עם)"
         r"|איך (?:לקדם|להתקדם|מתקדמים)|האם (?:לאשר|להתקשר|לסגור|לקדם)"
         r"|תן לי סטטוס|ת?קדם|תעדף)(?: |$)", words.strip()
     ):
