@@ -175,6 +175,23 @@ def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypat
             again = client.post(url, json=message, headers=headers).get_json()['data']
             assert again['event_id'] == data['event_id'] and again['duplicate'] is True
             session.post.assert_called_once()
+            followup = dict(message, command='בנוסף, הגיעו הערות למהנדס.', previous_event_id=data['event_id'])
+            assert client.post(url, json=dict(followup, previous_event_id=None), headers=headers).status_code == 422
+            result = client.post(url, json=followup, headers=headers)
+            assert result.status_code == 200
+            continuation = rt.get_event(result.get_json()['data']['event_id'])
+            assert continuation['facts']['work_item_subject'] == record['facts']['work_item_subject']
+            assert continuation['facts']['owner_update'] == followup['command']
+            assert rows[2][5].count(followup['command']) == 1
+            unclear = dict(message, command='ההצעה תגיע ביום חמישי.')
+            assert client.post(url, json=unclear, headers=headers).status_code == 422
+            clarification = dict(message, command='customer', pending_message=unclear['command'])
+            result = client.post(url, json=clarification, headers=headers)
+            assert result.status_code == 200
+            clarified = rt.get_event(result.get_json()['data']['event_id'])
+            assert clarified['facts']['owner_update'] == unclear['command']
+            assert rows[2][5].count(unclear['command']) == 1
+            assert session.post.call_count == 3
             return
 
         first = rt.ingest_event(event)

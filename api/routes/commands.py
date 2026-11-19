@@ -43,7 +43,7 @@ def post_command():
     command = body["command"].strip()
 
     if body.get("mode") == "business_update":
-        return _business_update(command)
+        return _business_update(command, body.get("previous_event_id"), body.get("pending_message"))
 
     if not command:
         return _error("field 'command' is required", 400)
@@ -63,12 +63,17 @@ def post_command():
     })
 
 
-def _business_update(message):
+def _business_update(message, previous_event_id, pending_message):
     from services.business_events import runtime
     from services.integrations.business_source import load_business_context
 
     message = " ".join(message.split())
-    if not 1 <= len(message) <= 1800 or "[ashbel-event:" in message.lower():
+    update = message
+    if isinstance(pending_message, str) and len(message) <= 80:
+        pending = " ".join(pending_message.split())
+        if pending:
+            update = pending
+    if not message or len(update) > 1800 or "[ashbel-event:" in update.lower():
         return _error("כתוב עדכון עסקי באורך של עד 1,800 תווים.", 400)
 
     source = os.getenv("ASHBEL_CRM_WRITEBACK_SOURCE", "").strip()
@@ -79,38 +84,65 @@ def _business_update(message):
     if context.get("health") != "read_ok" or not context.get("snapshot_sha256"):
         return _error("לא ניתן לקרוא את ה־CRM כרגע. העדכון טרם נקלט.", 503)
 
-    # Match whole words from CRM titles and explicit title segments. A match
-    # to more than one open record must stay with the owner for clarification.
-    normalized = " " + " ".join(re.findall(r"\w+", message.casefold().replace("_", " "))) + " "
+    items = [item for item in context["actions"] if item["kind"] in {"customer", "supplier"}
+             and item["disposition"] != "completed"]
+    normalized = " " + _topic_words(message) + " "
     matches = []
     name_matches = []
-    for item in context["actions"]:
-        if item["kind"] not in {"customer", "supplier"} or item["disposition"] == "completed":
-            continue
-        subject = item["subject"]
-        names = [subject, *re.split(r"[|—–·]", subject)]
-        aliases = {" ".join(re.findall(r"\w+", name.casefold().replace("_", " "))) for name in names}
+    for item in items:
+        parts = re.split(r"[|—–·]", item["subject"])
+        aliases = {_topic_words(name) for name in [item["subject"], *parts]}
         if any(len(alias) >= 4 and f" {alias} " in normalized for alias in aliases):
             matches.append(item)
-        elif item["kind"] == "customer" and len(names) > 1:
-            words = re.findall(r"\w+", names[1].casefold())
+        elif item["kind"] == "customer" and len(parts) > 1:
+            words = _topic_words(parts[0]).split()
             if len(words) > 1 and len(words[-1]) >= 3 and f" {words[-1]} " in normalized:
                 name_matches.append(item)
+
     matches = matches or name_matches
+    if not matches:
+        # Use only supplier aliases already recorded by the trusted event pipeline.
+        related = set()
+        for event in runtime.recent_events(limit=50):
+            if event["source"] != source or event["status"] != "analyzed":
+                continue
+            facts = event.get("facts") or {}
+            subject = facts.get("work_item_subject")
+            if not isinstance(subject, str):
+                continue
+            for field in ("manufacturing_supplier", "alternative_supplier"):
+                name = facts.get(field)
+                if isinstance(name, str):
+                    alias = _topic_words(name.split("/", 1)[0])
+                    if len(alias) >= 4 and f" {alias} " in normalized:
+                        related.add(subject)
+        matches = [item for item in items if item["subject"] in related]
+
+    if not matches and re.match(
+        r"^(?:ו?בנוסף|ו?גם|ובינתיים|ועדכון נוסף|הוא|היא|הם|הן|לגבי זה|קיבלתי ממנו|קיבלתי ממנה)(?: |$)", normalized.strip()
+    ):
+        if isinstance(previous_event_id, str) and re.fullmatch(r"[0-9a-f-]{36}", previous_event_id):
+            previous = runtime.get_event(previous_event_id) or {}
+            writeback = (previous.get("output") or {}).get("source_writeback") or {}
+            if (previous.get("source") == source and previous.get("source_ref") == "ashbelos:owner-console"
+                    and previous.get("status") == "analyzed" and writeback.get("status") == "verified"):
+                subject = (previous.get("facts") or {}).get("work_item_subject")
+                matches = [item for item in items if item["subject"] == subject]
+
     if len(matches) != 1:
-        return _error("כדי לשייך את ההודעה, כתוב בתחילתה את שם הפרויקט או נושא הספק כפי שמופיע בתור העבודה ב־CRM.", 422)
+        return _error("על איזה פרויקט או ספק מדובר? אפשר לענות בשם שבו אתה משתמש בדרך כלל.", 422)
 
     item = matches[0]
     now = runtime.now()
     day = now.astimezone(ZoneInfo("Asia/Jerusalem")).date().isoformat()
-    digest = hashlib.sha256(f"{day}\n{item['subject']}\n{message}".encode()).hexdigest()
+    digest = hashlib.sha256(f"{day}\n{item['subject']}\n{update}".encode()).hexdigest()
     envelope = {
         "source": source,
         "source_event_id": f"console-update-{digest}",
         "source_ref": "ashbelos:owner-console",
         "event_type": "supplier.updated" if item["kind"] == "supplier" else "customer.updated",
         "occurred_at": now.isoformat(),
-        "facts": {"work_item_subject": item["subject"], "owner_update": message,
+        "facts": {"work_item_subject": item["subject"], "owner_update": update,
                   "external_contact_authorized": False},
     }
     try:
@@ -138,3 +170,7 @@ def _business_update(message):
     return ok({"message": answer, "intent": "business_update", "event_id": event_id,
                "trace_id": record["trace_id"], "crm_cell": writeback["cell"],
                "departments": sorted(output.get("departments", {})), "duplicate": receipt["duplicate"]})
+
+
+def _topic_words(text):
+    return " ".join(re.findall(r"\w+", text.casefold().replace("_", " ")))

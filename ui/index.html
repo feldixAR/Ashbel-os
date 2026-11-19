@@ -7,7 +7,24 @@
   <title>AshbelOS — Operating Console</title>
   <link rel="stylesheet" href="/ui/css/app.css?v=p29" />
   <link rel="stylesheet" href="/ui/css/import_review.css?v=bir1" />
-  <style>#cmdResultText { min-width: 0; white-space: pre-line; overflow-wrap: anywhere; }</style>
+  <style>
+    #cmdResultText { min-width: 0; white-space: pre-line; overflow-wrap: anywhere; }
+    .business-chat { height: 100dvh; margin: auto; max-width: 770px; display: flex; flex-direction: column; }
+    .business-chat[hidden], #osShell[hidden] { display: none; }
+    .business-chat-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .business-chat-header h1 { font-size: 20px; }
+    .business-chat-thread { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
+      align-items: flex-start; gap: 12px; padding: 16px; }
+    .business-chat-message { max-width: 95%; margin: 0; padding: 10px 14px; border-radius: 16px;
+      background: var(--surface, #eaf1fa); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+    .business-chat-message.owner { align-self: flex-end; background: #1d4ed8; color: #fff; }
+    .business-chat-compose { display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+    .business-chat-compose textarea { min-width: 0; flex: 1; resize: vertical; max-height: 35dvh;
+      font: inherit; font-size: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 12px;
+      background: var(--surface, #fff); color: var(--text); }
+  </style>
 </head>
 <body>
 
@@ -59,6 +76,21 @@
     <div id="umStage-results" style="display:none"><div id="umResultMsg"></div><button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="UploadModal.close()">סגור</button></div>
   </div>
 </div>
+
+<main id="businessChat" class="business-chat" hidden aria-labelledby="chatTitle">
+  <header class="business-chat-header">
+    <h1 id="chatTitle">מנכ״ל AshbelOS</h1>
+    <button type="button" class="btn" id="chatReset">שיחה חדשה</button>
+  </header>
+  <div class="business-chat-thread" id="chatThread" role="log" aria-live="polite">
+    <p class="business-chat-message">מה חדש בעסק?</p>
+  </div>
+  <form class="business-chat-compose" id="chatCompose">
+    <textarea id="chatInput" rows="2" maxlength="1800" aria-label="הודעה למנכ״ל"
+      placeholder="כתוב הודעה…" enterkeyhint="send"></textarea>
+    <button class="btn btn-primary" type="submit" id="chatSend">שלח</button>
+  </form>
+</main>
 
 <!-- ── Operating Console Shell ────────────────────────────────────── -->
 <div class="os-shell" id="osShell">
@@ -212,12 +244,12 @@
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────── -->
-<script src="/ui/js/api.js?v=p30"></script>
+<script src="/ui/js/api.js?v=p31"></script>
 <script src="/ui/js/components/toast.js?v=p29"></script>
 <script src="/ui/js/components/ui.js?v=p29"></script>
 <script src="/ui/js/components/upload_modal.js?v=bir1"></script>
 <script src="/ui/js/components/draft_modal.js?v=p29"></script>
-<script src="/ui/js/shell.js?v=p30"></script>
+<script src="/ui/js/shell.js?v=p31"></script>
 <script src="/ui/js/panels/console.js?v=p29"></script>
 
 </body>

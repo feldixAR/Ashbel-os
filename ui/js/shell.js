@@ -19,6 +19,10 @@ const Shell = (() => {
   }
 
   function _boot() {
+    if (new URLSearchParams(window.location.search).get('business') === '1') {
+      _initBusinessChat();
+      return;
+    }
     _loadProfile();
     _initCmdBar();
     _refreshTodayStrip();
@@ -61,20 +65,86 @@ const Shell = (() => {
     }
   }
 
+  function _initBusinessChat() {
+    document.getElementById('osShell').hidden = true;
+    document.getElementById('businessChat').hidden = false;
+    const thread = document.getElementById('chatThread');
+    const composer = document.getElementById('chatCompose');
+    const input = document.getElementById('chatInput');
+    const send = document.getElementById('chatSend');
+    const reset = document.getElementById('chatReset');
+    const storageKey = 'ashbelos_business_chat_event';
+    let previous, pending;
+    try { previous = sessionStorage.getItem(storageKey) || undefined; } catch (_) {}
+
+    function bubble(text, owner = false) {
+      const item = document.createElement('p');
+      item.className = owner ? 'business-chat-message owner' : 'business-chat-message';
+      item.textContent = text;
+      thread.appendChild(item);
+      thread.scrollTop = thread.scrollHeight;
+      return item;
+    }
+
+    reset.addEventListener('click', () => {
+      previous = pending = undefined;
+      try { sessionStorage.removeItem(storageKey); } catch (_) {}
+      thread.replaceChildren();
+      bubble('מה חדש בעסק?');
+      input.value = '';
+      input.focus();
+    });
+
+    composer.addEventListener('submit', async event => {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message || send.disabled) return;
+      send.disabled = reset.disabled = true;
+      bubble(message, true);
+      input.value = '';
+      const answer = bubble('בודק את העדכון…');
+      try {
+        const res = await API.command(message, 'business_update', previous, pending);
+        if (res.success && res.data?.event_id && res.data?.message) {
+          pending = undefined;
+          previous = res.data.event_id;
+          try { sessionStorage.setItem(storageKey, previous); } catch (_) {}
+          answer.textContent = res.data.message;
+        } else {
+          answer.textContent = res._status === 401
+            ? 'החיבור לא אומת. רענן את הדף והתחבר שוב עם המפתח שלך.'
+            : res.error || 'לא ניתן לאשר כרגע שהעדכון הושלם.';
+          if (res._status === 401) API.clearKey();
+          if (res._status === 422) pending = message.length > 80 ? message : pending || message;
+          else input.value = message;
+        }
+      } catch (_) {
+        answer.textContent = 'החיבור נקטע. אפשר לשלוח שוב את אותה הודעה.';
+        input.value = message;
+      } finally {
+        send.disabled = reset.disabled = false;
+        thread.scrollTop = thread.scrollHeight;
+        input.focus();
+      }
+    });
+
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing
+          && !window.matchMedia('(pointer: coarse)').matches) {
+        event.preventDefault();
+        composer.requestSubmit();
+      }
+    });
+  }
+
   // ── Command bar ───────────────────────────────────────────────────────────
   function _initCmdBar() {
     const input  = document.getElementById('shCmdInput');
     const btn    = document.getElementById('shCmdRun');
     const bell   = document.getElementById('shBell');
     if (!input) return;
-    const businessMode = new URLSearchParams(window.location.search).get('business') === '1';
-    if (businessMode) {
-      input.placeholder = 'כתוב עדכון עסקי עם שם הפרויקט או נושא הספק';
-      input.setAttribute('aria-label', 'עדכון עסקי למנכ״ל AshbelOS');
-      btn.title = 'שלח עדכון עסקי';
-    }
 
-    async function _run(asBusinessUpdate = businessMode) {
+    async function _run() {
       if (btn.disabled) return;
       const cmd = input.value.trim();
       if (!cmd) return;
@@ -83,7 +153,7 @@ const Shell = (() => {
       _showCmdResult('loading', 'מעבד פקודה...');
 
       try {
-        const res = await API.command(cmd, asBusinessUpdate ? 'business_update' : undefined);
+        const res = await API.command(cmd);
         const d   = res.data || {};
         const msg = d.message || (res.success ? 'בוצע' : (res.error || 'שגיאה'));
         _showCmdResult(res.success ? 'ok' : 'err', msg);
@@ -106,7 +176,7 @@ const Shell = (() => {
     bell.addEventListener('click', () => switchTab('approvals'));
 
     // Expose runChip for quick-command chips
-    window._shellRunCmd = () => _run(false);
+    window._shellRunCmd = _run;
   }
 
   async function runChip(cmd) {
