@@ -10,6 +10,7 @@ _TASK_ASK = re.compile(
     r"תראה|תציג|תן|תזכיר|תפרט|תפרוס|תוציא|רשימ[הת]|תור|סדר)(?: |$)"
 )
 _MORE = re.compile(r"\b(?:ו?עוד|ו?נוספ(?:ת|ות)|יתר|שאר|מה נשאר)\b")
+_TASK_OTHER_ACTION = re.compile(r"\b(?:לנסח|לכתוב|סיכום|להוסיף|למחוק|להעביר|לשייך)\b")
 _REPORT = re.compile(
     r"^(?:עדכון|דיברתי|אמרתי|אמרנו|הסברתי|עדכנתי|שלחתי|קיבלתי|נפגשתי|הלקוח אישר)(?: |$)"
 )
@@ -44,11 +45,8 @@ def queue_intent(words: str) -> Literal["tasks", "more", "calls"] | None:
         return None
     if _CALL_ORDER.match(words) or _CALL_WHO.match(words) or _NEXT_PERSON.match(words):
         return "calls"
-    if _TASK_ASK.match(words) and _TASK.search(words):
-        if _MORE.search(words):
-            return "more"
-        if not re.search(r"\b(?:לנסח|לנסח מחדש|לכתוב|סיכום|להוסיף|למחוק|להעביר|לשייך)\b", words):
-            return "tasks"
+    if _TASK_ASK.match(words) and _TASK.search(words) and not _TASK_OTHER_ACTION.search(words):
+        return "more" if _MORE.search(words) else "tasks"
     if re.fullmatch(r"(?:ו?מה עוד(?: נשאר לי לעשות)?|יש עוד|תמשיך(?: עם הרשימה)?|תן לי עוד|עוד)", words):
         return "more"
     return None
