@@ -211,6 +211,8 @@ def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypat
             review = client.post(url, json=deal, headers=headers).get_json()['data']
             assert review['intent'] == 'business_review' and review['context_event_id'] == review['event_id']
             assert 'מועד המעקב' in review['message'] and 'internal follow-up' in review['message']
+            next_step = dict(message, command='ומה הצעד הבא?', previous_event_id=review['context_event_id'])
+            assert client.post(url, json=next_step, headers=headers).get_json()['data']['event_id'] == review['event_id']
             denied = dict(message, command='תשלח הודעה ללקוח customer')
             assert client.post(url, json=denied, headers=headers).status_code == 403
             assert session.post.call_count == 3
