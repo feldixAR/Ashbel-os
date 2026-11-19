@@ -33,7 +33,9 @@ def role_contract(role):
                                  'no external side effect', 'actual execution trace persisted']}
 
 
-def roles_for(event_type):
+def roles_for(event_type, review_scope=None):
+    if event_type == "source.snapshot" and review_scope == "prospecting":
+        return ["marketing", "sales", "knowledge"]
     roles = {'pmo', 'knowledge', 'finance', 'strategy'}
     if event_type in {'customer.updated', 'opportunity.discovered', 'message.received', 'message.status'}:
         roles.add('sales')
@@ -170,7 +172,13 @@ class DepartmentExpert(BaseAgent):
                         'gap_before_other_costs': [sale - oral - high, sale - oral - low],
                     }
         elif self.role == 'marketing':
-            if context.get('capacity_state') != 'confirmed':
+            if facts.get("review_scope") == "prospecting" and event["event_type"] == "source.snapshot":
+                from engines.lead_acquisition_engine import screen_existing_prospects
+                result["prospecting"] = screen_existing_prospects(
+                    context.get("prospect_records", []), facts.get("areas", []))
+                action("סינון מועמדים קיימים לפי נתוני CRM.", "screen_existing_prospects",
+                       execution="internal_preparation_only")
+            elif context.get('capacity_state') != 'confirmed':
                 missing('אפשר לחקור הזדמנויות; אין להרחיב פניות לפני אימות קיבולת והרשאה.', 'supplier_capacity', 'contact_permission')
             else:
                 action('לבדוק הזדמנות מול המאגר הקיים לפי מקור ומזהים לפני קליטה.', 'deduplicate_external_opportunity', execution='proposal_only')
@@ -213,6 +221,16 @@ class DepartmentExpert(BaseAgent):
                                               or (facts.get('review_scope') == 'deal_priorities' and item['kind'] != 'customer')
                                               for item in priorities):
                     violations.append('unverified_priorities')
+            elif decision.get("review_scope") == "prospecting":
+                prospecting = decision.get("prospecting") or {}
+                known = {record["id"]: record for record in context.get("prospect_records", [])}
+                selected = prospecting.get("candidates", [])
+                if (prospecting != departments.get("marketing", {}).get("prospecting")
+                        or prospecting.get("records_read") != len(known) or len(selected) > 3
+                        or prospecting.get("external_search") is not False
+                        or prospecting.get("outreach_authorized") is not False
+                        or any(known.get(record["id"]) != record for record in selected)):
+                    violations.append("unverified_prospecting")
             elif decision.get('review_scope') == 'deal':
                 action = decision.get('next_action') or {}
                 item = action.get('work_item') or {}

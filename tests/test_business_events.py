@@ -399,3 +399,36 @@ def test_supplier_event_resolves_existing_procurement_work_item_only(monkeypatch
     assert len(out['departments']) >= 6
     assert ingest_event(event)['duplicate'] is True
     assert process_event(e['id'], context=context_data)['status'] == 'not_claimed'
+
+
+def test_owner_discovers_crm_candidates_without_using_call_queue_or_writing(monkeypatch):
+    from flask import Flask
+    from api.routes import owner_chat
+    from routing.model_router import model_router
+
+    source = context()
+    base = dict(name="מועמד לדוגמה", area="מרכז", city="רעננה", stage="שלד",
+                work_type="חלונות", relevance="חם", range="'לידים'!A2:AE2")
+    source["prospect_records"] = [
+        dict(base, id="existing-1", status="חדש"),
+        dict(base, id="existing-2", status="לא רלוונטי", range="'לידים'!A3:AE3"),
+    ]
+    monkeypatch.setattr(owner_chat, "load_business_context", lambda: source)
+    monkeypatch.setenv("ASHBEL_CRM_WRITEBACK_SOURCE", "owner_internal")
+    model = Mock(side_effect=['{"intent":"calls"}', '{"intent":"prospecting","areas":["רעננה"]}'])
+    monkeypatch.setattr(model_router, "call_model", model)
+    with Flask(__name__).app_context():
+        calls, _ = owner_chat.respond("איזה טלפונים כבר ממתינים לי בתור?", {})
+        leads, status = owner_chat.respond("תוציא מהמאגר כמה הזדמנויות לחלונות ברעננה", {})
+    calls, leads = (response.get_json()["data"] for response in (calls, leads))
+    assert "חיוג" in calls["message"]
+    assert status == 200 and leads["intent"] == "business_prospecting"
+    assert "סיננתי 2" in leads["message"] and "נמצאו 1" in leads["message"]
+    assert "מועמד לדוגמה" in leads["message"]
+    assert "איתור מחוץ ל־CRM דורש מקור חיפוש מחובר" in leads["message"]
+    output = rt.get_event(leads["event_id"])["output"]
+    assert output["independent_auditor"]["passed"]
+    assert output["external_execution"] is False
+    assert output["source_writeback"]["status"] == "not_attempted"
+    assert sorted(output["departments"]) == ["knowledge", "marketing", "sales"]
+    assert model.call_count == 2

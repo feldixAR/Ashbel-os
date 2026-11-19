@@ -154,8 +154,13 @@ def test_chat_keeps_project_writes_only_owner_reports_and_reuses_draft(webhook, 
     writer = Mock(side_effect=write)
     monkeypatch.setattr(owner_chat, "_record_owner_update", writer)
     model = Mock(side_effect=[
-        {"intent": "answer", "answer": "שלום, אשמח לעדכון על בחירת הפרופילים."},
-        {"intent": "answer", "answer": "היי, יש עדכון על הפרופילים?"},
+        {"intent": "tasks"},
+        {"intent": "project"},
+        {"intent": "update", "fact": "החלון העליון חשמלי"},
+        {"intent": "update", "fact": "החלון העליון חשמלי"},
+        {"intent": "draft", "answer": "שלום, אשמח לעדכון על בחירת הפרופילים."},
+        {"intent": "revision", "answer": "היי, יש עדכון על הפרופילים?"},
+        {"intent": "external_action"},
     ])
     monkeypatch.setattr(owner_chat, "_model_answer", model)
 
@@ -178,7 +183,7 @@ def test_chat_keeps_project_writes_only_owner_reports_and_reuses_draft(webhook, 
     assert "כבר מופיע" in replies[3]
     assert "יש עדכון" in replies[5]
     assert "צריך אישור" in replies[6]
-    assert model.call_args_list[1].args[1]["subject"] == item["subject"]
+    assert model.call_args_list[5].args[1]["subject"] == item["subject"]
     writer.assert_called_once()
     assert writer.call_args.args[3] is item
 
@@ -201,7 +206,7 @@ def test_queue_conversation_handles_followups_and_semantic_routes(webhook, monke
     monkeypatch.setattr(owner_chat, "_review", Mock(return_value={"intent": "business_review", "event_id": "review"}))
     writer = Mock()
     monkeypatch.setattr(owner_chat, "_record_owner_update", writer)
-    model = Mock(return_value={"intent": "calls"})
+    model = Mock(side_effect=[{"intent": intent} for intent in ("tasks", "more", "more", "calls", "calls")])
     monkeypatch.setattr(owner_chat, "_model_answer", model)
     state["subject"] = "לקוח 3"
 
@@ -216,7 +221,7 @@ def test_queue_conversation_handles_followups_and_semantic_routes(webhook, monke
     assert replies[3] == replies[4]
     assert "לקוח 3" in replies[3] and "לקוח 6" in replies[3] and "לקוח 4" not in replies[3]
     assert model.call_args.args[0] == messages[-1]
-    model.assert_called_once()
+    assert model.call_count == len(messages)
     writer.assert_not_called()
 
 
@@ -230,7 +235,7 @@ def test_conversation_provider_timeout_uses_valid_secondary_model(monkeypatch):
     provider = Mock(side_effect=[APITimeoutError(), '{"intent":"calls","answer":""}'])
     monkeypatch.setattr(model_router, "call_model", provider)
     result = owner_chat._model_answer("איפה להרים את השפופרת?", {}, {"as_of_date_il": "2026-11-19"}, [], None)
-    assert result == {"intent": "calls"}
+    assert result == {"intent": "calls", "subject": None, "areas": []}
     assert [call.args[0].model_id for call in provider.call_args_list] == [
         "claude-sonnet-4-6", "claude-haiku-4-5-20251001",
     ]

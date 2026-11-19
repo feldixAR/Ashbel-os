@@ -213,7 +213,7 @@ def _review_intent(words):
     return None
 
 
-def _business_review(runtime, source, context, item, review, source_ref):
+def _business_review(runtime, source, context, item, review, source_ref, *, areas=()):
     snapshot = context["snapshot_sha256"]
     subject = item["subject"] if item else None
     now = runtime.now()
@@ -222,12 +222,15 @@ def _business_review(runtime, source, context, item, review, source_ref):
     key = hashlib.sha256(f"v2\n{day}\n{snapshot}\n{scope}\n{subject}".encode()).hexdigest()
     if source_ref != "ashbelos:owner-console":
         key = hashlib.sha256(f"{source_ref}\n{key}".encode()).hexdigest()
+    if areas:
+        key = hashlib.sha256(f"{key}\n{areas}".encode()).hexdigest()
     receipt = runtime.ingest_event({
         "source": source, "source_event_id": f"chat-review-{key}",
         "source_ref": source_ref, "event_type": "source.snapshot",
         "occurred_at": now.isoformat(),
         "facts": {"review_scope": scope, "work_item_subject": subject,
-                  "snapshot_sha256": snapshot, "external_contact_authorized": False},
+                  "snapshot_sha256": snapshot, "external_contact_authorized": False,
+                  **({"areas": list(areas)} if areas else {})},
     })
     event_id = receipt["id"]
     runtime.process_event(event_id, context=context)

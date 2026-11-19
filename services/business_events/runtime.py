@@ -169,7 +169,9 @@ def process_event(event_id, context=None, clock=None):
         from services.business_events.departments import ROLES, register_department_experts, roles_for
         register_department_experts()
         trace_id = new_uuid()
-        departments = {role: _run_role(role, event, context, trace_id) for role in roles_for(event['event_type'])}
+        event_scope = event['facts'].get('review_scope')
+        departments = {role: _run_role(role, event, context, trace_id)
+                       for role in roles_for(event['event_type'], event_scope)}
         from services.integrations.business_source import context_plan
         plan = context_plan(context)
         top = plan['priority_items'][0] if plan['priority_items'] else None
@@ -209,6 +211,22 @@ def process_event(event_id, context=None, clock=None):
                                 summary='לאמת שיוך ייחודי של האירוע לרשומה קיימת לפני פעולה.',
                                 next_action={'event_id': event_id, 'code': resolve_code,
                                              'execution': 'internal_review_only'})
+        elif event['event_type'] == 'source.snapshot' and event_scope == 'prospecting':
+            if event["facts"].get("snapshot_sha256") != context["snapshot_sha256"]:
+                raise ValueError("review_snapshot_changed")
+            selection = departments["marketing"]["prospecting"]
+            areas = event["facts"].get("areas", [])
+            lines = [f"סיננתי {selection['records_read']} רשומות קיימות ב־CRM."
+                     f" נמצאו {selection['eligible']} מועמדים לבדיקה פנימית"
+                     + (f" לפי אזור: {', '.join(areas)}." if areas else ".")]
+            for record in selection["candidates"]:
+                lines.append(f"• {record['name']} · {record['area'] or record['city'] or 'אזור לא ידוע'}"
+                             f" · {record['stage'] or 'שלב לא ידוע'}")
+            lines.append("הצעד הבא: לבדוק שהפרויקט עדיין פעיל ושיש צורך באלומיניום.")
+            lines.append("איתור מחוץ ל־CRM דורש מקור חיפוש מחובר או רשימת מועמדים. "
+                         "פנייה דורשת אישור נפרד.")
+            decision.update(code="screen_existing_prospects", review_scope="prospecting",
+                            prospecting=selection, review_message="\n".join(lines))
         elif event['event_type'] == 'source.snapshot' and event['facts'].get('review_scope') in {'portfolio', 'deal', 'deal_priorities'}:
             decision.update(_owner_review(event, context, plan))
         elif event['event_type'] == 'message.received':

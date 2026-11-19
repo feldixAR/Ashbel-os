@@ -15,6 +15,9 @@ from services.integrations.business_source import context_plan, load_business_co
 
 log = logging.getLogger(__name__)
 SOURCE_REF = "ashbelos:owner-telegram"
+_QUEUE_TOOLS = {"tasks", "more", "calls", "deals"}
+_ACTION_TOOLS = _QUEUE_TOOLS | {"prospecting", "project", "changes", "update", "external_action"}
+_RESPONSE_TOOLS = {"answer", "research", "draft", "revision"}
 _REPORT = re.compile(r"^(?:עדכון(?: בעלים)?|דיברתי|אמרתי|אמרנו|הסברתי|עדכנתי|שלחתי|קיבלתי|נפגשתי|לקוח עדכן|הלקוח אישר)(?: |$)")
 _OUTBOUND = re.compile(r"^(?:ת?שלח|ת?פנה|ת?תקשר|ת?זמין|ת?תחייב|ת?שלם|ת?קנה|חייג|בצע)(?: |$)")
 _PRIVATE = re.compile(r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}|(?<!\d)(?:\+972[ -]?|0)\d{1,2}[ -]?\d{7}(?!\d)")
@@ -138,8 +141,11 @@ def _model_answer(message, state, context, candidates, item):
                          "history_start": history[:350], "history_end": history[-600:],
                          "relevant_evidence": "\n".join(relevant[-3:])[-920:], "row": raw.get("range")})
     prompt = json.dumps({"message": message, "focus": item["subject"] if item else None,
+                         "previous_request": state.get("last_request", ""),
                          "last_answer": state.get("last_answer", ""),
-                         "crm": evidence, "as_of": context["as_of_date_il"],
+                         "known_projects": [row["subject"] for row in context.get("actions", [])
+                                            if row.get("kind") in {"customer", "supplier"} and row.get("disposition") != "completed"],
+                         "crm": evidence, "as_of": context.get("as_of_date_il"),
                          "links": sorted(links)[:15]}, ensure_ascii=False)
     system = (
         "אתה ממשק מנכ״ל אסיף אלומיניום בעברית. ענה ישירות להודעה, בטקסט קצר ונוח לטלפון. "
@@ -151,10 +157,19 @@ def _model_answer(message, state, context, candidates, item):
         "בתסריט תן שלבים קצרים והסתעפויות; בטיוטה להשבה תן את הנוסח בלבד. "
         "בתיקון ניסוח שכתב בעל העסק השתמש בתשובה האחרונה כטיוטה, בלי לאמץ טענות לא מתועדות. "
         "אם חסרים נתונים חיוניים שאל שאלה אחת. אין תבנית קבועה. "
-        "סווג לפי הכוונה, בלי תלות בניסוח מדויק: tasks לרשימת משימות, more לעמוד הבא, "
-        "calls לרשימת שיחות יוצאות, deals לעסקאות לקידום, answer לכל בקשה אחרת. "
-        "החזר JSON בלבד עם intent ו-answer. בסיווג שאינו answer השאר את answer ריק. "
-        "בתשובה רגילה עד 1000 תווים, או עד 1800 אם ביקש להרחיב."
+        "קבע קודם את מטרת ההודעה בהקשר השיחה ובחר כלי אחד. "
+        "prospecting = לאתר, לסנן או למצוא עוד לקוחות פוטנציאליים, גם אם מזכירים שיחות כמטרת המשך; "
+        "calls = לראות את השיחות שכבר ממתינות בתור; אין להשתמש בו לאיתור לקוחות. "
+        "tasks = רשימת עבודה, more = המשך הרשימה הקודמת, deals = עסקאות פעילות לקידום, "
+        "project = לשלוף מצב קיים של לקוח או ספק, changes = שינוי מאז אתמול, "
+        "update = בעל העסק מדווח עובדה עסקית שהתרחשה ומבקש לתעד, external_action = לבצע פנייה או התחייבות, "
+        "draft = להכין תוצר או טיוטה, revision = לשכתב תוצר קודם, research = לנתח מידע או לחקור שאלה, answer = שיחה אחרת. "
+        "בקשה להכין טיוטת פנייה אינה external_action. תיקון כוונה אינו עדכון CRM. "
+        "ל־prospecting מותר להחזיר areas רק עבור מיקומים מפורשים בבקשה או בבקשת האיתור הקודמת. "
+        "ציין subject רק אם זו בדיוק רשומה אחת מ־known_projects שהבקשה עוסקת בה. "
+        "ל־update החזר fact שהוא ציטוט רציף ומדויק של עובדה מדווחת בהודעה הנוכחית. "
+        "החזר JSON בלבד: intent, subject (מחרוזת או null), areas (רשימת מחרוזות), fact, answer. "
+        "מלא answer רק עבור answer, research, draft או revision, עד 1000 תווים, או 1800 אם ביקש להרחיב."
     )
     user_prompt = _PRIVATE.sub("[פרטי קשר הוסרו]", prompt)
     for model_key, timeout in (("claude_sonnet", 18), ("claude_haiku", 7)):
@@ -163,12 +178,26 @@ def _model_answer(message, state, context, candidates, item):
             payload = payload.strip().removeprefix("```json").removesuffix("```").strip()
             result = json.loads(payload)
             intent = result.get("intent")
-            if intent in {"tasks", "more", "calls", "deals"}:
-                return {"intent": intent}
+            if not isinstance(intent, str):
+                continue
+            subject = result.get("subject")
+            subject = subject if isinstance(subject, str) else None
+            if intent in _ACTION_TOOLS:
+                regions = result.get("areas")
+                owner_words = _topic_words(f"{state.get('last_request', '')} {message}")
+                areas = sorted({area.strip() for area in regions[:4] if isinstance(area, str)
+                                and 2 <= len(area.strip()) <= 40 and _topic_words(area)
+                                and _topic_words(area) in owner_words}) if isinstance(regions, list) and intent == "prospecting" else []
+                plan = {"intent": intent, "subject": subject, "areas": areas}
+                if intent == "update":
+                    fact = result.get("fact")
+                    if isinstance(fact, str) and len(fact.strip()) >= 8 and fact.strip() in message:
+                        plan["fact"] = fact.strip()
+                return plan
             answer = result.get("answer")
-            if (intent in {"answer", None} and isinstance(answer, str) and 1 <= len(answer.strip()) <= 2100
+            if (intent in _RESPONSE_TOOLS and isinstance(answer, str) and 1 <= len(answer.strip()) <= 2100
                     and all(url.rstrip(".,;)") in links for url in _URL.findall(answer))):
-                return {"intent": "answer", "answer": answer.strip()}
+                return {"intent": intent, "subject": subject, "answer": answer.strip()}
             log.warning("Owner conversation model returned an invalid response: %s", model_key)
         except Exception as exc:
             log.warning("Owner conversation model unavailable: %s %s", model_key, type(exc).__name__)
@@ -183,8 +212,6 @@ def respond(text, state):
     words = _topic_words(message)
     if len(message) > 1800 or "[ashbel-event:" in message.lower():
         return _error("אפשר לשלוח עד 1,800 תווים בהודעה.", 400)
-    if _OUTBOUND.match(words):
-        return _error("כדי לפנות או להתחייב צריך אישור לפעולה המדויקת. אפשר להכין טיוטה כאן.", 403)
     source = os.getenv("ASHBEL_CRM_WRITEBACK_SOURCE", "").strip()
     if not (runtime.enabled() and source):
         return _error("המנוע העסקי אינו זמין כרגע.", 503)
@@ -195,12 +222,37 @@ def respond(text, state):
              and row["kind"] in {"customer", "supplier"}]
     active = next((row for row in items if row["subject"] == state.get("subject")), None)
     item = _spoken_item(message, items, active)
-    scope = _review_intent(f" {words} ")
-    route = queue_intent(words)
-    if route is None:
-        route = {"portfolio": "tasks", "deal_priorities": "deals"}.get(scope)
+    ranked = context_plan(context)["priority_items"]
+    candidates = ([item] if item else []) + [row for row in ranked[:3] if row is not item]
+    candidates.extend(row for row in items if row["kind"] == "supplier" and row not in candidates)
+    plan = _model_answer(message, state, context, candidates[:5], item)
+    if plan:
+        selected = plan.get("subject")
+        if selected:
+            matching = [row for row in items if row["subject"] == selected]
+            if len(matching) == 1 and (plan["intent"] != "update" or matching[0] is item):
+                item = matching[0]
+            elif plan["intent"] in {"update", "project"}:
+                item = None
+        route = plan["intent"]
+    else:
+        scope = _review_intent(f" {words} ")
+        route = queue_intent(words) or {"portfolio": "tasks", "deal_priorities": "deals"}.get(scope)
+        if route is None and item and (scope == "deal" or re.match(r"^(?:ו?מה עם|ו?לגבי)(?: |$)", words)):
+            route = "project"
+    if route == "external_action" or _OUTBOUND.match(words):
+        return _error("כדי לפנות או להתחייב צריך אישור לפעולה המדויקת. אפשר להכין טיוטה כאן.", 403)
+    if route == "prospecting":
+        areas = tuple(plan.get("areas", ()))
+        response, status = _business_review(runtime, source, context, None, "prospecting", SOURCE_REF, areas=areas)
+        if status != 200:
+            return response, status
+        data = response.get_json()["data"]
+        return _receipt({**data, "intent": "business_prospecting"}, data["message"])
 
-    if _REPORT.match(words) and "?" not in message:
+    if route == "update" and (not plan.get("fact") or "?" in message):
+        return _error("מה קרה בפועל ומה תרצה שאעדכן ב־CRM?", 422)
+    if (route == "update" or (not plan and _REPORT.match(words))) and "?" not in message:
         if not item:
             return _error("לאיזה פרויקט לשייך את העדכון?", 422)
         for line in item.get("history", "").splitlines():
@@ -213,20 +265,18 @@ def respond(text, state):
         data = result.get_json()["data"]
         return _receipt(data, f"{item['subject']}\nהעדכון נרשם ואומת ב־CRM ({data['crm_cell']}).", item["subject"])
 
-    if "מאז אתמול" in words and re.search(r"השתנה|חדש|עדכונים", words):
+    if route == "changes":
         data = _review(source, context, item, "deal") if item else _review(source, context)
         if not data:
             return _error("סקירת השינויים טרם אומתה.", 503)
         explicit = _spoken_item(message, items, None)
         return _receipt(data, _recent_changes(context, source, explicit["subject"] if explicit else None))
 
-    if route:
+    if route in _QUEUE_TOOLS:
         return _queue_reply(source, context, items, state, message, route)
-    correction = bool(re.match(r"^(?:התכוונתי|לא הבנת אותי)(?: |$)", words))
-    if correction and not item:
-        return _error("לאיזה פרויקט התכוונת?", 422)
-    deal = item and (scope == "deal" or re.match(r"^(?:ו?מה עם|ו?לגבי|התכוונתי|לא הבנת אותי)(?: |$)", words))
-    if deal:
+    if route in {"update", "project"} and not item:
+        return _error("לאיזה פרויקט או לקוח התכוונת?", 422)
+    if route == "project":
         data = _review(source, context, item, "deal")
         if not data:
             return _error("בדיקת הפרויקט טרם אומתה. אפשר לנסות שוב.", 503)
@@ -239,19 +289,11 @@ def respond(text, state):
         text += f"\n\nהצעד הבא\n{_short(item['action'], 205)}"
         return _receipt(data, text, item["subject"])
 
-    ranked = context_plan(context)["priority_items"]
-    if item:
-        candidates = [item] + [row for row in items if row != item and row["kind"] == "supplier"][:2]
-    else:
-        candidates = (ranked[:3] + [row for row in items if row["kind"] == "supplier" and row not in ranked[:3]])[:6]
-    result = _model_answer(message, state, context, candidates, item)
-    if result and result["intent"] != "answer":
-        return _queue_reply(source, context, items, state, message, result["intent"])
     data = _review(source, context, item, "deal") if item else _review(source, context)
     if not data:
         return _error("סקירת מקור האמת טרם אומתה. אפשר לנסות שוב.", 503)
-    if result:
-        return _receipt({**data, "intent": "business_conversation"}, result["answer"], item["subject"] if item else None)
+    if plan and plan.get("answer"):
+        return _receipt({**data, "intent": f"business_{route}"}, plan["answer"], item["subject"] if item else None)
     if item:
         text = (f"ניתוח השיחה התעכב. מתוך ה־CRM עבור {item['subject']}:\n"
                 f"{_short(item['status'], 180)}\n\nהצעד הבא: {_short(item['action'], 180)}")

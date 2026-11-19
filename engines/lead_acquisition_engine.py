@@ -187,6 +187,27 @@ def run_acquisition(
     )
 
 
+def screen_existing_prospects(records, areas=()):
+    """Shortlist existing CRM candidates for verification without creating leads or contacting anyone."""
+    from skills.lead_intelligence import enrich, normalize, score_lead
+
+    candidates = []
+    for record in records:
+        if record["status"] not in {"חדש", "מעקב", "בטיפול"} or record["relevance"] not in {"חם", "אפשרי"}:
+            continue
+        location = f"{record['area']} {record['city']}"
+        if areas and not any(area in location for area in areas):
+            continue
+        signal = normalize({"name": record["name"], "city": record["city"], "project_stage": record["stage"],
+                            "work_type": record["work_type"], "source_type": "existing_crm"})
+        score = score_lead(enrich(signal), use_learning=False).score
+        candidates.append((record, score))
+    candidates.sort(key=lambda pair: (pair[0]["relevance"] != "חם", -pair[1], pair[0]["id"]))
+    return {"records_read": len(records), "eligible": len(candidates),
+            "candidates": [record for record, _ in candidates[:3]],
+            "external_search": False, "outreach_authorized": False}
+
+
 def process_inbound(lead_data: dict[str, Any], session: Any = None) -> str:
     """
     Process an inbound lead (from form, Telegram, WhatsApp).

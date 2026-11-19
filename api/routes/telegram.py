@@ -167,6 +167,7 @@ def telegram_owner_webhook():
                 if "task_offset" in trace:
                     state["task_offset"] = trace["task_offset"]
                 if trace["intent"] != "business_conversation_fallback":
+                    state["last_request"] = text[:1800]
                     state["last_answer"] = reply_text[:1800]
         else:
             reply_text = result["error"]

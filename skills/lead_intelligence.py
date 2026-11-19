@@ -244,7 +244,7 @@ _DEFAULT_WEIGHTS = {
 }
 
 
-def score_lead(enriched: EnrichedLead, weights: dict[str, int] | None = None) -> ScoredLead:
+def score_lead(enriched: EnrichedLead, weights: dict[str, int] | None = None, *, use_learning=True) -> ScoredLead:
     """
     Score 0-100. Higher = better prospect.
     Optionally consults learned conversion stats from MemoryStore to bias
@@ -256,7 +256,7 @@ def score_lead(enriched: EnrichedLead, weights: dict[str, int] | None = None) ->
     try:
         from memory.memory_store import MemoryStore
         seg = (enriched.lead.segment or "").lower()
-        seg_stats = MemoryStore.read("leads", f"conversion_seg_{seg}", {})
+        seg_stats = MemoryStore.read("leads", f"conversion_seg_{seg}", {}) if use_learning else {}
         total = seg_stats.get("total", 0)
         if total >= 5:
             rate = seg_stats.get("converted", 0) / total

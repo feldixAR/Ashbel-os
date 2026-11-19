@@ -221,9 +221,19 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
                 action["blocked_reasons"].append("pilot_gate_" + pilot["state"])
             elif pilot["state"] == "ready_for_review" and action["disposition"] == "actionable":
                 action["action"] = "לאמת אסמכתאות, רווח ותזרים בפיילוט ולהביא להכרעת מנכ״ל."
+    prospect_records = [
+        {"id": row["מזהה ליד"], "name": row["שם הלקוח"].splitlines()[0],
+         "area": row.get("אזור ויישוב", ""), "city": row.get("יישוב מקור", ""),
+         "status": row["סטטוס"], "stage": row.get("שלב בנייה", ""),
+         "work_type": row.get("סוג עבודה שזוהה", ""),
+         "relevance": row.get("דירוג רלוונטיות", ""),
+         "range": f"'לידים'!A{row['_row']}:AE{row['_row']}"}
+        for row in leads if row["מזהה ליד"] and row["שם הלקוח"]
+    ]
     return {"health": "read_ok", "fetched_at": fetched_at, "source_updated_at": None,
             "source_freshness": "not_verified", "spreadsheet_id": spreadsheet_id,
             "snapshot_sha256": fingerprint, "lead_count": len(leads), "work_count": len(work),
+            "prospect_records": prospect_records,
             "proposal_lead_facts": lead_facts, "proposal_lead_facts_limit": 25,
             "proposal_lead_facts_total": len(proposal_rows),
             "proposal_lead_facts_truncated": max(0, len(proposal_rows) - len(lead_facts)),
