@@ -201,6 +201,22 @@ class DepartmentExpert(BaseAgent):
                            or review.get('disposition') != 'hold_commitment'
                            or departments['finance']['financial_truth']['verified_contractor_profit_ils'] is not None):
                 violations.append('unverified_supplier_commitment')
+            if decision.get('review_scope') == 'portfolio':
+                work = [item for item in context['actions'] if item['disposition'] != 'completed']
+                expected = {status: sum(item['disposition'] == status for item in work)
+                            for status in ('actionable', 'waiting', 'future', 'blocked', 'needs_review')}
+                priorities = decision.get('priority_items') or []
+                if decision.get('work_counts') != expected or sum(expected.values()) != len(work):
+                    violations.append('work_counts_mismatch')
+                if len(priorities) > 3 or any(item not in work or item['disposition'] != 'actionable'
+                                              or item.get('blocked_reasons') for item in priorities):
+                    violations.append('unverified_priorities')
+            elif decision.get('review_scope') == 'deal':
+                action = decision.get('next_action') or {}
+                item = action.get('work_item') or {}
+                if (action.get('execution') != 'internal_review_only' or item not in context['actions']
+                        or item.get('subject') != facts.get('work_item_subject')):
+                    violations.append('unverified_deal')
             if not departments or any(not d.get('evidence') for d in departments.values()):
                 violations.append('missing_department_evidence')
             result.update(status='action' if violations else 'no_change',

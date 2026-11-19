@@ -209,6 +209,8 @@ def process_event(event_id, context=None, clock=None):
                                 summary='לאמת שיוך ייחודי של האירוע לרשומה קיימת לפני פעולה.',
                                 next_action={'event_id': event_id, 'code': resolve_code,
                                              'execution': 'internal_review_only'})
+        elif event['event_type'] == 'source.snapshot' and event['facts'].get('review_scope') in {'portfolio', 'deal'}:
+            decision.update(_owner_review(event, context, plan))
         elif event['event_type'] == 'message.received':
             decision.update(code='review_inbound', summary=departments['sales']['summary'],
                             next_action={'event_id': event_id, 'code': 'review_inbound',
@@ -236,6 +238,55 @@ def process_event(event_id, context=None, clock=None):
         _finish(event_id, token, status='dead_letter' if exhausted else 'retry',
                 last_error_code=type(exc).__name__, next_attempt_at=(clock + dt.timedelta(minutes=2 ** event['attempts'])).isoformat())
         return {'id': event_id, 'status': 'dead_letter' if exhausted else 'retry', 'error_code': type(exc).__name__}
+
+
+
+def _owner_review(event, context, plan):
+    facts = event["facts"]
+    if facts.get("snapshot_sha256") != context["snapshot_sha256"]:
+        raise ValueError("review_snapshot_changed")
+    subject = facts.get("work_item_subject")
+    if subject:
+        matches = [item for item in context["actions"] if item["subject"] == subject
+                   and item["disposition"] != "completed"]
+        if len(matches) != 1:
+            raise ValueError("review_subject_not_unique")
+        item = matches[0]
+        gate = {
+            "waiting": "לשמור על תנאי ההמתנה הרשום.",
+            "future": "לשמור על מועד המעקב הרשום.",
+            "blocked": "לטפל בחסם לפני קידום העסקה.",
+            "needs_review": "לאמת את הנתונים החסרים לפני החלטה.",
+        }.get(item["disposition"], "לקדם את הצעד המורשה הבא.")
+        pilot = item.get("pilot_gate")
+        if pilot and pilot.get("state") != "ready_for_review":
+            gate = "להמשיך בבדיקה פנימית. אין בסיס להתחייבות לפני השלמת שער הרכש, ההתקנה והתזרים."
+        lines = [f"מנכ״ל AshbelOS | {subject}", f"החלטה: {gate}",
+                 f"מצב לפי תור העבודה: {item.get('status') or 'אין סטטוס מאומת'}",
+                 f"הצעד הבא: {item['action']}"]
+        if item.get("owner") or item.get("due"):
+            lines.append(f"אחראי: {item.get('owner') or 'לא תועד'} | מועד: {item.get('due') or 'לא תועד'}")
+        lines.append("החלטה פנימית בלבד. לא נשלחה פנייה.")
+        return {"code": "owner_deal_review", "summary": gate, "review_message": "\n".join(lines),
+                "review_scope": "deal", "next_action": {"work_item": item, "execution": "internal_review_only"}}
+
+    items = [a for a in context["actions"] if a["disposition"] != "completed"]
+    counts = {key: sum(a["disposition"] == key for a in items) for key in
+              ("actionable", "waiting", "future", "blocked", "needs_review")}
+    lines = ["מנכ״ל AshbelOS | תמונת העסק",
+             f"תור עבודה: {len(items)} פתוחים. {counts['actionable']} זמינים לקידום, "
+             f"{counts['waiting']} בהמתנה, {counts['future']} עתידיים, "
+             f"{counts['blocked'] + counts['needs_review']} חסומים או טעוני בדיקה.",
+             "גבייה ורווח בפועל טרם אומתו. סכומי הצעה אינם משמשים כגבייה."]
+    priorities = plan["priority_items"][:3]
+    lines.extend(f"{i}. {item['subject']} — {item['action']}" for i, item in enumerate(priorities, 1))
+    if not priorities:
+        lines.append("אין בתור צעד שניתן לקדם כעת לפי הנתונים המאומתים.")
+    if context["capacity_state"] != "confirmed":
+        lines.append("יש לאמת קיבולת ספקים לפני הרחבת לידים.")
+    return {"code": "owner_portfolio_review", "summary": plan["top_action"],
+            "review_scope": "portfolio", "review_message": "\n".join(lines),
+            "work_counts": counts, "priority_items": priorities}
 
 
 def process_pending(limit=20, context=None):

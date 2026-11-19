@@ -192,6 +192,24 @@ def test_existing_event_pipeline_writes_and_reads_one_note(event_type, monkeypat
             assert clarified['facts']['owner_update'] == unclear['command']
             assert rows[2][5].count(unclear['command']) == 1
             assert session.post.call_count == 3
+
+            view = dict(message, command='תן לי תמונת מצב של העסק')
+            overview = client.post(url, json=view, headers=headers).get_json()['data']
+            assert overview['intent'] == 'business_review' and overview['context_event_id'] is None
+            record = rt.get_event(overview['event_id'])
+            assert record['output']['source_writeback']['status'] == 'not_attempted'
+            assert record['output']['independent_auditor']['passed'] is True
+            assert record['output']['ceo_decision']['work_counts']['future'] == 1
+            assert '2 פתוחים' in overview['message'] and 'טרם אומתו' in overview['message']
+            replay = client.post(url, json=view, headers=headers).get_json()['data']
+            assert replay['duplicate'] is True and replay['trace_id'] == overview['trace_id']
+            deal = dict(message, command='איך לקדם את customer?')
+            review = client.post(url, json=deal, headers=headers).get_json()['data']
+            assert review['intent'] == 'business_review' and review['context_event_id'] == review['event_id']
+            assert 'מועד המעקב' in review['message'] and 'internal follow-up' in review['message']
+            denied = dict(message, command='תשלח הודעה ללקוח customer')
+            assert client.post(url, json=denied, headers=headers).status_code == 403
+            assert session.post.call_count == 3
             return
 
         first = rt.ingest_event(event)

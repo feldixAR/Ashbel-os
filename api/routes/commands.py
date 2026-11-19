@@ -76,8 +76,13 @@ def _business_update(message, previous_event_id, pending_message):
     if not message or len(update) > 1800 or "[ashbel-event:" in update.lower():
         return _error("כתוב עדכון עסקי באורך של עד 1,800 תווים.", 400)
 
+    normalized = " " + _topic_words(message) + " "
+    if re.match(r"^(?:ת?שלח|ת?פנה|ת?תקשר|ת?זמין|ת?תחייב|ת?שלם|ת?קנה)(?: |$)", normalized.strip()):
+        return _error("הבקשה דורשת אישור מפורש לפנייה או להתחייבות. לא בוצעה פעולה.", 403)
+    review = _review_intent(normalized) if update == message else None
     source = os.getenv("ASHBEL_CRM_WRITEBACK_SOURCE", "").strip()
-    if not (runtime.enabled() and source and os.getenv("ASHBEL_CRM_WRITEBACK_ENABLED", "").lower() == "true"):
+    writer_enabled = os.getenv("ASHBEL_CRM_WRITEBACK_ENABLED", "").lower() == "true"
+    if not (runtime.enabled() and source and (review or writer_enabled)):
         return _error("מסלול עדכוני העסק אינו זמין כרגע.", 503)
 
     context = load_business_context()
@@ -86,7 +91,6 @@ def _business_update(message, previous_event_id, pending_message):
 
     items = [item for item in context["actions"] if item["kind"] in {"customer", "supplier"}
              and item["disposition"] != "completed"]
-    normalized = " " + _topic_words(message) + " "
     matches = []
     name_matches = []
     for item in items:
@@ -118,18 +122,28 @@ def _business_update(message, previous_event_id, pending_message):
                         related.add(subject)
         matches = [item for item in items if item["subject"] in related]
 
-    if not matches and re.match(
+    continuation = re.match(
         r"^(?:ו?בנוסף|ו?גם|ובינתיים|ועדכון נוסף|הוא|היא|הם|הן|לגבי זה|קיבלתי ממנו|קיבלתי ממנה)(?: |$)", normalized.strip()
-    ):
+    )
+    followup_review = review == "deal" and (
+        " איתו " in normalized or normalized.strip() in {"מה הצעד הבא", "איך מתקדמים", "מה עושים עכשיו"}
+    )
+    if not matches and (continuation or followup_review):
         if isinstance(previous_event_id, str) and re.fullmatch(r"[0-9a-f-]{36}", previous_event_id):
             previous = runtime.get_event(previous_event_id) or {}
-            writeback = (previous.get("output") or {}).get("source_writeback") or {}
+            result = previous.get("output") or {}
+            writeback = result.get("source_writeback") or {}
+            decision = result.get("ceo_decision") or {}
+            audited_deal = (decision.get("review_scope") == "deal"
+                            and (result.get("independent_auditor") or {}).get("passed") is True)
             if (previous.get("source") == source and previous.get("source_ref") == "ashbelos:owner-console"
-                    and previous.get("status") == "analyzed" and writeback.get("status") == "verified"):
+                    and previous.get("status") == "analyzed" and (writeback.get("status") == "verified" or audited_deal)):
                 subject = (previous.get("facts") or {}).get("work_item_subject")
                 matches = [item for item in items if item["subject"] == subject]
 
-    if len(matches) != 1:
+    if review and len(matches) <= 1 and (review == "portfolio" or matches):
+        return _business_review(runtime, source, context, matches[0] if matches else None)
+    if review or len(matches) != 1:
         return _error("על איזה פרויקט או ספק מדובר? אפשר לענות בשם שבו אתה משתמש בדרך כלל.", 422)
 
     item = matches[0]
@@ -169,6 +183,48 @@ def _business_update(message, previous_event_id, pending_message):
     answer += f"\nהעדכון נשמר ונקרא בחזרה ב־CRM ({writeback['cell']})."
     return ok({"message": answer, "intent": "business_update", "event_id": event_id,
                "trace_id": record["trace_id"], "crm_cell": writeback["cell"],
+               "departments": sorted(output.get("departments", {})), "duplicate": receipt["duplicate"]})
+
+
+
+def _review_intent(words):
+    if re.search(r" תמונת (?:מצב |ה)?עסק | תמונת מצב | מצב העסק | מה פתוח | (?:איזה|אילו) עסקאות | מה (?:לקדם|כדאי לקדם) (?:היום|בעסק) ", words):
+        return "portfolio"
+    if re.match(
+        r"^(?:מה (?:כדאי לעשות|לעשות|עושים|המצב|מצב|הסטטוס|הצעד הבא|קורה עם)"
+        r"|איך (?:לקדם|להתקדם|מתקדמים)|האם (?:לאשר|להתקשר|לסגור|לקדם)"
+        r"|תן לי סטטוס|ת?קדם|תעדף)(?: |$)", words.strip()
+    ):
+        return "deal"
+    return None
+
+
+def _business_review(runtime, source, context, item):
+    snapshot = context["snapshot_sha256"]
+    subject = item["subject"] if item else None
+    now = runtime.now()
+    day = now.astimezone(ZoneInfo("Asia/Jerusalem")).date().isoformat()
+    key = hashlib.sha256(f"{day}\n{snapshot}\n{subject}".encode()).hexdigest()
+    receipt = runtime.ingest_event({
+        "source": source, "source_event_id": f"chat-review-{key}",
+        "source_ref": "ashbelos:owner-console", "event_type": "source.snapshot",
+        "occurred_at": now.isoformat(),
+        "facts": {"review_scope": "deal" if item else "portfolio", "work_item_subject": subject,
+                  "snapshot_sha256": snapshot, "external_contact_authorized": False},
+    })
+    event_id = receipt["id"]
+    runtime.process_event(event_id, context=context)
+    event = runtime.get_event(event_id) or {}
+    output = event.get("output") or {}
+    decision = output.get("ceo_decision") or {}
+    if (event.get("status") != "analyzed" or output.get("external_execution") is not False
+            or (output.get("independent_auditor") or {}).get("passed") is not True
+            or (output.get("source_writeback") or {}).get("status") != "not_attempted"
+            or not decision.get("review_message")):
+        return _error("בדיקת המנכ״ל טרם הושלמה. אפשר לנסות שוב.", 503)
+    return ok({"message": decision["review_message"], "intent": "business_review",
+               "context_event_id": event_id if item else None,
+               "event_id": event_id, "trace_id": event["trace_id"],
                "departments": sorted(output.get("departments", {})), "duplicate": receipt["duplicate"]})
 
 

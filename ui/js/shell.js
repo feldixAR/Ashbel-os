@@ -107,8 +107,11 @@ const Shell = (() => {
         const res = await API.command(message, 'business_update', previous, pending);
         if (res.success && res.data?.event_id && res.data?.message) {
           pending = undefined;
-          previous = res.data.event_id;
-          try { sessionStorage.setItem(storageKey, previous); } catch (_) {}
+          const nextContext = res.data.intent === 'business_review' ? res.data.context_event_id : res.data.event_id;
+          if (nextContext) {
+            previous = nextContext;
+            try { sessionStorage.setItem(storageKey, previous); } catch (_) {}
+          }
           answer.textContent = res.data.message;
         } else {
           answer.textContent = res._status === 401
