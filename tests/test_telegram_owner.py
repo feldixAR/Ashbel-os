@@ -147,7 +147,8 @@ def test_chat_keeps_project_writes_only_owner_reports_and_reuses_draft(webhook, 
     review = Mock(return_value={"intent": "business_review", "event_id": "review"})
     monkeypatch.setattr(owner_chat, "_review", review)
 
-    def write(runtime, source, ctx, target, text, ref):
+    def write(runtime, source, ctx, target, text, ref, delivery_id=None):
+        assert delivery_id == "telegram-owner-123-3"
         target["history"] += "\nעדכון בעלים: " + text + " | החלטת מנכ״ל: בדיקה"
         return ok({"intent": "business_update", "event_id": "write", "crm_cell": "F4"})
 

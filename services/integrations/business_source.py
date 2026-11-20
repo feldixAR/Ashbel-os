@@ -130,6 +130,41 @@ def _pilot_gate(values: list, fingerprint: str) -> dict:
     return {"state": state, "evidence": {"range": PILOT_RANGE, "snapshot_sha256": fingerprint}}
 
 
+def _scheduled_lead_followups(leads, work, today, fingerprint):
+    """Project dated CRM activities once. The lower queue section is a formula view."""
+    # A work item explicitly linked to a lead row for the same date supersedes
+    # its formula reminder. Never infer a link merely from a person's name.
+    linked = {(int(match.group(1)), _due_date(row["מועד"], today))
+              for row in work
+              for match in re.finditer(r"(?:^|\s)'?לידים'?!(?:[A-Z]+)?(\d+)\b", row["מקור"])}
+    followups = []
+    for row in leads:
+        due = row.get("תאריך פעולה", "")
+        subject = row["שם הלקוח"].splitlines()
+        action, status = row["פעולה הבאה"], row["סטטוס"]
+        if not due or not subject or status in {"הושלם", "סגור", "בוטל", "לא רלוונטי"}:
+            continue
+        date = _due_date(due, today)
+        if date and (row["_row"], date) in linked:
+            continue
+        disposition = "needs_review"
+        if action.startswith("להמתין") or status in {"בהקפאה", "בהשהיה"}:
+            disposition = "waiting"
+        elif date and date > today:
+            disposition = "future"
+        elif date == today and action:
+            disposition = "actionable"
+        followups.append({"subject": subject[0], "action": action, "due": due,
+                          "due_date": date.isoformat() if date else None,
+                          "owner": "", "status": status, "source_type": "lead_followup",
+                          "lead_id": row["מזהה ליד"], "phone": row.get("טלפון", ""), "kind": "customer",
+                          "history": row["סיכום ומעקב"], "disposition": disposition,
+                          "blocked_reasons": [], "evidence": {
+                              "range": f"'לידים'!A{row['_row']}:AE{row['_row']}",
+                              "snapshot_sha256": fingerprint}})
+    return followups
+
+
 def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> dict:
     as_of = dt.datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
     if as_of.tzinfo is None:
@@ -219,6 +254,9 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
             if pilot["state"] in {"stopped", "unverified"}:
                 action["disposition"] = "needs_review"
                 action["blocked_reasons"].append("pilot_gate_" + pilot["state"])
+            elif (pilot["state"] == "waiting" and action["disposition"] == "actionable"
+                  and re.search(r"אחרי בחירת|לאחר בחירת", action["action"])):
+                action["disposition"] = "waiting"
             elif pilot["state"] == "ready_for_review" and action["disposition"] == "actionable":
                 action["action"] = "לאמת אסמכתאות, רווח ותזרים בפיילוט ולהביא להכרעת מנכ״ל."
     prospect_records = [
@@ -233,6 +271,7 @@ def interpret_snapshot(payload: dict, spreadsheet_id: str, fetched_at: str) -> d
     return {"health": "read_ok", "fetched_at": fetched_at, "source_updated_at": None,
             "source_freshness": "not_verified", "spreadsheet_id": spreadsheet_id,
             "snapshot_sha256": fingerprint, "lead_count": len(leads), "work_count": len(work),
+            "lead_followups": _scheduled_lead_followups(leads, work, today, fingerprint),
             "prospect_records": prospect_records,
             "proposal_lead_facts": lead_facts, "proposal_lead_facts_limit": 25,
             "proposal_lead_facts_total": len(proposal_rows),
@@ -265,7 +304,7 @@ def load_business_context() -> dict:
                 "actions": [], "error_code": "source_read_or_validation_failed"}
 
 
-def context_plan(context: dict) -> dict:
+def context_plan(context: dict, *, limit: int | None = 10) -> dict:
     """Safe daily-planning projection; not an execution or approval command."""
     if context.get("health") != "read_ok":
         return {"business_context": context,
@@ -279,5 +318,5 @@ def context_plan(context: dict) -> dict:
         0 if context["capacity_state"] != "confirmed" and a["kind"] == "supplier" else 1,
         a["due_date"] or "9999-12-31"))
     return {"business_context": context, "top_action": top,
-            "priority_items": available[:10],
+            "priority_items": available[:limit],
             "recommendations_only": True}

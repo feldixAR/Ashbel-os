@@ -142,7 +142,7 @@ def telegram_owner_webhook():
             ceo_enabled = os.getenv("ASHBEL_TELEGRAM_CEO_CHAT_ENABLED") == "true"
             if ceo_enabled:
                 from api.routes.owner_chat import respond
-                response, status = respond(text, state)
+                response, status = respond(text, {**state, "delivery_id": f"telegram-owner-{owner}-{message_id}"})
             else:
                 response, status = _business_update(
                     text, state.get("previous_event_id"), state.get("pending_message"),
@@ -164,8 +164,9 @@ def telegram_owner_webhook():
             if ceo_enabled:
                 if trace.get("subject"):
                     state["subject"] = trace["subject"]
-                if "task_offset" in trace:
-                    state["task_offset"] = trace["task_offset"]
+                for key_name in ("last_queue", "task_seen", "task_offset", "call_offset", "call_exclude"):
+                    if key_name in trace:
+                        state[key_name] = trace[key_name]
                 if trace["intent"] != "business_conversation_fallback":
                     state["last_request"] = text[:1800]
                     state["last_answer"] = reply_text[:1800]
@@ -179,8 +180,8 @@ def telegram_owner_webhook():
         return _error("Telegram did not confirm delivery", 503)
     state["last_message_id"] = message_id
     MemoryStore.write(namespace, key, state, updated_by="telegram")
-    log.log(logging.INFO if log.isEnabledFor(logging.INFO) else logging.WARNING, "Telegram owner replied message_id=%s event_id=%s intent=%s crm_readback=%s",
-             reply_id, trace.get("event_id"), trace.get("intent"), bool(trace.get("crm_cell")))
+    log.log(logging.INFO if log.isEnabledFor(logging.INFO) else logging.WARNING, "Telegram owner replied message_id=%s event_id=%s intent=%s queue=%s crm_readback=%s",
+             reply_id, trace.get("event_id"), trace.get("intent"), trace.get("queue_route"), bool(trace.get("crm_cell")))
     return ok({"status": "replied"})
 
 

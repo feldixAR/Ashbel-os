@@ -1,6 +1,7 @@
 """Conversation adapter for the existing owner business-review and update flows."""
 
 from datetime import date, datetime, timedelta
+import hashlib
 import json
 import logging
 import os
@@ -9,13 +10,13 @@ from zoneinfo import ZoneInfo
 
 from api.middleware import _error, ok
 from api.routes.commands import _business_review, _record_owner_update, _review_intent, _topic_words
-from api.routes.owner_chat_intent import call_limit, is_call_candidate, queue_intent
+from api.routes.owner_chat_intent import call_limit, call_queue_reply, queue_intent
 from services.business_events import runtime
 from services.integrations.business_source import context_plan, load_business_context
 
 log = logging.getLogger(__name__)
 SOURCE_REF = "ashbelos:owner-telegram"
-_QUEUE_TOOLS = {"tasks", "more", "calls", "deals"}
+_QUEUE_TOOLS = {"tasks", "all_tasks", "more", "calls", "all_calls", "deals"}
 _ACTION_TOOLS = _QUEUE_TOOLS | {"prospecting", "project", "changes", "update", "external_action"}
 _RESPONSE_TOOLS = {"answer", "research", "draft", "revision"}
 _REPORT = re.compile(r"^(?:עדכון(?: בעלים)?|דיברתי|אמרתי|אמרנו|הסברתי|עדכנתי|שלחתי|קיבלתי|נפגשתי|לקוח עדכן|הלקוח אישר)(?: |$)")
@@ -60,49 +61,90 @@ def _review(source, context, subject=None, scope="portfolio"):
     return result.get_json()["data"] if status == 200 else None
 
 
-def _mobile_priorities(context, *, customer_only=False, calls=False, limit=3, exclude=None, offset=0):
-    available = context["actions"]
-    if calls:
-        available = [item for item in available if is_call_candidate(item)]
-    elif customer_only:
-        available = [item for item in available if item["kind"] == "customer"]
-    if exclude:
-        available = [item for item in available if item["subject"] != exclude]
-    plan = context_plan({**context, "actions": available})["priority_items"][offset:offset + limit]
-    if not plan:
-        if calls:
-            return "אין כרגע לקוח עם פעולת חיוג מאומתת וזמינה בתור העבודה.", 0
-        if customer_only:
-            return "אין כרגע עסקה זמינה לקידום בתור העבודה.", 0
-        return "אין עוד משימות זמינות לקידום בתור העבודה.", 0
+_DISPOSITION = {"actionable": "לקידום", "future": "עתידי", "waiting": "בהמתנה",
+                "blocked": "חסום", "needs_review": "לאימות"}
+
+
+def _task_key(item):
+    source = item.get("source_type", "work")
+    identity = item.get("lead_id") or item["subject"]
+    return hashlib.sha256(f"{source}\n{identity}\n{item['action']}".encode()).hexdigest()
+
+
+def _task_page(context, state, route):
+    actions = [item for item in context["actions"] + context.get("lead_followups", [])
+               if item["disposition"] != "completed"]
+    priority = context_plan({**context, "actions": actions}, limit=None)["priority_items"]
+    held = sorted((item for item in actions if item["disposition"] != "actionable"
+                   or item["blocked_reasons"]),
+                  key=lambda item: (item.get("due_date") or "9999", item["subject"]))
+    ranked = priority + held
+    if route == "deals":
+        ranked = [item for item in priority if item["kind"] == "customer"
+                  and item.get("source_type") != "lead_followup"]
+    seen = set(state.get("task_seen", [])) if route == "more" else set()
+    # Existing conversations previously persisted only a numerical cursor.
+    if route == "more" and "task_seen" not in state:
+        seen.update(_task_key(item) for item in ranked[:state.get("task_offset", 0)])
+    pending = [item for item in ranked if _task_key(item) not in seen]
+    if not pending:
+        text = ("אין כרגע עסקה זמינה לקידום בתור העבודה." if route == "deals"
+                else f"אין עוד משימות פתוחות להציג מתוך {len(ranked)} ברשימה שנקראה.")
+        return text, seen
+    compact = route == "all_tasks" or (route == "more" and state.get("last_queue") == "all_tasks")
     lines = []
-    for number, item in enumerate(plan, offset + 1):
-        # Display the first complete instruction when the CRM cell includes a long checklist.
+    start = len(ranked) - len(pending)
+    for index, item in enumerate(pending if compact else pending[:3], start + 1):
         first = re.split(r"(?<=[.!?])\s+|;|\n", item["action"], maxsplit=1)[0]
-        why = "פותח יכולת ביצוע" if item["kind"] == "supplier" else "פעולה פתוחה בתור העבודה"
-        owner = _short(item["owner"], 33) or "טרם שויך"
-        due = item.get("due_date") or "טרם נקבע"
-        lines.append(f"{number}. {item['subject']}\n{_short(first, 115)}\n{why} · {owner} · {due}")
-    return "\n\n".join(lines), len(plan)
+        label = _DISPOSITION.get(item["disposition"], "לאימות")
+        due = item.get("due_date")
+        when = f" · מועד {due}" if due else ""
+        if due and due < context.get("as_of_date_il", "") and item.get("source_type") == "lead_followup":
+            when += " · המועד עבר"
+        if item.get("source_type") == "lead_followup":
+            label = "מעקב ליד · " + label
+        detail = _short(first, 65 if compact else 120) or "נדרש בירור הצעד הבא"
+        entry = f"{index}. {_short(item['subject'], 75)} · {label}{when}\n{detail}"
+        if re.search("אישור|מאושר", item["action"]) and "אישור" not in detail and "מאושר" not in detail:
+            entry += " · יש לבדוק את תנאי האישור"
+        if sum(len(line.encode("utf-16-le")) // 2 + 2 for line in [*lines, entry]) > 3700:
+            break
+        lines.append(entry)
+        seen.add(_task_key(item))
+    text = "\n\n".join(lines)
+    summary = f"הוצגו {start + 1}–{start + len(lines)} מתוך {len(ranked)}"
+    stamp = context.get("fetched_at")
+    if stamp:
+        read_at = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(ZoneInfo("Asia/Jerusalem"))
+        summary += f" · CRM נקרא ב־{read_at:%d.%m %H:%M}"
+    if len(lines) < len(pending):
+        summary += " · אפשר לבקש את ההמשך"
+    return f"{summary}\n\n{text}", seen
 
 
 def _queue_reply(source, context, items, state, message, route):
     words = _topic_words(message)
-    calls = route == "calls"
-    customers = calls or route == "deals"
-    data = _review(source, context, scope="deal_priorities" if customers else "portfolio")
+    calls = route in {"calls", "all_calls"} or (route == "more" and state.get("last_queue") == "calls")
+    data = _review(source, context, scope="deal_priorities" if route == "deals" else "portfolio")
     if not data:
         return _error("סקירת המשימות טרם אומתה. אפשר לנסות שוב.", 503)
-    excluded = None
-    exclusion = re.search(r"(?:עזוב(?: כרגע)?(?: את)?|בלי|חוץ מ|למעט) (.+?)(?: מי | למי |$)", words)
-    if calls and exclusion:
-        item = _spoken_item(exclusion[1], items, None)
-        excluded = item["subject"] if item else None
-    offset = state.get("task_offset", 0) if route == "more" else 0
-    text, shown = _mobile_priorities(context, customer_only=customers, calls=calls,
-                                    limit=call_limit(words) if calls else 3, exclude=excluded, offset=offset)
-    if not customers:
-        data["task_offset"] = offset + shown
+    data = dict(data)
+    if calls:
+        exclusion = re.search(r"(?:עזוב(?: כרגע)?(?: את)?|בלי|חוץ מ|למעט) (.+?)(?: מי | למי |$)", words)
+        item = _spoken_item(exclusion[1], items, None) if exclusion else None
+        offset = state.get("call_offset", 0) if route == "more" else 0
+        excluded = state.get("call_exclude") if route == "more" else (item["subject"] if item else None)
+        limit = 1 if route == "calls" and call_limit(words) == 1 else None
+        text, shown = call_queue_reply(context, limit=limit, exclude=excluded, offset=offset)
+        data.update(last_queue="calls", call_offset=offset + shown, call_exclude=excluded)
+    else:
+        text, seen = _task_page(context, state, route)
+        if route != "deals":
+            mode = state.get("last_queue", "tasks") if route == "more" else route
+            data.update(task_seen=sorted(seen), task_offset=len(seen), last_queue=mode)
+        else:
+            data["last_queue"] = "deals"
+    data["queue_route"] = route
     return _receipt(data, text)
 
 
@@ -143,6 +185,7 @@ def _model_answer(message, state, context, candidates, item):
     prompt = json.dumps({"message": message, "focus": item["subject"] if item else None,
                          "previous_request": state.get("last_request", ""),
                          "last_answer": state.get("last_answer", ""),
+                         "last_queue": state.get("last_queue"), "tasks_already_shown": state.get("task_offset", 0),
                          "known_projects": [row["subject"] for row in context.get("actions", [])
                                             if row.get("kind") in {"customer", "supplier"} and row.get("disposition") != "completed"],
                          "crm": evidence, "as_of": context.get("as_of_date_il"),
@@ -160,7 +203,9 @@ def _model_answer(message, state, context, candidates, item):
         "קבע קודם את מטרת ההודעה בהקשר השיחה ובחר כלי אחד. "
         "prospecting = לאתר, לסנן או למצוא עוד לקוחות פוטנציאליים, גם אם מזכירים שיחות כמטרת המשך; "
         "calls = לראות את השיחות שכבר ממתינות בתור; אין להשתמש בו לאיתור לקוחות. "
-        "tasks = רשימת עבודה, more = המשך הרשימה הקודמת, deals = עסקאות פעילות לקידום, "
+        "tasks = סדר עדיפויות חדש, all_tasks = מלוא הרשימה לרבות המתנה, מעקבים ועתיד. "
+        "אם כבר הוצגו משימות והבעלים מציין שחסרים פריטים או מבקש את היתרה, בחר more להמשך. "
+        "all_calls = כל השיחות, more = המשך הרשימה הקודמת, deals = עסקאות פעילות לקידום, "
         "project = לשלוף מצב קיים של לקוח או ספק, changes = שינוי מאז אתמול, "
         "update = בעל העסק מדווח עובדה עסקית שהתרחשה ומבקש לתעד, external_action = לבצע פנייה או התחייבות, "
         "draft = להכין תוצר או טיוטה, revision = לשכתב תוצר קודם, research = לנתח מידע או לחקור שאלה, answer = שיחה אחרת. "
@@ -259,7 +304,8 @@ def respond(text, state):
             saved = re.search(r"עדכון בעלים: (.*?) \| החלטת מנכ״ל:", line)
             if saved and _topic_words(saved.group(1)) == words:
                 return _receipt({"intent": "business_note_already_saved"}, "העדכון הזה כבר מופיע ב־CRM.", item["subject"])
-        result, status = _record_owner_update(runtime, source, context, item, message, SOURCE_REF)
+        result, status = _record_owner_update(runtime, source, context, item, message, SOURCE_REF,
+                                             delivery_id=state.get("delivery_id"))
         if status != 200:
             return result, status
         data = result.get_json()["data"]
