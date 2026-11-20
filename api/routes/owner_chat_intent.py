@@ -119,3 +119,20 @@ def call_queue_reply(context, *, limit=None, exclude=None, offset=0):
     remaining = total - offset - len(lines)
     footer = [f"עוד {remaining} משימות שיחה בהמשך הרשימה."] if remaining else []
     return "\n\n".join([header, *lines, *footer]), len(lines)
+
+
+def previous_contacts(context, state):
+    """Resolve only phones that appeared in the last answer and still match their CRM row."""
+    previous = state.get("last_answer") or ""
+    positions = []
+    for row in [*context.get("actions", []), *context.get("lead_followups", [])]:
+        name = row["subject"].splitlines()[0]
+        phone = row.get("phone") or ""
+        if not re.fullmatch(r"(?:0|\+972[- ]?)\d{1,2}[- ]?\d{7}", phone):
+            continue
+        for block in previous.split("\n\n"):
+            if block.splitlines() and block.splitlines()[0] in (name, name + " · " + (_call_stage(row) or "")) and phone in block.splitlines()[1:]:
+                positions.append((previous.index(block), row))
+                break
+    positions.sort(key=lambda entry: entry[0])
+    return {f"c{i}": row for i, (_, row) in enumerate(positions, 1)}

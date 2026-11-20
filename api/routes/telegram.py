@@ -169,7 +169,7 @@ def telegram_owner_webhook():
                         state[key_name] = trace[key_name]
                 if trace["intent"] != "business_conversation_fallback":
                     state["last_request"] = text[:1800]
-                    state["last_answer"] = reply_text[:1800]
+                    state["last_answer"] = reply_text[:4096]
         else:
             reply_text = result["error"]
             if status == 422 and not ceo_enabled:

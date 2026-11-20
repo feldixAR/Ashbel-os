@@ -10,14 +10,14 @@ from zoneinfo import ZoneInfo
 
 from api.middleware import _error, ok
 from api.routes.commands import _business_review, _record_owner_update, _review_intent, _topic_words
-from api.routes.owner_chat_intent import call_limit, call_queue_reply, queue_intent
+from api.routes.owner_chat_intent import call_limit, call_queue_reply, previous_contacts, queue_intent
 from services.business_events import runtime
 from services.integrations.business_source import context_plan, load_business_context
 
 log = logging.getLogger(__name__)
 SOURCE_REF = "ashbelos:owner-telegram"
 _QUEUE_TOOLS = {"tasks", "all_tasks", "more", "calls", "all_calls", "deals"}
-_ACTION_TOOLS = _QUEUE_TOOLS | {"prospecting", "project", "changes", "update", "external_action"}
+_ACTION_TOOLS = _QUEUE_TOOLS | {"contact_cards", "prospecting", "project", "changes", "update", "external_action"}
 _RESPONSE_TOOLS = {"answer", "research", "draft", "revision"}
 _REPORT = re.compile(r"^(?:עדכון(?: בעלים)?|דיברתי|אמרתי|אמרנו|הסברתי|עדכנתי|שלחתי|קיבלתי|נפגשתי|לקוח עדכן|הלקוח אישר)(?: |$)")
 _OUTBOUND = re.compile(r"^(?:ת?שלח|ת?פנה|ת?תקשר|ת?זמין|ת?תחייב|ת?שלם|ת?קנה|חייג|בצע)(?: |$)")
@@ -185,6 +185,7 @@ def _model_answer(message, state, context, candidates, item):
     prompt = json.dumps({"message": message, "focus": item["subject"] if item else None,
                          "previous_request": state.get("last_request", ""),
                          "last_answer": state.get("last_answer", ""),
+                         "previous_contacts": {key: row["subject"] for key, row in previous_contacts(context, state).items()},
                          "last_queue": state.get("last_queue"), "tasks_already_shown": state.get("task_offset", 0),
                          "known_projects": [row["subject"] for row in context.get("actions", [])
                                             if row.get("kind") in {"customer", "supplier"} and row.get("disposition") != "completed"],
@@ -202,6 +203,9 @@ def _model_answer(message, state, context, candidates, item):
         "אם חסרים נתונים חיוניים שאל שאלה אחת. אין תבנית קבועה. "
         "קבע קודם את מטרת ההודעה בהקשר השיחה ובחר כלי אחד. "
         "prospecting = לאתר, לסנן או למצוא עוד לקוחות פוטנציאליים, גם אם מזכירים שיחות כמטרת המשך; "
+        "בקשה לשנות את ההצגה של פרטי קשר שכבר הוצגו היא contact_cards. השתמש בה גם לבקשה להעתיק או לחייג בעצמו. "
+        "בחר contact_ids מתוך previous_contacts לפי הרשומות המבוקשות, לפי סדרן, או את כולן כשהבקשה כללית. "
+        "שינוי הצגה אחר של תשובה קודמת הוא revision גם כאשר נושא התשובה הקודמת היה תור השיחות. "
         "calls = לראות את השיחות שכבר ממתינות בתור; אין להשתמש בו לאיתור לקוחות. "
         "tasks = סדר עדיפויות חדש, all_tasks = מלוא הרשימה לרבות המתנה, מעקבים ועתיד. "
         "אם כבר הוצגו משימות והבעלים מציין שחסרים פריטים או מבקש את היתרה, בחר more להמשך. "
@@ -213,7 +217,7 @@ def _model_answer(message, state, context, candidates, item):
         "ל־prospecting מותר להחזיר areas רק עבור מיקומים מפורשים בבקשה או בבקשת האיתור הקודמת. "
         "ציין subject רק אם זו בדיוק רשומה אחת מ־known_projects שהבקשה עוסקת בה. "
         "ל־update החזר fact שהוא ציטוט רציף ומדויק של עובדה מדווחת בהודעה הנוכחית. "
-        "החזר JSON בלבד: intent, subject (מחרוזת או null), areas (רשימת מחרוזות), fact, answer. "
+        "החזר JSON בלבד: intent, subject (מחרוזת או null), areas (רשימת מחרוזות), contact_ids (מזהי הרשומות שנבחרו), fact, answer. "
         "מלא answer רק עבור answer, research, draft או revision, עד 1000 תווים, או 1800 אם ביקש להרחיב."
     )
     user_prompt = _PRIVATE.sub("[פרטי קשר הוסרו]", prompt)
@@ -234,6 +238,10 @@ def _model_answer(message, state, context, candidates, item):
                                 and 2 <= len(area.strip()) <= 40 and _topic_words(area)
                                 and _topic_words(area) in owner_words}) if isinstance(regions, list) and intent == "prospecting" else []
                 plan = {"intent": intent, "subject": subject, "areas": areas}
+                if intent == "contact_cards":
+                    ids = result.get("contact_ids")
+                    if isinstance(ids, list):
+                        plan["contact_ids"] = [key for key in ids if isinstance(key, str)]
                 if intent == "update":
                     fact = result.get("fact")
                     if isinstance(fact, str) and len(fact.strip()) >= 8 and fact.strip() in message:
@@ -287,6 +295,14 @@ def respond(text, state):
             route = "project"
     if route == "external_action" or _OUTBOUND.match(words):
         return _error("כדי לפנות או להתחייב צריך אישור לפעולה המדויקת. אפשר להכין טיוטה כאן.", 403)
+    if route == "contact_cards":
+        contacts = previous_contacts(context, state)
+        ids = plan.get("contact_ids", [])
+        if not ids or any(key not in contacts for key in ids):
+            return _error("לאיזה איש קשר מהרשימה התכוונת?", 422)
+        cards = [f"{contacts[key]['subject'].splitlines()[0]}\n{contacts[key]['phone']}"
+                 for key in dict.fromkeys(ids)]
+        return _receipt({"intent": "business_contact_cards"}, "\n\n".join(cards))
     if route == "prospecting":
         areas = tuple(plan.get("areas", ()))
         response, status = _business_review(runtime, source, context, None, "prospecting", SOURCE_REF, areas=areas)

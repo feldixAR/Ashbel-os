@@ -43,7 +43,13 @@ def reply(chat_id, message_id, text):
     """Reply in the verified private chat without enabling scheduled sends."""
     if chat_id != owner_chat_id() or chat_id is None or not webhook_secret():
         return None
-    result = _api("sendMessage", chat_id=chat_id, text=text[:4096],
+    # Telegram entity offsets and message budgets count UTF-16 code units.
+    text = text.encode("utf-16-le")[:8192].decode("utf-16-le", errors="ignore")
+    entities = [{"type": "phone_number",
+                 "offset": len(text[:match.start()].encode("utf-16-le")) // 2,
+                 "length": len(match.group())}
+                for match in re.finditer(r"(?m)^(?:0|\+972[- ]?)\d{1,2}[- ]?\d{7}$", text)]
+    result = _api("sendMessage", chat_id=chat_id, text=text, entities=entities,
                   reply_parameters={"message_id": message_id, "allow_sending_without_reply": True})
     return result.get("message_id") if isinstance(result, dict) else None
 
